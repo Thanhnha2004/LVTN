@@ -1,0 +1,92 @@
+version: '3.8'
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: LVTN
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: root123
+      MYSQL_DATABASE: bds_db
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - bds-network
+
+  api-gateway:
+    build: ./api-gateway
+    container_name: bds-gateway
+    ports:
+      - "3000:3000"
+    depends_on:
+      - auth-service
+      - property-service
+      - listing-service
+      - contact-service
+    networks:
+      - bds-network
+
+  auth-service:
+    build: ./services/auth-service
+    container_name: bds-auth
+    environment:
+      DB_HOST: mysql
+      DB_USER: root
+      DB_PASS: root123
+      DB_NAME: bds_db
+      JWT_SECRET: supersecret123
+    depends_on:
+      - mysql
+    networks:
+      - bds-network
+
+  property-service:
+    build: ./services/property-service
+    container_name: bds-property
+    environment:
+      DB_HOST: mysql
+      DB_USER: root
+      DB_PASS: root123
+      DB_NAME: bds_db
+    depends_on:
+      - mysql
+    networks:
+      - bds-network
+
+  listing-service:
+    build: ./services/listing-service
+    container_name: bds-listing
+    environment:
+      DB_HOST: mysql
+      DB_USER: root
+      DB_PASS: root123
+      DB_NAME: bds_db
+    depends_on:
+      - mysql
+    networks:
+      - bds-network
+
+  contact-service:
+    build: ./services/contact-service
+    container_name: bds-contact
+    environment:
+      DB_HOST: mysql
+      DB_USER: root
+      DB_PASS: root123
+      DB_NAME: bds_db
+      MAIL_USER: your@gmail.com
+      MAIL_PASS: yourapppassword
+    depends_on:
+      - mysql
+    networks:
+      - bds-network
+
+networks:
+  bds-network:
+    driver: bridge
+
+volumes:
+  mysql_data:
