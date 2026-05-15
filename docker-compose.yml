@@ -2,11 +2,13 @@
 services:
   mysql:
     image: mysql:8.0
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
     container_name: LVTN
     restart: always
     environment:
       MYSQL_ROOT_PASSWORD: root123
       MYSQL_DATABASE: bds_db
+      MYSQL_CHARSET: utf8mb4
     ports:
       - "3307:3306"
     volumes:
@@ -37,6 +39,8 @@ services:
       DB_PASS: root123
       DB_NAME: bds_db
       JWT_SECRET: supersecret123
+    ports:
+      - "3001:3001"
     depends_on:
       - mysql
     networks:
@@ -50,6 +54,8 @@ services:
       DB_USER: root
       DB_PASS: root123
       DB_NAME: bds_db
+    ports:
+      - "3002:3002"
     depends_on:
       - mysql
     networks:
@@ -63,6 +69,8 @@ services:
       DB_USER: root
       DB_PASS: root123
       DB_NAME: bds_db
+    ports:
+      - "3003:3003"
     depends_on:
       - mysql
     networks:
@@ -78,6 +86,8 @@ services:
       DB_NAME: bds_db
       MAIL_USER: your@gmail.com
       MAIL_PASS: yourapppassword
+    ports:
+      - "3004:3004"
     depends_on:
       - mysql
     networks:

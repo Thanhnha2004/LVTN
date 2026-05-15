@@ -1,6 +1,9 @@
 CREATE DATABASE IF NOT EXISTS bds_db;
 USE bds_db;
 
+SET NAMES utf8mb4;
+SET CHARACTER SET utf8mb4;
+
 -- Bảng users
 CREATE TABLE users (
   id INT AUTO_INCREMENT PRIMARY KEY,
