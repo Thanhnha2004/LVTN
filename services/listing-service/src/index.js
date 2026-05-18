@@ -1,1 +1,13 @@
-const express = require('express'); const app = express(); app.use(require('express').json()); app.listen(3003, () => console.log('Listing running on 3003'));
+const express = require("express");
+const cors = require("cors");
+require("dotenv").config();
+const listingRoutes = require("./routes/listing");
+
+const app = express();
+app.use(cors());
+app.use(express.json());
+app.use("/api/listing", listingRoutes);
+
+app.listen(process.env.PORT || 3003, () =>
+  console.log(`Listing service running on port ${process.env.PORT || 3003}`),
+);
