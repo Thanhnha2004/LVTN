@@ -84,6 +84,7 @@ services:
       DB_USER: root
       DB_PASS: root123
       DB_NAME: bds_db
+      JWT_SECRET: supersecret123
       MAIL_USER: your@gmail.com
       MAIL_PASS: yourapppassword
     ports:
