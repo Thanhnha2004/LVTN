@@ -85,8 +85,8 @@ services:
       DB_PASS: root123
       DB_NAME: bds_db
       JWT_SECRET: supersecret123
-      MAIL_USER: your@gmail.com
-      MAIL_PASS: yourapppassword
+      MAIL_USER: tranthanhnha.28032004@gmail.com
+      MAIL_PASS: kptkqiqnihkxmawm
     ports:
       - "3004:3004"
     depends_on:
