@@ -2,6 +2,7 @@ const express = require("express");
 const pool = require("../db");
 const authMiddleware = require("../middleware/auth");
 const router = express.Router();
+const { upload, cloudinary } = require("../cloudinary");
 
 // POST /api/property — tạo tin (owner)
 router.post("/", authMiddleware, async (req, res) => {
@@ -90,7 +91,53 @@ router.patch("/:id/status", authMiddleware, async (req, res) => {
   res.json({ message: "Cập nhật trạng thái thành công" });
 });
 
-const { upload, cloudinary } = require("../cloudinary");
+// PATCH /api/property/:id/hide — Owner tự ẩn tin của mình
+router.patch("/:id/hide", authMiddleware, async (req, res) => {
+  if (req.user.role !== "owner")
+    return res.status(403).json({ message: "Chỉ owner mới được ẩn tin" });
+
+  try {
+    const [rows] = await pool.query(
+      "SELECT owner_id FROM properties WHERE id = ?",
+      [req.params.id],
+    );
+    if (rows.length === 0)
+      return res.status(404).json({ message: "Không tìm thấy" });
+    if (rows[0].owner_id !== req.user.id)
+      return res.status(403).json({ message: "Không có quyền" });
+
+    await pool.query("UPDATE properties SET status = 'hidden' WHERE id = ?", [
+      req.params.id,
+    ]);
+    res.json({ message: "Đã ẩn tin" });
+  } catch (err) {
+    res.status(500).json({ message: "Lỗi server", error: err.message });
+  }
+});
+
+// PATCH /api/property/:id/sold — Owner đánh dấu đã giao dịch
+router.patch("/:id/sold", authMiddleware, async (req, res) => {
+  if (req.user.role !== "owner")
+    return res.status(403).json({ message: "Chỉ owner mới được đánh dấu" });
+
+  try {
+    const [rows] = await pool.query(
+      "SELECT owner_id FROM properties WHERE id = ?",
+      [req.params.id],
+    );
+    if (rows.length === 0)
+      return res.status(404).json({ message: "Không tìm thấy" });
+    if (rows[0].owner_id !== req.user.id)
+      return res.status(403).json({ message: "Không có quyền" });
+
+    await pool.query("UPDATE properties SET status = 'sold' WHERE id = ?", [
+      req.params.id,
+    ]);
+    res.json({ message: "Đã đánh dấu giao dịch thành công" });
+  } catch (err) {
+    res.status(500).json({ message: "Lỗi server", error: err.message });
+  }
+});
 
 // POST /api/property/:id/images — upload ảnh
 router.post(
