@@ -4,6 +4,57 @@ const authMiddleware = require("../middleware/auth");
 const router = express.Router();
 const { upload, cloudinary } = require("../cloudinary");
 
+// GET /api/property/owner/list — danh sách tin của Owner
+router.get("/owner/list", authMiddleware, async (req, res) => {
+  if (req.user.role !== "owner")
+    return res.status(403).json({ message: "Không có quyền" });
+
+  const { status, page = 1, limit = 10 } = req.query;
+  const offset = (parseInt(page) - 1) * parseInt(limit);
+
+  let conditions = ["p.owner_id = ?"];
+  let params = [req.user.id];
+
+  if (status) {
+    conditions.push("p.status = ?");
+    params.push(status);
+  }
+
+  const where = conditions.join(" AND ");
+
+  try {
+    const [rows] = await pool.query(
+      `
+      SELECT p.*,
+        (SELECT pi.url FROM property_images pi WHERE pi.property_id = p.id ORDER BY pi.order LIMIT 1) as thumbnail,
+        (SELECT COUNT(*) FROM contacts c WHERE c.property_id = p.id) as contact_count
+      FROM properties p
+      WHERE ${where}
+      ORDER BY p.created_at DESC
+      LIMIT ? OFFSET ?
+    `,
+      [...params, parseInt(limit), offset],
+    );
+
+    const [[{ total }]] = await pool.query(
+      `SELECT COUNT(*) as total FROM properties p WHERE ${where}`,
+      params,
+    );
+
+    res.json({
+      data: rows,
+      pagination: {
+        total,
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total_pages: Math.ceil(total / limit),
+      },
+    });
+  } catch (err) {
+    res.status(500).json({ message: "Lỗi server", error: err.message });
+  }
+});
+
 // POST /api/property — tạo tin (owner)
 router.post("/", authMiddleware, async (req, res) => {
   if (req.user.role !== "owner")
