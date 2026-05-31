@@ -69,4 +69,17 @@ app.use(
   }),
 );
 
+app.use(
+  "/api/admin",
+  createProxyMiddleware({
+    target: "http://auth-service:3001",
+    changeOrigin: true,
+    pathRewrite: (path) => `/api/admin${path}`,
+    proxyTimeout: 5000,
+    on: {
+      error: (err, req, res) => res.status(502).json({ message: err.message }),
+    },
+  }),
+);
+
 app.listen(3000, () => console.log("Gateway running on port 3000"));
