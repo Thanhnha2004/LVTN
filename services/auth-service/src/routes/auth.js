@@ -68,4 +68,46 @@ router.get("/me", authMiddleware, async (req, res) => {
   res.json(rows[0]);
 });
 
+// PUT /api/auth/me — cập nhật thông tin cá nhân
+router.put("/me", authMiddleware, async (req, res) => {
+  const { full_name } = req.body;
+  if (!full_name) return res.status(400).json({ message: "Thiếu họ tên" });
+
+  try {
+    await pool.query("UPDATE users SET full_name = ? WHERE id = ?", [
+      full_name,
+      req.user.id,
+    ]);
+    res.json({ message: "Cập nhật thành công" });
+  } catch (err) {
+    res.status(500).json({ message: "Lỗi server", error: err.message });
+  }
+});
+
+// PUT /api/auth/change-password — đổi mật khẩu
+router.put("/change-password", authMiddleware, async (req, res) => {
+  const { old_password, new_password } = req.body;
+  if (!old_password || !new_password)
+    return res.status(400).json({ message: "Thiếu mật khẩu" });
+
+  try {
+    const [rows] = await pool.query(
+      "SELECT password_hash FROM users WHERE id = ?",
+      [req.user.id],
+    );
+    const match = await bcrypt.compare(old_password, rows[0].password_hash);
+    if (!match)
+      return res.status(400).json({ message: "Mật khẩu cũ không đúng" });
+
+    const hash = await bcrypt.hash(new_password, 10);
+    await pool.query("UPDATE users SET password_hash = ? WHERE id = ?", [
+      hash,
+      req.user.id,
+    ]);
+    res.json({ message: "Đổi mật khẩu thành công" });
+  } catch (err) {
+    res.status(500).json({ message: "Lỗi server", error: err.message });
+  }
+});
+
 module.exports = router;
