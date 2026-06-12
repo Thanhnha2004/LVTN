@@ -61,6 +61,24 @@ router.post("/", authMiddleware, async (req, res) => {
     return res.status(403).json({ message: "Chỉ owner mới được đăng tin" });
 
   const { title, description, type, price, area, address, city } = req.body;
+
+  const validTypes = ["apartment", "house", "land", "office"];
+  const validTx = ["sale", "rent"];
+  if (!title || title.trim().length < 5)
+    return res.status(400).json({ message: "Tiêu đề phải có ít nhất 5 ký tự" });
+  if (!validTypes.includes(type))
+    return res.status(400).json({ message: "Loại hình không hợp lệ" });
+  if (!validTx.includes(transaction_type))
+    return res.status(400).json({ message: "Loại giao dịch không hợp lệ" });
+  if (!price || parseFloat(price) <= 0)
+    return res.status(400).json({ message: "Giá phải lớn hơn 0" });
+  if (!area || parseFloat(area) <= 0)
+    return res.status(400).json({ message: "Diện tích phải lớn hơn 0" });
+  if (!address || !city)
+    return res
+      .status(400)
+      .json({ message: "Địa chỉ và thành phố không được để trống" });
+
   try {
     const [result] = await pool.query(
       "INSERT INTO properties (owner_id, title, description, type, price, area, address, city) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
@@ -121,8 +139,32 @@ router.delete("/:id", authMiddleware, async (req, res) => {
   if (rows[0].owner_id !== req.user.id && req.user.role !== "admin")
     return res.status(403).json({ message: "Không có quyền" });
 
-  await pool.query("DELETE FROM properties WHERE id = ?", [req.params.id]);
-  res.json({ message: "Xoá thành công" });
+  try {
+    // Lấy danh sách ảnh trước khi xóa
+    const [images] = await pool.query(
+      "SELECT url FROM property_images WHERE property_id = ?",
+      [req.params.id],
+    );
+
+    // Xóa ảnh trên Cloudinary
+    const { cloudinary } = require("../cloudinary");
+    for (const img of images) {
+      try {
+        const urlParts = img.url.split("/");
+        const folder = urlParts[urlParts.length - 2];
+        const filename = urlParts[urlParts.length - 1].split(".")[0];
+        const publicId = `${folder}/${filename}`;
+        await cloudinary.uploader.destroy(publicId);
+      } catch (e) {
+        console.error("Cloudinary delete error:", e.message);
+      }
+    }
+
+    await pool.query("DELETE FROM properties WHERE id = ?", [req.params.id]);
+    res.json({ message: "Xoá thành công" });
+  } catch (err) {
+    res.status(500).json({ message: "Lỗi server", error: err.message });
+  }
 });
 
 // PATCH /api/property/:id/status — duyệt tin (admin)
@@ -230,5 +272,33 @@ router.post(
     }
   },
 );
+
+// PATCH /api/property/:id/resubmit — Owner submit lại tin bị rejected
+router.patch("/:id/resubmit", authMiddleware, async (req, res) => {
+  if (req.user.role !== "owner")
+    return res.status(403).json({ message: "Không có quyền" });
+
+  try {
+    const [rows] = await pool.query(
+      "SELECT owner_id, status FROM properties WHERE id = ?",
+      [req.params.id],
+    );
+    if (rows.length === 0)
+      return res.status(404).json({ message: "Không tìm thấy" });
+    if (rows[0].owner_id !== req.user.id)
+      return res.status(403).json({ message: "Không có quyền" });
+    if (rows[0].status !== "rejected")
+      return res
+        .status(400)
+        .json({ message: "Chỉ có thể nộp lại tin bị từ chối" });
+
+    await pool.query("UPDATE properties SET status = 'pending' WHERE id = ?", [
+      req.params.id,
+    ]);
+    res.json({ message: "Đã nộp lại, chờ Admin duyệt" });
+  } catch (err) {
+    res.status(500).json({ message: "Lỗi server", error: err.message });
+  }
+});
 
 module.exports = router;

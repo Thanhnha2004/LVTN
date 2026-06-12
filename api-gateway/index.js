@@ -6,6 +6,39 @@ require("dotenv").config();
 const app = express();
 app.use(cors());
 
+const rateLimit = require("express-rate-limit");
+
+// Giới hạn chung: 100 request/phút
+app.use(
+  rateLimit({
+    windowMs: 60 * 1000,
+    max: 100,
+    message: { message: "Quá nhiều request, vui lòng thử lại sau" },
+  }),
+);
+
+// Giới hạn chặt hơn cho login: 10 lần/phút
+app.use(
+  "/api/auth/login",
+  rateLimit({
+    windowMs: 60 * 1000,
+    max: 10,
+    message: {
+      message: "Quá nhiều lần đăng nhập, vui lòng thử lại sau 1 phút",
+    },
+  }),
+);
+
+// Giới hạn contact: 20 lần/phút
+app.use(
+  "/api/contact",
+  rateLimit({
+    windowMs: 60 * 1000,
+    max: 20,
+    message: { message: "Quá nhiều yêu cầu liên hệ" },
+  }),
+);
+
 app.get("/health", (req, res) => res.json({ status: "ok" }));
 
 app.use(

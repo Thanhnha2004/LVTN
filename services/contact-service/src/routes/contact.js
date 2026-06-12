@@ -71,6 +71,9 @@ router.get("/owner", authMiddleware, async (req, res) => {
   if (req.user.role !== "owner" && req.user.role !== "admin")
     return res.status(403).json({ message: "Không có quyền" });
 
+  const { page = 1, limit = 10 } = req.query;
+  const offset = (parseInt(page) - 1) * parseInt(limit);
+
   try {
     const [rows] = await pool.query(
       `
@@ -80,10 +83,29 @@ router.get("/owner", authMiddleware, async (req, res) => {
       JOIN users u ON c.buyer_id = u.id
       WHERE p.owner_id = ?
       ORDER BY c.created_at DESC
+      LIMIT ? OFFSET ?
+    `,
+      [req.user.id, parseInt(limit), offset],
+    );
+
+    const [[{ total }]] = await pool.query(
+      `
+      SELECT COUNT(*) as total FROM contacts c
+      JOIN properties p ON c.property_id = p.id
+      WHERE p.owner_id = ?
     `,
       [req.user.id],
     );
-    res.json(rows);
+
+    res.json({
+      data: rows,
+      pagination: {
+        total,
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total_pages: Math.ceil(total / limit),
+      },
+    });
   } catch (err) {
     res.status(500).json({ message: "Lỗi server", error: err.message });
   }
@@ -127,6 +149,9 @@ router.get("/buyer", authMiddleware, async (req, res) => {
   if (req.user.role !== "buyer")
     return res.status(403).json({ message: "Không có quyền" });
 
+  const { page = 1, limit = 10 } = req.query;
+  const offset = (parseInt(page) - 1) * parseInt(limit);
+
   try {
     const [rows] = await pool.query(
       `
@@ -135,10 +160,25 @@ router.get("/buyer", authMiddleware, async (req, res) => {
       JOIN properties p ON c.property_id = p.id
       WHERE c.buyer_id = ?
       ORDER BY c.created_at DESC
+      LIMIT ? OFFSET ?
     `,
+      [req.user.id, parseInt(limit), offset],
+    );
+
+    const [[{ total }]] = await pool.query(
+      "SELECT COUNT(*) as total FROM contacts WHERE buyer_id = ?",
       [req.user.id],
     );
-    res.json(rows);
+
+    res.json({
+      data: rows,
+      pagination: {
+        total,
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total_pages: Math.ceil(total / limit),
+      },
+    });
   } catch (err) {
     res.status(500).json({ message: "Lỗi server", error: err.message });
   }
@@ -151,6 +191,16 @@ router.post("/saved", authMiddleware, async (req, res) => {
 
   const { property_id } = req.body;
   try {
+    // Thêm kiểm tra approved
+    const [rows] = await pool.query(
+      "SELECT id FROM properties WHERE id = ? AND status = 'approved'",
+      [property_id],
+    );
+    if (rows.length === 0)
+      return res
+        .status(404)
+        .json({ message: "Bất động sản không tồn tại hoặc chưa được duyệt" });
+
     await pool.query(
       "INSERT IGNORE INTO saved_properties (buyer_id, property_id) VALUES (?, ?)",
       [req.user.id, property_id],

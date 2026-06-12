@@ -8,6 +8,17 @@ const router = express.Router();
 // POST /api/auth/register
 router.post("/register", async (req, res) => {
   const { full_name, email, password, role } = req.body;
+
+  if (!full_name || full_name.trim().length < 2)
+    return res.status(400).json({ message: "Họ tên phải có ít nhất 2 ký tự" });
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(email))
+    return res.status(400).json({ message: "Email không hợp lệ" });
+  if (!password || password.length < 6)
+    return res
+      .status(400)
+      .json({ message: "Mật khẩu phải có ít nhất 6 ký tự" });
+
   try {
     const [existing] = await pool.query(
       "SELECT id FROM users WHERE email = ?",
