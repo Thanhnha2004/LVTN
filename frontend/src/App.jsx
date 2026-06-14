@@ -6,8 +6,6 @@ import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Home from "./pages/buyer/Home";
 import Detail from "./pages/buyer/Detail";
-import Saved from "./pages/buyer/Saved";
-import MyContacts from "./pages/buyer/MyContacts";
 import OwnerDashboard from "./pages/owner/Dashboard";
 import CreateProperty from "./pages/owner/CreateProperty";
 import EditProperty from "./pages/owner/EditProperty";
@@ -15,6 +13,8 @@ import OwnerContacts from "./pages/owner/Contacts";
 import AdminDashboard from "./pages/admin/Dashboard";
 import Pending from "./pages/admin/Pending";
 import Users from "./pages/admin/Users";
+import Profile from "./pages/profile/Profile";
+import PropertyList from "./pages/property/PropertyList";
 
 function ProtectedRoute({ children, roles }) {
   const { user } = useAuth();
@@ -33,24 +33,8 @@ export default function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/property/:id" element={<Detail />} />
-
-          {/* Buyer */}
-          <Route
-            path="/saved"
-            element={
-              <ProtectedRoute roles={["buyer"]}>
-                <Saved />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/my-contacts"
-            element={
-              <ProtectedRoute roles={["buyer"]}>
-                <MyContacts />
-              </ProtectedRoute>
-            }
-          />
+          <Route path="/profile" element={<Profile />} />
+          <Route path="/search" element={<PropertyList />} />
 
           {/* Owner */}
           <Route

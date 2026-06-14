@@ -308,22 +308,24 @@ export default function Home() {
   }, [filter]);
 
   const handleSearch = () => {
-    let min_price = "",
-      max_price = "";
+    let min_price = "";
+    let max_price = "";
+
     if (search.price) {
       const [min, max] = search.price.split("-");
       min_price = min || "";
       max_price = max || "";
     }
-    setFilter({
-      ...filter,
+
+    const params = new URLSearchParams({
       transaction_type: activeTab,
-      type: search.type,
       keyword: search.keyword,
+      type: search.type,
       min_price,
       max_price,
-      page: 1,
     });
+
+    navigate(`/search?${params.toString()}`);
   };
 
   const handleTabChange = (val) => {
@@ -332,8 +334,7 @@ export default function Home() {
   };
 
   const handleCategoryClick = (cat) => {
-    setFilter((f) => ({ ...f, type: cat.value, page: 1 }));
-    window.scrollTo({ top: 600, behavior: "smooth" });
+    navigate(`/search?keyword=${encodeURIComponent(cat.label)}`);
   };
 
   return (

@@ -196,7 +196,7 @@ export default function Navbar() {
             <li className="nav-item">
               <Link
                 className="nav-link text-dark px-2"
-                to="/saved"
+                to="/profile?tab=saved"
                 title="Tin đã lưu">
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -214,7 +214,7 @@ export default function Navbar() {
             <li className="nav-item">
               <Link
                 className="nav-link text-dark px-2"
-                to="/my-contacts"
+                to="/profile?tab=contacts"
                 style={{ fontSize: 14 }}>
                 Liên hệ của tôi
               </Link>
