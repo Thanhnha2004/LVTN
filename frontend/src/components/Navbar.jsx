@@ -2,6 +2,89 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
+function UserDropdown({ user, onLogout }) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <li className="nav-item" style={{ position: "relative" }}>
+      <button
+        className="nav-link d-flex align-items-center gap-2 border-0 bg-transparent"
+        style={{ fontSize: 14, cursor: "pointer" }}
+        onClick={() => setOpen(!open)}>
+        <div
+          className="rounded-circle d-flex align-items-center justify-content-center text-white"
+          style={{
+            width: 30,
+            height: 30,
+            background: "#2c5364",
+            fontSize: 13,
+            fontWeight: "bold",
+          }}>
+          {user.full_name?.charAt(0).toUpperCase()}
+        </div>
+        <span className="d-none d-md-inline">{user.full_name}</span>
+      </button>
+
+      {open && (
+        <>
+          <div
+            onClick={() => setOpen(false)}
+            style={{ position: "fixed", inset: 0, zIndex: 999 }}
+          />
+          <ul
+            className="dropdown-menu show shadow"
+            style={{
+              position: "absolute",
+              right: 0,
+              top: "110%",
+              borderRadius: 10,
+              zIndex: 1000,
+              minWidth: 180,
+            }}>
+            <li>
+              <div className="px-3 py-2 border-bottom">
+                <div className="fw-semibold small">{user.full_name}</div>
+                <div className="text-muted" style={{ fontSize: 12 }}>
+                  {user.role}
+                </div>
+              </div>
+            </li>
+            <li>
+              <Link
+                className="dropdown-item small"
+                to="/profile"
+                onClick={() => setOpen(false)}>
+                Thông tin cá nhân
+              </Link>
+            </li>
+            <li>
+              <Link
+                className="dropdown-item small"
+                to="/change-password"
+                onClick={() => setOpen(false)}>
+                Đổi mật khẩu
+              </Link>
+            </li>
+            <li>
+              <hr className="dropdown-divider" />
+            </li>
+            <li>
+              <button
+                className="dropdown-item small text-danger"
+                onClick={() => {
+                  setOpen(false);
+                  onLogout();
+                }}>
+                Đăng xuất
+              </button>
+            </li>
+          </ul>
+        </>
+      )}
+    </li>
+  );
+}
+
 export default function Navbar() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
@@ -56,7 +139,6 @@ export default function Navbar() {
             </li>
           ))}
 
-          {/* Menu theo role */}
           {user?.role === "owner" && (
             <>
               <li className="nav-item">
@@ -110,7 +192,6 @@ export default function Navbar() {
 
         {/* Right side */}
         <ul className="navbar-nav align-items-center gap-2">
-          {/* Tin đã lưu — chỉ buyer */}
           {user?.role === "buyer" && (
             <li className="nav-item">
               <Link
@@ -129,7 +210,6 @@ export default function Navbar() {
             </li>
           )}
 
-          {/* Liên hệ của tôi — chỉ buyer */}
           {user?.role === "buyer" && (
             <li className="nav-item">
               <Link
@@ -180,93 +260,7 @@ export default function Navbar() {
                   </Link>
                 </li>
               )}
-              {(() => {
-                const [open, setOpen] = useState(false);
-                return (
-                  <li className="nav-item" style={{ position: "relative" }}>
-                    <button
-                      className="nav-link d-flex align-items-center gap-2 border-0 bg-transparent"
-                      style={{ fontSize: 14, cursor: "pointer" }}
-                      onClick={() => setOpen(!open)}>
-                      <div
-                        className="rounded-circle d-flex align-items-center justify-content-center text-white"
-                        style={{
-                          width: 30,
-                          height: 30,
-                          background: "#2c5364",
-                          fontSize: 13,
-                          fontWeight: "bold",
-                        }}>
-                        {user.full_name?.charAt(0).toUpperCase()}
-                      </div>
-                      <span className="d-none d-md-inline">
-                        {user.full_name}
-                      </span>
-                    </button>
-
-                    {open && (
-                      <>
-                        <div
-                          onClick={() => setOpen(false)}
-                          style={{ position: "fixed", inset: 0, zIndex: 999 }}
-                        />
-                        <ul
-                          className="dropdown-menu show shadow"
-                          style={{
-                            position: "absolute",
-                            right: 0,
-                            top: "110%",
-                            borderRadius: 10,
-                            zIndex: 1000,
-                            minWidth: 180,
-                          }}>
-                          <li>
-                            <div className="px-3 py-2 border-bottom">
-                              <div className="fw-semibold small">
-                                {user.full_name}
-                              </div>
-                              <div
-                                className="text-muted"
-                                style={{ fontSize: 12 }}>
-                                {user.role}
-                              </div>
-                            </div>
-                          </li>
-                          <li>
-                            <Link
-                              className="dropdown-item small"
-                              to="/profile"
-                              onClick={() => setOpen(false)}>
-                              Thông tin cá nhân
-                            </Link>
-                          </li>
-                          <li>
-                            <Link
-                              className="dropdown-item small"
-                              to="/change-password"
-                              onClick={() => setOpen(false)}>
-                              Đổi mật khẩu
-                            </Link>
-                          </li>
-                          <li>
-                            <hr className="dropdown-divider" />
-                          </li>
-                          <li>
-                            <button
-                              className="dropdown-item small text-danger"
-                              onClick={() => {
-                                setOpen(false);
-                                handleLogout();
-                              }}>
-                              Đăng xuất
-                            </button>
-                          </li>
-                        </ul>
-                      </>
-                    )}
-                  </li>
-                );
-              })()}
+              <UserDropdown user={user} onLogout={handleLogout} />
             </>
           )}
         </ul>
