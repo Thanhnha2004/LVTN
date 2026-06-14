@@ -1,4 +1,3 @@
-
 services:
   mysql:
     image: mysql:8.0
@@ -6,8 +5,8 @@ services:
     container_name: LVTN
     restart: always
     environment:
-      MYSQL_ROOT_PASSWORD: root123
-      MYSQL_DATABASE: bds_db
+      MYSQL_ROOT_PASSWORD: ${DB_PASS}
+      MYSQL_DATABASE: ${DB_NAME}
       MYSQL_CHARSET: utf8mb4
     ports:
       - "3307:3306"
@@ -17,11 +16,20 @@ services:
     networks:
       - bds-network
 
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-p${DB_PASS}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
   api-gateway:
     build: ./api-gateway
     container_name: bds-gateway
     ports:
       - "3000:3000"
+    environment:
+      FRONTEND_URL: ${FRONTEND_URL}
     depends_on:
       - auth-service
       - property-service
@@ -35,64 +43,85 @@ services:
     container_name: bds-auth
     environment:
       DB_HOST: mysql
-      DB_USER: root
-      DB_PASS: root123
-      DB_NAME: bds_db
-      JWT_SECRET: supersecret123
+      DB_USER: ${DB_USER}
+      DB_PASS: ${DB_PASS}
+      DB_NAME: ${DB_NAME}
+      JWT_SECRET: ${JWT_SECRET}
+      MAIL_USER: ${MAIL_USER}
+      MAIL_PASS: ${MAIL_PASS}
+      PORT: 3001
     ports:
       - "3001:3001"
+
     depends_on:
-      - mysql
+      mysql:
+        condition: service_healthy
     networks:
       - bds-network
+    restart: on-failure
 
   property-service:
     build: ./services/property-service
     container_name: bds-property
     environment:
       DB_HOST: mysql
-      DB_USER: root
-      DB_PASS: root123
-      DB_NAME: bds_db
+      DB_USER: ${DB_USER}
+      DB_PASS: ${DB_PASS}
+      DB_NAME: ${DB_NAME}
+      # ✅ FIX: thêm JWT_SECRET — thiếu cái này middleware auth sẽ crash
+      JWT_SECRET: ${JWT_SECRET}
+      # ✅ THÊM: Cloudinary credentials
+      CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME}
+      CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY}
+      CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET}
+      PORT: 3002
     ports:
       - "3002:3002"
     depends_on:
-      - mysql
+      mysql:
+        condition: service_healthy
     networks:
       - bds-network
+    restart: on-failure
 
   listing-service:
     build: ./services/listing-service
     container_name: bds-listing
     environment:
       DB_HOST: mysql
-      DB_USER: root
-      DB_PASS: root123
-      DB_NAME: bds_db
+      DB_USER: ${DB_USER}
+      DB_PASS: ${DB_PASS}
+      DB_NAME: ${DB_NAME}
+      PORT: 3003
     ports:
       - "3003:3003"
     depends_on:
-      - mysql
+      mysql:
+        condition: service_healthy
     networks:
       - bds-network
+    restart: on-failure
 
   contact-service:
     build: ./services/contact-service
     container_name: bds-contact
     environment:
       DB_HOST: mysql
-      DB_USER: root
-      DB_PASS: root123
-      DB_NAME: bds_db
-      JWT_SECRET: supersecret123
-      MAIL_USER: tranthanhnha.28032004@gmail.com
-      MAIL_PASS: kptkqiqnihkxmawm
+      DB_USER: ${DB_USER}
+      DB_PASS: ${DB_PASS}
+      DB_NAME: ${DB_NAME}
+      JWT_SECRET: ${JWT_SECRET}
+      MAIL_USER: ${MAIL_USER}
+      MAIL_PASS: ${MAIL_PASS}
+      PORT: 3004
     ports:
       - "3004:3004"
     depends_on:
-      - mysql
+      mysql:
+        condition: service_healthy
     networks:
       - bds-network
+    restart: on-failure
 
 networks:
   bds-network:

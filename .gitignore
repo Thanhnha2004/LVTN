@@ -1,2 +1,14 @@
+# Environment — KHÔNG được commit file này
+.env
+
+# Dependencies
 node_modules/
-*.env
+**/node_modules/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
