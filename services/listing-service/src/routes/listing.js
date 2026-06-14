@@ -2,18 +2,34 @@ const express = require("express");
 const pool = require("../db");
 const router = express.Router();
 
-// GET /api/listing — tìm kiếm + lọc + phân trang
+// GET /api/listing — tìm kiếm + lọc nâng cao + phân trang
+// Query params được hỗ trợ:
+//   Lọc cơ bản:   type, transaction_type, city, district, ward
+//   Lọc giá/dt:   min_price, max_price, min_area, max_area
+//   Lọc chi tiết: bedrooms, direction, legal_status
+//   Tìm kiếm:     keyword
+//   Bản đồ:       bbox=lat_min,lng_min,lat_max,lng_max
+//   Sắp xếp:      sort=newest|price_asc|price_desc|area_asc|area_desc
+//   Phân trang:   page, limit
+// ============================================================
 router.get("/", async (req, res) => {
   try {
     const {
-      type, // apartment, house, land, office
-      transaction_type, // sale, rent
+      type,
+      transaction_type,
       city,
+      district,
+      ward,
       min_price,
       max_price,
       min_area,
       max_area,
+      bedrooms,
+      direction,
+      legal_status,
       keyword,
+      bbox,
+      sort = "newest",
       page = 1,
       limit = 10,
     } = req.query;
@@ -21,61 +37,169 @@ router.get("/", async (req, res) => {
     let conditions = ["p.status = 'approved'"];
     let params = [];
 
+    // --- Phân loại ---
     if (type) {
+      const validTypes = ["apartment", "house", "land", "office"];
+      if (!validTypes.includes(type))
+        return res.status(400).json({ message: "Loại hình không hợp lệ" });
       conditions.push("p.type = ?");
       params.push(type);
     }
+
     if (transaction_type) {
+      const validTx = ["sale", "rent"];
+      if (!validTx.includes(transaction_type))
+        return res.status(400).json({ message: "Loại giao dịch không hợp lệ" });
       conditions.push("p.transaction_type = ?");
       params.push(transaction_type);
     }
+
+    // --- Địa chỉ 3 cấp ---
     if (city) {
       conditions.push("p.city LIKE ?");
       params.push(`%${city}%`);
     }
+    if (district) {
+      conditions.push("p.district LIKE ?");
+      params.push(`%${district}%`);
+    }
+    if (ward) {
+      conditions.push("p.ward LIKE ?");
+      params.push(`%${ward}%`);
+    }
+
+    // --- Khoảng giá ---
     if (min_price) {
+      const v = parseFloat(min_price);
+      if (isNaN(v) || v < 0)
+        return res.status(400).json({ message: "min_price không hợp lệ" });
       conditions.push("p.price >= ?");
-      params.push(min_price);
+      params.push(v);
     }
     if (max_price) {
+      const v = parseFloat(max_price);
+      if (isNaN(v) || v < 0)
+        return res.status(400).json({ message: "max_price không hợp lệ" });
       conditions.push("p.price <= ?");
-      params.push(max_price);
+      params.push(v);
     }
+
+    // --- Khoảng diện tích ---
     if (min_area) {
+      const v = parseFloat(min_area);
+      if (isNaN(v) || v < 0)
+        return res.status(400).json({ message: "min_area không hợp lệ" });
       conditions.push("p.area >= ?");
-      params.push(min_area);
+      params.push(v);
     }
     if (max_area) {
+      const v = parseFloat(max_area);
+      if (isNaN(v) || v < 0)
+        return res.status(400).json({ message: "max_area không hợp lệ" });
       conditions.push("p.area <= ?");
-      params.push(max_area);
+      params.push(v);
     }
-    if (keyword) {
+
+    // --- Lọc chi tiết ---
+    if (bedrooms) {
+      const v = parseInt(bedrooms);
+      if (isNaN(v) || v < 0)
+        return res.status(400).json({ message: "bedrooms không hợp lệ" });
+      conditions.push("p.bedrooms = ?");
+      params.push(v);
+    }
+    if (direction) {
+      const validDir = [
+        "north",
+        "south",
+        "east",
+        "west",
+        "northeast",
+        "northwest",
+        "southeast",
+        "southwest",
+      ];
+      if (!validDir.includes(direction))
+        return res.status(400).json({ message: "direction không hợp lệ" });
+      conditions.push("p.direction = ?");
+      params.push(direction);
+    }
+    if (legal_status) {
+      const validLegal = ["sohong", "sokhongdo", "dangchoso", "other"];
+      if (!validLegal.includes(legal_status))
+        return res.status(400).json({ message: "legal_status không hợp lệ" });
+      conditions.push("p.legal_status = ?");
+      params.push(legal_status);
+    }
+
+    // --- Từ khoá (tìm trong title, description, address) ---
+    if (keyword && keyword.trim()) {
       conditions.push(
-        "(p.title LIKE ? OR p.description LIKE ? OR p.address LIKE ?)",
+        "(p.title LIKE ? OR p.description LIKE ? OR p.address LIKE ? OR p.district LIKE ? OR p.ward LIKE ?)",
       );
-      params.push(`%${keyword}%`, `%${keyword}%`, `%${keyword}%`);
+      const kw = `%${keyword.trim()}%`;
+      params.push(kw, kw, kw, kw, kw);
     }
+
+    // --- Bounding box cho bản đồ ---
+    // bbox=lat_min,lng_min,lat_max,lng_max
+    if (bbox) {
+      const parts = bbox.split(",").map(Number);
+      if (parts.length !== 4 || parts.some(isNaN))
+        return res.status(400).json({
+          message:
+            "bbox không hợp lệ. Định dạng: lat_min,lng_min,lat_max,lng_max",
+        });
+      const [latMin, lngMin, latMax, lngMax] = parts;
+      conditions.push("p.latitude BETWEEN ? AND ?");
+      conditions.push("p.longitude BETWEEN ? AND ?");
+      params.push(latMin, latMax, lngMin, lngMax);
+    }
+
+    // --- Sắp xếp ---
+    const sortMap = {
+      newest: "p.created_at DESC",
+      oldest: "p.created_at ASC",
+      price_asc: "p.price ASC",
+      price_desc: "p.price DESC",
+      area_asc: "p.area ASC",
+      area_desc: "p.area DESC",
+    };
+    const orderBy = sortMap[sort] || "p.created_at DESC";
+
+    // --- Phân trang ---
+    const pageNum = Math.max(1, parseInt(page) || 1);
+    const limitNum = Math.min(50, Math.max(1, parseInt(limit) || 10)); // tối đa 50
+    const offset = (pageNum - 1) * limitNum;
 
     const where = conditions.join(" AND ");
-    const offset = (parseInt(page) - 1) * parseInt(limit);
 
+    // --- Query danh sách ---
     const [rows] = await pool.query(
-      `
-      SELECT p.*, u.full_name as owner_name,
-        (SELECT pi.url FROM property_images pi WHERE pi.property_id = p.id ORDER BY pi.order LIMIT 1) as thumbnail
-      FROM properties p
-      JOIN users u ON p.owner_id = u.id
-      WHERE ${where}
-      ORDER BY p.created_at DESC
-      LIMIT ? OFFSET ?
-    `,
-      [...params, parseInt(limit), offset],
+      `SELECT
+         p.id, p.title, p.type, p.transaction_type,
+         p.price, p.area, p.bedrooms, p.bathrooms,
+         p.address, p.ward, p.district, p.city,
+         p.latitude, p.longitude,
+         p.direction, p.legal_status,
+         p.status, p.created_at,
+         u.full_name AS owner_name,
+         (SELECT pi.url
+          FROM property_images pi
+          WHERE pi.property_id = p.id
+          ORDER BY pi.\`order\`
+          LIMIT 1) AS thumbnail
+       FROM properties p
+       JOIN users u ON p.owner_id = u.id
+       WHERE ${where}
+       ORDER BY ${orderBy}
+       LIMIT ? OFFSET ?`,
+      [...params, limitNum, offset],
     );
 
+    // --- Query tổng số ---
     const [[{ total }]] = await pool.query(
-      `
-      SELECT COUNT(*) as total FROM properties p WHERE ${where}
-    `,
+      `SELECT COUNT(*) AS total FROM properties p WHERE ${where}`,
       params,
     );
 
@@ -83,29 +207,45 @@ router.get("/", async (req, res) => {
       data: rows,
       pagination: {
         total,
-        page: parseInt(page),
-        limit: parseInt(limit),
-        total_pages: Math.ceil(total / limit),
+        page: pageNum,
+        limit: limitNum,
+        total_pages: Math.ceil(total / limitNum),
+      },
+      // Trả về filter đang áp dụng để frontend dễ hiển thị
+      filters: {
+        type,
+        transaction_type,
+        city,
+        district,
+        ward,
+        bedrooms,
+        direction,
+        legal_status,
+        sort,
       },
     });
   } catch (err) {
+    console.error("Listing search error:", err);
     res.status(500).json({ message: "Lỗi server", error: err.message });
   }
 });
 
 // GET /api/listing/:id — chi tiết tin (public)
+// Tự động ghi nhận lượt xem vào bảng property_views
 router.get("/:id", async (req, res) => {
   try {
     const [rows] = await pool.query(
-      `
-      SELECT p.*, u.full_name as owner_name, u.email as owner_email,
-        GROUP_CONCAT(pi.url ORDER BY pi.order SEPARATOR ',') as images
-      FROM properties p
-      JOIN users u ON p.owner_id = u.id
-      LEFT JOIN property_images pi ON p.id = pi.property_id
-      WHERE p.id = ? AND p.status = 'approved'
-      GROUP BY p.id
-    `,
+      `SELECT
+         p.*,
+         u.full_name  AS owner_name,
+         u.email      AS owner_email,
+         u.phone_number AS owner_phone,
+         GROUP_CONCAT(pi.url ORDER BY pi.\`order\` SEPARATOR ',') AS images
+       FROM properties p
+       JOIN users u ON p.owner_id = u.id
+       LEFT JOIN property_images pi ON p.id = pi.property_id
+       WHERE p.id = ? AND p.status = 'approved'
+       GROUP BY p.id`,
       [req.params.id],
     );
 
@@ -114,8 +254,77 @@ router.get("/:id", async (req, res) => {
 
     const property = rows[0];
     property.images = property.images ? property.images.split(",") : [];
+
+    // --- Ghi nhận lượt xem (fire-and-forget, không block response) ---
+    const ip =
+      req.headers["x-forwarded-for"]?.split(",")[0]?.trim() ||
+      req.socket.remoteAddress ||
+      null;
+
+    pool
+      .query(
+        "INSERT INTO property_views (property_id, viewer_ip) VALUES (?, ?)",
+        [req.params.id, ip],
+      )
+      .catch((err) => console.error("View tracking error:", err.message));
+
     res.json(property);
   } catch (err) {
+    console.error("Listing detail error:", err);
+    res.status(500).json({ message: "Lỗi server", error: err.message });
+  }
+});
+
+// GET /api/listing/:id/similar — gợi ý tin tương tự
+// Cùng type + transaction_type + city, loại trừ tin hiện tại
+router.get("/:id/similar", async (req, res) => {
+  try {
+    // Lấy thông tin tin hiện tại
+    const [base] = await pool.query(
+      "SELECT type, transaction_type, city, price FROM properties WHERE id = ? AND status = 'approved'",
+      [req.params.id],
+    );
+    if (base.length === 0)
+      return res.status(404).json({ message: "Không tìm thấy" });
+
+    const { type, transaction_type, city, price } = base[0];
+
+    // Tìm tin cùng loại, cùng thành phố, giá ±50%, tối đa 6 tin
+    const [rows] = await pool.query(
+      `SELECT
+         p.id, p.title, p.type, p.transaction_type,
+         p.price, p.area, p.bedrooms,
+         p.address, p.district, p.city,
+         p.created_at,
+         u.full_name AS owner_name,
+         (SELECT pi.url
+          FROM property_images pi
+          WHERE pi.property_id = p.id
+          ORDER BY pi.\`order\`
+          LIMIT 1) AS thumbnail
+       FROM properties p
+       JOIN users u ON p.owner_id = u.id
+       WHERE p.status = 'approved'
+         AND p.id != ?
+         AND p.type = ?
+         AND p.transaction_type = ?
+         AND p.city LIKE ?
+         AND p.price BETWEEN ? AND ?
+       ORDER BY p.created_at DESC
+       LIMIT 6`,
+      [
+        req.params.id,
+        type,
+        transaction_type,
+        `%${city}%`,
+        price * 0.5,
+        price * 1.5,
+      ],
+    );
+
+    res.json({ data: rows });
+  } catch (err) {
+    console.error("Similar listing error:", err);
     res.status(500).json({ message: "Lỗi server", error: err.message });
   }
 });

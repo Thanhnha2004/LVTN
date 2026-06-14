@@ -60,12 +60,11 @@ router.post("/", authMiddleware, async (req, res) => {
   if (req.user.role !== "owner")
     return res.status(403).json({ message: "Chỉ owner mới được đăng tin" });
 
-  // ✅ FIX BUG 1: thêm transaction_type vào destructure
   const {
     title,
     description,
     type,
-    transaction_type, // ← đã thêm
+    transaction_type,
     price,
     area,
     address,
@@ -101,7 +100,6 @@ router.post("/", authMiddleware, async (req, res) => {
       .json({ message: "Địa chỉ và thành phố không được để trống" });
 
   try {
-    // ✅ FIX BUG 2: thêm transaction_type vào INSERT + các cột mới từ init.sql
     const [result] = await pool.query(
       `INSERT INTO properties
         (owner_id, title, description, type, transaction_type,
