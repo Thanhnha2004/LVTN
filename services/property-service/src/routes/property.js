@@ -55,6 +55,145 @@ router.get("/owner/list", authMiddleware, async (req, res) => {
   }
 });
 
+// GET /api/property/owner/stats — tổng quan dashboard
+router.get("/owner/stats", authMiddleware, async (req, res) => {
+  if (req.user.role !== "owner")
+    return res.status(403).json({ message: "Không có quyền" });
+
+  try {
+    const [[overview]] = await pool.query(
+      `SELECT
+        COUNT(DISTINCT p.id)                                    AS total_properties,
+        SUM(CASE WHEN p.status = 'approved' THEN 1 ELSE 0 END) AS active_count,
+        SUM(CASE WHEN p.status = 'pending'  THEN 1 ELSE 0 END) AS pending_count,
+        SUM(CASE WHEN p.status = 'rejected' THEN 1 ELSE 0 END) AS rejected_count,
+        SUM(CASE WHEN p.status = 'sold'     THEN 1 ELSE 0 END) AS sold_count,
+        SUM(CASE WHEN p.status = 'hidden'   THEN 1 ELSE 0 END) AS hidden_count,
+        COUNT(DISTINCT pv.id)                                   AS total_views,
+        COUNT(DISTINCT c.id)                                    AS total_contacts
+      FROM properties p
+      LEFT JOIN property_views pv ON p.id = pv.property_id
+      LEFT JOIN contacts       c  ON p.id = c.property_id
+      WHERE p.owner_id = ?`,
+      [req.user.id],
+    );
+
+    // Top 5 tin được xem nhiều nhất
+    const [topProperties] = await pool.query(
+      `SELECT
+        p.id, p.title, p.status, p.price, p.city, p.district,
+        COUNT(pv.id) AS view_count,
+        (SELECT pi.url FROM property_images pi
+         WHERE pi.property_id = p.id ORDER BY pi.\`order\` LIMIT 1) AS thumbnail
+      FROM properties p
+      LEFT JOIN property_views pv ON p.id = pv.property_id
+      WHERE p.owner_id = ?
+      GROUP BY p.id
+      ORDER BY view_count DESC
+      LIMIT 5`,
+      [req.user.id],
+    );
+
+    // Views 7 ngày gần nhất (tất cả tin của owner)
+    const [viewsByDay] = await pool.query(
+      `SELECT
+        DATE(pv.viewed_at)  AS date,
+        COUNT(*)            AS views
+      FROM property_views pv
+      JOIN properties p ON pv.property_id = p.id
+      WHERE p.owner_id = ?
+        AND pv.viewed_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+      GROUP BY DATE(pv.viewed_at)
+      ORDER BY date ASC`,
+      [req.user.id],
+    );
+
+    // Contacts chưa reply
+    const [[{ pending_contacts }]] = await pool.query(
+      `SELECT COUNT(*) AS pending_contacts
+       FROM contacts c
+       JOIN properties p ON c.property_id = p.id
+       WHERE p.owner_id = ? AND c.status = 'pending'`,
+      [req.user.id],
+    );
+
+    res.json({
+      overview: { ...overview, pending_contacts },
+      top_properties: topProperties,
+      views_by_day: viewsByDay,
+    });
+  } catch (err) {
+    res.status(500).json({ message: "Lỗi server", error: err.message });
+  }
+});
+
+// GET /api/property/owner/stats/:id — chi tiết 1 tin cụ thể
+router.get("/owner/stats/:id", authMiddleware, async (req, res) => {
+  if (req.user.role !== "owner")
+    return res.status(403).json({ message: "Không có quyền" });
+
+  try {
+    // Kiểm tra tin thuộc owner này không
+    const [rows] = await pool.query(
+      "SELECT id, title, status, price, area, city, district, created_at FROM properties WHERE id = ? AND owner_id = ?",
+      [req.params.id, req.user.id],
+    );
+    if (rows.length === 0)
+      return res
+        .status(404)
+        .json({ message: "Không tìm thấy hoặc không có quyền" });
+
+    const property = rows[0];
+
+    // Views theo ngày 7 ngày gần nhất
+    const [viewsByDay] = await pool.query(
+      `SELECT
+        DATE(viewed_at) AS date,
+        COUNT(*)        AS views
+      FROM property_views
+      WHERE property_id = ?
+        AND viewed_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+      GROUP BY DATE(viewed_at)
+      ORDER BY date ASC`,
+      [req.params.id],
+    );
+
+    // Tổng views + contacts
+    const [[{ total_views }]] = await pool.query(
+      "SELECT COUNT(*) AS total_views FROM property_views WHERE property_id = ?",
+      [req.params.id],
+    );
+    const [[{ total_contacts, pending_contacts }]] = await pool.query(
+      `SELECT
+        COUNT(*) AS total_contacts,
+        SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) AS pending_contacts
+       FROM contacts WHERE property_id = ?`,
+      [req.params.id],
+    );
+
+    // 5 liên hệ gần nhất
+    const [recentContacts] = await pool.query(
+      `SELECT c.id, c.message, c.status, c.created_at, c.owner_reply,
+              u.full_name AS buyer_name, u.phone_number AS buyer_phone
+       FROM contacts c
+       JOIN users u ON c.buyer_id = u.id
+       WHERE c.property_id = ?
+       ORDER BY c.created_at DESC
+       LIMIT 5`,
+      [req.params.id],
+    );
+
+    res.json({
+      property,
+      stats: { total_views, total_contacts, pending_contacts },
+      views_by_day: viewsByDay,
+      recent_contacts: recentContacts,
+    });
+  } catch (err) {
+    res.status(500).json({ message: "Lỗi server", error: err.message });
+  }
+});
+
 // POST /api/property — tạo tin (owner)
 router.post("/", authMiddleware, async (req, res) => {
   if (req.user.role !== "owner")
