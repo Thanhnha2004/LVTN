@@ -37,22 +37,32 @@ export default function Profile() {
 
   const fetchData = async () => {
     try {
-      const [profileRes, savedRes, contactRes] = await Promise.all([
-        api.get("/api/auth/me"),
-        api.get("/api/contact/saved"),
-        api.get("/api/contact/buyer"),
-      ]);
+      const profileRes = await api.get("/api/auth/me");
 
-      setUser(profileRes.data);
-      setSaved(savedRes.data || []);
+      const userData = profileRes.data;
+      setUser(userData);
+
+      const requests = [api.get("/api/contact/saved")];
+
+      // chỉ buyer mới gọi contact/buyer
+      if (userData.role === "buyer") {
+        requests.push(api.get("/api/contact/buyer"));
+      }
+
+      const results = await Promise.all(requests);
+
+      setSaved(results[0].data || []);
+
       setContacts(
-        Array.isArray(contactRes.data)
-          ? contactRes.data
-          : contactRes.data.data || [],
+        userData.role === "buyer"
+          ? results[1]?.data?.data || results[1]?.data || []
+          : [], // owner không có contacts
       );
     } catch (err) {
       if (err.response?.status === 401) {
         navigate("/login");
+      } else {
+        console.log("Fetch error:", err.response?.status, err.message);
       }
     }
   };
@@ -118,16 +128,18 @@ export default function Profile() {
                   ♥ Tin đã lưu ({saved.length})
                 </Link>
 
-                <Link
-                  to="/profile?tab=contacts"
-                  className="btn text-start"
-                  style={{
-                    background:
-                      activeTab === "contacts" ? "#b51b17" : "transparent",
-                    color: activeTab === "contacts" ? "#fff" : "#5b403c",
-                  }}>
-                  ✉ Yêu cầu liên hệ ({contacts.length})
-                </Link>
+                {user?.role === "buyer" && (
+                  <Link
+                    to="/profile?tab=contacts"
+                    className="btn text-start"
+                    style={{
+                      background:
+                        activeTab === "contacts" ? "#b51b17" : "transparent",
+                      color: activeTab === "contacts" ? "#fff" : "#5b403c",
+                    }}>
+                    ✉ Yêu cầu liên hệ ({contacts.length})
+                  </Link>
+                )}
               </nav>
             </div>
           </div>

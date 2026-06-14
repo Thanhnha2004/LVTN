@@ -1191,136 +1191,145 @@ export default function Detail() {
       </div>
 
       {/* ── FOOTER ── */}
-      <footer
-        style={{
-          marginTop: 64,
-          background: "#e2e2e2",
-          borderTop: "1px solid #dadada",
-          padding: "40px",
-        }}>
+      <footer style={{ background: "#e2e2e2", borderTop: "1px solid #E8E8E8" }}>
         <div
           style={{
             maxWidth: 1200,
             margin: "0 auto",
-            display: "grid",
-            gridTemplateColumns: "2fr 1fr 1fr 1fr",
-            gap: 32,
+            padding: "48px 40px 32px",
           }}>
-          <div>
-            <div
-              style={{
-                fontFamily: "Manrope, sans-serif",
-                fontSize: 18,
-                fontWeight: 700,
-                color: "#b51b17",
-                marginBottom: 8,
-              }}>
-              Bất Động Sản
-            </div>
-            <p
-              style={{
-                fontFamily: "Inter, sans-serif",
-                fontSize: 13,
-                color: "#5f5e5e",
-                lineHeight: 1.7,
-                maxWidth: 260,
-              }}>
-              Hệ thống cung cấp giải pháp bất động sản toàn diện, chuyên nghiệp
-              và uy tín hàng đầu Việt Nam.
-            </p>
-          </div>
-          {[
-            {
-              title: "Khám phá",
-              links: ["Nhà đất bán", "Nhà đất cho thuê", "Tin dự án"],
-            },
-            {
-              title: "Thông tin",
-              links: [
-                "Về chúng tôi",
-                "Chính sách bảo mật",
-                "Điều khoản sử dụng",
-              ],
-            },
-          ].map((col) => (
-            <div key={col.title}>
-              <h5
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "2fr 1fr 1fr 1fr",
+              gap: 40,
+              marginBottom: 40,
+            }}>
+            <div>
+              <Link
+                to="/"
                 style={{
-                  fontFamily: "Manrope, sans-serif",
-                  fontSize: 14,
+                  fontFamily: "Manrope",
                   fontWeight: 700,
-                  color: "#1a1c1c",
-                  marginBottom: 12,
-                  marginTop: 0,
+                  fontSize: 18,
+                  color: "#b51b17",
+                  textDecoration: "none",
+                  display: "block",
+                  marginBottom: 16,
                 }}>
-                {col.title}
-              </h5>
-              <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
-                {col.links.map((link) => (
-                  <li key={link} style={{ marginBottom: 8 }}>
-                    <a
-                      href="#"
-                      style={{
-                        fontFamily: "Inter, sans-serif",
-                        fontSize: 13,
-                        color: "#5f5e5e",
-                        textDecoration: "none",
-                      }}>
-                      {link}
-                    </a>
-                  </li>
-                ))}
-              </ul>
+                Bất Động Sản
+              </Link>
+              <p
+                style={{
+                  color: "#656464",
+                  fontSize: 14,
+                  lineHeight: 1.7,
+                  maxWidth: 280,
+                }}>
+                Hệ thống kết nối bất động sản hàng đầu Việt Nam, cung cấp thông
+                tin chính xác, minh bạch và nhanh chóng cho người dùng.
+              </p>
             </div>
-          ))}
-          <div>
-            <h5
-              style={{
-                fontFamily: "Manrope, sans-serif",
-                fontSize: 14,
-                fontWeight: 700,
-                color: "#1a1c1c",
-                marginBottom: 12,
-                marginTop: 0,
-              }}>
-              Kết nối
-            </h5>
+            {[
+              {
+                title: "KHÁM PHÁ",
+                links: ["Mua bán nhà đất", "Cho thuê căn hộ", "Dự án mới"],
+              },
+              {
+                title: "HỖ TRỢ",
+                links: [
+                  "Về chúng tôi",
+                  "Liên hệ quảng cáo",
+                  "Hướng dẫn đăng tin",
+                ],
+              },
+              {
+                title: "PHÁP LÝ",
+                links: ["Chính sách bảo mật", "Điều khoản sử dụng"],
+              },
+            ].map((col) => (
+              <div key={col.title}>
+                <h4
+                  style={{
+                    fontSize: 12,
+                    fontWeight: 600,
+                    color: "#1a1c1c",
+                    marginBottom: 20,
+                    letterSpacing: "0.08em",
+                  }}>
+                  {col.title}
+                </h4>
+                <ul
+                  style={{
+                    listStyle: "none",
+                    padding: 0,
+                    margin: 0,
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 12,
+                  }}>
+                  {col.links.map((l) => (
+                    <li key={l}>
+                      <a
+                        href="#"
+                        style={{
+                          color: "#656464",
+                          fontSize: 14,
+                          textDecoration: "none",
+                        }}
+                        onMouseEnter={(e) =>
+                          (e.currentTarget.style.color = "#b51b17")
+                        }
+                        onMouseLeave={(e) =>
+                          (e.currentTarget.style.color = "#656464")
+                        }>
+                        {l}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+          <div
+            style={{
+              paddingTop: 24,
+              borderTop: "1px solid #E8E8E8",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+            }}>
+            <p style={{ color: "#656464", fontSize: 13, margin: 0 }}>
+              © 2024 Hệ thống Bất Động Sản Chuyên Nghiệp. All rights reserved.
+            </p>
             <div style={{ display: "flex", gap: 10 }}>
-              {["📸", "✉️", "🔗"].map((icon, i) => (
-                <button
+              {["📘", "🐦"].map((icon, i) => (
+                <a
                   key={i}
+                  href="#"
                   style={{
                     width: 36,
                     height: 36,
                     borderRadius: "50%",
-                    background: "#fff",
-                    border: "1px solid #E8E8E8",
-                    cursor: "pointer",
-                    fontSize: 16,
-                  }}>
+                    background: "#eeeeee",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: 14,
+                    textDecoration: "none",
+                    transition: "background 0.15s",
+                  }}
+                  onMouseEnter={(e) =>
+                    (e.currentTarget.style.background = "#b51b17")
+                  }
+                  onMouseLeave={(e) =>
+                    (e.currentTarget.style.background = "#eeeeee")
+                  }>
                   {icon}
-                </button>
+                </a>
               ))}
             </div>
           </div>
-        </div>
-        <div
-          style={{
-            maxWidth: 1200,
-            margin: "24px auto 0",
-            paddingTop: 20,
-            borderTop: "1px solid #dadada",
-            textAlign: "center",
-          }}>
-          <p
-            style={{
-              fontFamily: "Inter, sans-serif",
-              fontSize: 12,
-              color: "#757575",
-              margin: 0,
-            }}>
-            © 2024 Hệ thống Bất Động Sản Chuyên Nghiệp. All rights reserved.
-          </p>
         </div>
       </footer>
     </div>
