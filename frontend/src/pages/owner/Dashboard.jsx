@@ -2,6 +2,20 @@ import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import api from "../../api/axios";
 import Navbar from "../../components/Navbar";
+import {
+  FaListAlt,
+  FaComments,
+  FaBuilding,
+  FaHome,
+  FaMapMarkedAlt,
+  FaBriefcase,
+  FaEdit,
+  FaTag,
+  FaEye,
+  FaTrash,
+  FaRedo,
+  FaEyeSlash,
+} from "react-icons/fa";
 
 const VN = { fontFamily: "'Be Vietnam Pro', Inter, sans-serif" };
 
@@ -51,8 +65,17 @@ const TABS = [
 ];
 
 const SIDEBAR = [
-  { to: "/owner/dashboard", icon: "📋", label: "Tin đã đăng", active: true },
-  { to: "/owner/contacts", icon: "💬", label: "Liên hệ" },
+  {
+    to: "/owner/dashboard",
+    icon: <FaListAlt size={16} />,
+    label: "Tin đã đăng",
+    active: true,
+  },
+  {
+    to: "/owner/contacts",
+    icon: <FaComments size={16} />,
+    label: "Liên hệ",
+  },
 ];
 
 function StatusBadge({ status, rejectReason }) {
@@ -92,7 +115,6 @@ function StatusBadge({ status, rejectReason }) {
             marginTop: 3,
             ...VN,
           }}>
-          {rejectReason}
         </div>
       )}
     </div>
@@ -147,7 +169,12 @@ function Thumb({ src, status }) {
       />
     );
   }
-  const iconMap = { apartment: "🏢", house: "🏠", land: "🗺️", office: "🏙️" };
+  const iconMap = {
+    apartment: <FaBuilding />,
+    house: <FaHome />,
+    land: <FaMapMarkedAlt />,
+    office: <FaBriefcase />,
+  };
   return (
     <div
       style={{
@@ -162,7 +189,7 @@ function Thumb({ src, status }) {
         fontSize: 20,
         filter: grayscale ? "grayscale(0.5)" : "none",
       }}>
-      {iconMap[status] || "🏠"}
+      {iconMap[status] || <FaHome />}
     </div>
   );
 }
@@ -175,6 +202,7 @@ export default function OwnerDashboard() {
   const [page, setPage] = useState(1);
   const PER_PAGE = 10;
   const navigate = useNavigate();
+  const [rejectModal, setRejectModal] = useState(null);
 
   useEffect(() => {
     (async () => {
@@ -199,17 +227,6 @@ export default function OwnerDashboard() {
     }
   };
 
-  const handleRepost = async (id) => {
-    try {
-      await api.patch(`/api/property/${id}/resubmit`);
-      setProperties((prev) =>
-        prev.map((p) => (p.id === id ? { ...p, status: "pending" } : p)),
-      );
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
   const handleHide = async (id) => {
     try {
       await api.patch(`/api/property/${id}/hide`);
@@ -227,6 +244,17 @@ export default function OwnerDashboard() {
       await api.patch(`/api/property/${id}/sold`);
       setProperties((prev) =>
         prev.map((p) => (p.id === id ? { ...p, status: "sold" } : p)),
+      );
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleUnhide = async (id) => {
+    try {
+      await api.patch(`/api/property/${id}/unhide`);
+      setProperties((prev) =>
+        prev.map((p) => (p.id === id ? { ...p, status: "approved" } : p)),
       );
     } catch (err) {
       console.error(err);
@@ -288,7 +316,6 @@ export default function OwnerDashboard() {
           maxWidth: 1280,
           margin: "0 auto",
         }}>
-
         {/* ── Main ── */}
         <main style={{ flex: 1, padding: "24px 28px", minWidth: 0 }}>
           {/* Stats */}
@@ -299,12 +326,7 @@ export default function OwnerDashboard() {
               gap: 12,
               marginBottom: 24,
             }}>
-            <StatCard
-              label="Tổng tin đăng"
-              value={total}
-              sub="↑ +2 tháng này"
-              subColor="#0f6e56"
-            />
+            <StatCard label="Tổng tin đăng" value={total} subColor="#0f6e56" />
             <StatCard
               label="Đang hiển thị"
               value={<span style={{ color: "#0f6e56" }}>{active}</span>}
@@ -317,17 +339,7 @@ export default function OwnerDashboard() {
             <StatCard
               label="Tổng lượt xem"
               value={views.toLocaleString("vi-VN")}
-              sub="👁 Tất cả các tin"
-            />
-            <StatCard
-              label="Liên hệ mới"
-              value={<span style={{ color: "#b51b17" }}>{contacts}</span>}
-              sub={
-                unread > 0
-                  ? `${unread} liên hệ chưa phản hồi`
-                  : "Đã phản hồi tất cả"
-              }
-              subColor={unread > 0 ? "#b51b17" : "#0f6e56"}
+              sub="Tất cả các tin"
             />
           </div>
 
@@ -488,7 +500,9 @@ export default function OwnerDashboard() {
               </div>
             ) : paginated.length === 0 ? (
               <div style={{ textAlign: "center", padding: "60px 0", ...VN }}>
-                <div style={{ fontSize: 48 }}>📋</div>
+                <div style={{ fontSize: 42, color: "#b51b17" }}>
+                  <FaListAlt />
+                </div>
                 <h6 style={{ fontWeight: 600, marginTop: 12 }}>
                   Không có tin đăng nào
                 </h6>
@@ -636,7 +650,8 @@ export default function OwnerDashboard() {
                                 gap: 4,
                                 ...VN,
                               }}>
-                              💬 {p.contact_count} liên hệ
+                              <FaComments />
+                              {p.contact_count} liên hệ
                             </span>
                           ) : (
                             <span
@@ -654,27 +669,6 @@ export default function OwnerDashboard() {
                               gap: 4,
                               justifyContent: "flex-end",
                             }}>
-                            {p.status === "rejected" && (
-                              <button
-                                onClick={() => handleRepost(p.id)}
-                                style={{
-                                  fontSize: 11,
-                                  padding: "5px 10px",
-                                  borderRadius: 6,
-                                  border: "none",
-                                  background: "#fcebeb",
-                                  color: "#a32d2d",
-                                  cursor: "pointer",
-                                  fontWeight: 500,
-                                  display: "flex",
-                                  alignItems: "center",
-                                  gap: 4,
-                                  ...VN,
-                                }}>
-                                🔄 Gửi lại
-                              </button>
-                            )}
-
                             {p.status !== "sold" && p.status !== "rejected" && (
                               <Link
                                 to={`/owner/edit/${p.id}`}
@@ -700,7 +694,7 @@ export default function OwnerDashboard() {
                                   e.currentTarget.style.color = "#5f5e5e";
                                   e.currentTarget.style.borderColor = "#E8E8E8";
                                 }}>
-                                ✏️
+                                <FaEdit />
                               </Link>
                             )}
 
@@ -734,7 +728,7 @@ export default function OwnerDashboard() {
                                     e.currentTarget.style.borderColor =
                                       "#E8E8E8";
                                   }}>
-                                  🏷️
+                                  <FaTag />
                                 </button>
                                 <button
                                   onClick={() => handleHide(p.id)}
@@ -762,30 +756,61 @@ export default function OwnerDashboard() {
                                     e.currentTarget.style.borderColor =
                                       "#E8E8E8";
                                   }}>
-                                  🙈
+                                  <FaEyeSlash />
                                 </button>
                               </>
                             )}
 
-                            {p.status === "sold" && (
-                              <Link
-                                to={`/property/${p.id}`}
-                                title="Xem chi tiết"
+                            {/* NÚT HIỆN LẠI khi đang ẩn */}
+                            {p.status === "hidden" && (
+                              <button
+                                onClick={() => handleUnhide(p.id)}
+                                title="Hiện lại"
                                 style={{
                                   width: 30,
                                   height: 30,
                                   borderRadius: 6,
                                   border: "0.5px solid #E8E8E8",
                                   background: "#fff",
+                                  cursor: "pointer",
+                                  fontSize: 14,
                                   display: "flex",
                                   alignItems: "center",
                                   justifyContent: "center",
-                                  fontSize: 14,
-                                  textDecoration: "none",
                                   color: "#5f5e5e",
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.background = "#e6f9f0";
+                                  e.currentTarget.style.borderColor = "#0f6e56";
+                                  e.currentTarget.style.color = "#0f6e56";
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.background = "#fff";
+                                  e.currentTarget.style.borderColor = "#E8E8E8";
+                                  e.currentTarget.style.color = "#5f5e5e";
                                 }}>
-                                👁️
-                              </Link>
+                                <FaEye />
+                              </button>
+                            )}
+
+                            {/* XEM LÝ DO khi bị từ chối */}
+                            {p.status === "rejected" && p.reject_reason && (
+                              <button
+                                onClick={() => setRejectModal(p)}
+                                style={{
+                                  height: 30,
+                                  padding: "0 10px",
+                                  borderRadius: 6,
+                                  border: "0.5px solid #f09595",
+                                  background: "#fcebeb",
+                                  cursor: "pointer",
+                                  fontSize: 12,
+                                  color: "#a32d2d",
+                                  whiteSpace: "nowrap",
+                                  ...VN,
+                                }}>
+                                Xem lý do
+                              </button>
                             )}
 
                             <button
@@ -814,7 +839,7 @@ export default function OwnerDashboard() {
                                 e.currentTarget.style.borderColor = "#E8E8E8";
                                 e.currentTarget.style.color = "#5f5e5e";
                               }}>
-                              🗑️
+                              <FaTrash />
                             </button>
                           </div>
                         </td>
@@ -898,6 +923,119 @@ export default function OwnerDashboard() {
             )}
           </div>
         </main>
+        {rejectModal && (
+          <div
+            onClick={() => setRejectModal(null)}
+            style={{
+              position: "fixed",
+              inset: 0,
+              background: "rgba(0,0,0,0.4)",
+              zIndex: 1000,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: 16,
+            }}>
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                background: "#fff",
+                borderRadius: 14,
+                width: "100%",
+                maxWidth: 440,
+                boxShadow: "0 8px 32px rgba(0,0,0,0.12)",
+                overflow: "hidden",
+                ...VN,
+              }}>
+              {/* Header */}
+              <div
+                style={{
+                  background: "#fcebeb",
+                  padding: "18px 20px",
+                  borderBottom: "0.5px solid #f09595",
+                  display: "flex",
+                  alignItems: "flex-start",
+                  justifyContent: "space-between",
+                  gap: 12,
+                }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <div>
+                    <div
+                      style={{
+                        fontSize: 14,
+                        fontWeight: 700,
+                        color: "#a32d2d",
+                      }}>
+                      Tin đăng bị từ chối
+                    </div>
+
+                  </div>
+                </div>
+                <button
+                  onClick={() => setRejectModal(null)}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    fontSize: 18,
+                    color: "#a32d2d",
+                    cursor: "pointer",
+                    lineHeight: 1,
+                    padding: 0,
+                    flexShrink: 0,
+                  }}>
+                  ×
+                </button>
+              </div>
+
+              {/* Tên tin */}
+              <div
+                style={{
+                  padding: "14px 20px",
+                  borderBottom: "0.5px solid #E8E8E8",
+                  background: "#fafafa",
+                }}>
+                <div
+                  style={{ fontSize: 11, color: "#757575", marginBottom: 3 }}>
+                  Tin đăng
+                </div>
+                <div
+                  style={{ fontSize: 13, fontWeight: 600, color: "#1a1c1c" }}>
+                  {rejectModal.title}
+                </div>
+                <div style={{ fontSize: 11, color: "#757575", marginTop: 2 }}>
+                  {rejectModal.area}m² · {rejectModal.city}
+                </div>
+              </div>
+
+              {/* Lý do */}
+              <div style={{ padding: "16px 20px" }}>
+                <div
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 600,
+                    color: "#757575",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.06em",
+                    marginBottom: 8,
+                  }}>
+                  Lý do từ chối
+                </div>
+                <div
+                  style={{
+                    fontSize: 14,
+                    color: "#a32d2d",
+                    lineHeight: 1.6,
+                    background: "#fcebeb",
+                    border: "0.5px solid #f09595",
+                    borderRadius: 8,
+                    padding: "12px 14px",
+                  }}>
+                  {rejectModal.reject_reason}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ── FOOTER ── */}
@@ -1012,33 +1150,8 @@ export default function OwnerDashboard() {
             <p style={{ color: "#656464", fontSize: 13, margin: 0 }}>
               © 2024 Hệ thống Bất Động Sản Chuyên Nghiệp. All rights reserved.
             </p>
-            <div style={{ display: "flex", gap: 10 }}>
-              {["📘", "🐦"].map((icon, i) => (
-                <a
-                  key={i}
-                  href="#"
-                  style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: "50%",
-                    background: "#eeeeee",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: 14,
-                    textDecoration: "none",
-                    transition: "background 0.15s",
-                  }}
-                  onMouseEnter={(e) =>
-                    (e.currentTarget.style.background = "#b51b17")
-                  }
-                  onMouseLeave={(e) =>
-                    (e.currentTarget.style.background = "#eeeeee")
-                  }>
-                  {icon}
-                </a>
-              ))}
-            </div>
+
+
           </div>
         </div>
       </footer>

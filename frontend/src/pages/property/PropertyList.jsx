@@ -398,16 +398,6 @@ export default function PropertyList() {
                           VIP
                         </span>
 
-                        <button
-                          className="btn btn-light"
-                          style={{
-                            position: "absolute",
-                            top: 10,
-                            right: 10,
-                            borderRadius: "50%",
-                          }}>
-                          ❤️
-                        </button>
                       </div>
 
                       {/* BODY */}
@@ -602,33 +592,8 @@ export default function PropertyList() {
             <p style={{ color: "#656464", fontSize: 13, margin: 0 }}>
               © 2024 Hệ thống Bất Động Sản Chuyên Nghiệp. All rights reserved.
             </p>
-            <div style={{ display: "flex", gap: 10 }}>
-              {["📘", "🐦"].map((icon, i) => (
-                <a
-                  key={i}
-                  href="#"
-                  style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: "50%",
-                    background: "#eeeeee",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: 14,
-                    textDecoration: "none",
-                    transition: "background 0.15s",
-                  }}
-                  onMouseEnter={(e) =>
-                    (e.currentTarget.style.background = "#b51b17")
-                  }
-                  onMouseLeave={(e) =>
-                    (e.currentTarget.style.background = "#eeeeee")
-                  }>
-                  {icon}
-                </a>
-              ))}
-            </div>
+
+
           </div>
         </div>
       </footer>

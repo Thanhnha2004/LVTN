@@ -4,6 +4,7 @@ const jwt = require("jsonwebtoken");
 const pool = require("../db");
 const authMiddleware = require("../middleware/auth");
 const { sendOtpEmail } = require("../mailer");
+const { cloudinary, upload } = require("../cloudinary");
 const router = express.Router();
 
 // ─── Helper: tạo mã OTP 6 số ────────────────────────────────
@@ -212,7 +213,7 @@ router.post("/login", async (req, res) => {
 router.get("/me", authMiddleware, async (req, res) => {
   try {
     const [rows] = await pool.query(
-      "SELECT id, full_name, email, phone_number, role, email_verified, created_at FROM users WHERE id = ?",
+      "SELECT id, full_name, email, phone_number, avatar_url, role, email_verified, created_at FROM users WHERE id = ?",
       [req.user.id],
     );
     if (rows.length === 0)
@@ -223,17 +224,48 @@ router.get("/me", authMiddleware, async (req, res) => {
   }
 });
 
-// PUT /api/auth/me — cập nhật thông tin cá nhân
-router.put("/me", authMiddleware, async (req, res) => {
+// PUT /api/auth/me — cập nhật thông tin + avatar
+router.put("/me", authMiddleware, upload.single("avatar"), async (req, res) => {
   const { full_name, phone_number } = req.body;
   if (!full_name) return res.status(400).json({ message: "Thiếu họ tên" });
 
   try {
-    await pool.query(
-      "UPDATE users SET full_name = ?, phone_number = ? WHERE id = ?",
-      [full_name, phone_number || null, req.user.id],
-    );
-    res.json({ message: "Cập nhật thành công" });
+    let avatar_url = undefined;
+
+    if (req.file) {
+      // Xoá avatar cũ trên Cloudinary nếu có
+      const [rows] = await pool.query(
+        "SELECT avatar_url FROM users WHERE id = ?",
+        [req.user.id],
+      );
+      const oldUrl = rows[0]?.avatar_url;
+      if (oldUrl) {
+        try {
+          const parts = oldUrl.split("/");
+          const folder = parts[parts.length - 2];
+          const filename = parts[parts.length - 1].split(".")[0];
+          await cloudinary.uploader.destroy(`${folder}/${filename}`);
+        } catch (e) {
+          console.error("Cloudinary delete old avatar error:", e.message);
+        }
+      }
+
+      avatar_url = req.file.path; // URL Cloudinary trả về
+    }
+
+    if (avatar_url !== undefined) {
+      await pool.query(
+        "UPDATE users SET full_name = ?, phone_number = ?, avatar_url = ? WHERE id = ?",
+        [full_name, phone_number || null, avatar_url, req.user.id],
+      );
+    } else {
+      await pool.query(
+        "UPDATE users SET full_name = ?, phone_number = ? WHERE id = ?",
+        [full_name, phone_number || null, req.user.id],
+      );
+    }
+
+    res.json({ message: "Cập nhật thành công", avatar_url });
   } catch (err) {
     res.status(500).json({ message: "Lỗi server", error: err.message });
   }

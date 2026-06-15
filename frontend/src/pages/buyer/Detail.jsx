@@ -827,7 +827,7 @@ export default function Detail() {
                   fontWeight: 600,
                   cursor: "pointer",
                 }}>
-                💬 Gửi yêu cầu
+                Gửi yêu cầu
               </button>
             </div>
 
@@ -976,49 +976,6 @@ export default function Detail() {
               )}
             </div>
 
-            {/* Tour registration banner */}
-            <div
-              style={{
-                background: "#fff0ef",
-                border: "1px solid #ffb4aa",
-                borderRadius: 12,
-                padding: "16px 20px",
-              }}>
-              <div
-                style={{
-                  fontFamily: "Manrope, sans-serif",
-                  fontSize: 14,
-                  fontWeight: 700,
-                  color: "#b51b17",
-                  marginBottom: 4,
-                }}>
-                Đăng ký xem nhà
-              </div>
-              <div
-                style={{
-                  fontFamily: "Inter, sans-serif",
-                  fontSize: 13,
-                  color: "#5b403c",
-                  marginBottom: 12,
-                }}>
-                Nhận lịch tham quan thực tế căn hộ ngay trong hôm nay.
-              </div>
-              <button
-                style={{
-                  width: "100%",
-                  background: "#b51b17",
-                  color: "#fff",
-                  border: "none",
-                  padding: "10px 0",
-                  borderRadius: 8,
-                  fontFamily: "Inter, sans-serif",
-                  fontSize: 13,
-                  fontWeight: 600,
-                  cursor: "pointer",
-                }}>
-                Đăng ký ngay
-              </button>
-            </div>
           </div>
         </div>
 
@@ -1302,33 +1259,8 @@ export default function Detail() {
             <p style={{ color: "#656464", fontSize: 13, margin: 0 }}>
               © 2024 Hệ thống Bất Động Sản Chuyên Nghiệp. All rights reserved.
             </p>
-            <div style={{ display: "flex", gap: 10 }}>
-              {["📘", "🐦"].map((icon, i) => (
-                <a
-                  key={i}
-                  href="#"
-                  style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: "50%",
-                    background: "#eeeeee",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: 14,
-                    textDecoration: "none",
-                    transition: "background 0.15s",
-                  }}
-                  onMouseEnter={(e) =>
-                    (e.currentTarget.style.background = "#b51b17")
-                  }
-                  onMouseLeave={(e) =>
-                    (e.currentTarget.style.background = "#eeeeee")
-                  }>
-                  {icon}
-                </a>
-              ))}
-            </div>
+
+
           </div>
         </div>
       </footer>

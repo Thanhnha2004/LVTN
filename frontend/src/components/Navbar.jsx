@@ -60,7 +60,7 @@ function UserDropdown({ user, onLogout }) {
             <li>
               <Link
                 className="dropdown-item small"
-                to="/change-password"
+                to="/profile?tab=password"
                 onClick={() => setOpen(false)}>
                 Đổi mật khẩu
               </Link>
@@ -124,16 +124,16 @@ export default function Navbar() {
         {/* Menu loại hình — luôn hiện */}
         <ul className="navbar-nav me-auto gap-1">
           {[
-            { label: "Căn hộ", path: "/?type=apartment" },
-            { label: "Nhà phố", path: "/?type=house" },
-            { label: "Đất nền", path: "/?type=land" },
-            { label: "Văn phòng", path: "/?type=office" },
+            { label: "Căn hộ", type: "apartment" },
+            { label: "Nhà phố", type: "house" },
+            { label: "Đất nền", type: "land" },
+            { label: "Văn phòng", type: "office" },
           ].map((item) => (
             <li key={item.label} className="nav-item">
               <Link
                 className="nav-link text-dark fw-medium px-2"
                 style={{ fontSize: 14, whiteSpace: "nowrap" }}
-                to={item.path}>
+                to={`/search?type=${item.type}`}>
                 {item.label}
               </Link>
             </li>
@@ -168,22 +168,6 @@ export default function Navbar() {
                   style={{ fontSize: 14 }}
                   to="/admin/dashboard">
                   Dashboard
-                </Link>
-              </li>
-              <li className="nav-item">
-                <Link
-                  className="nav-link text-dark fw-medium px-2"
-                  style={{ fontSize: 14 }}
-                  to="/admin/pending">
-                  Duyệt tin
-                </Link>
-              </li>
-              <li className="nav-item">
-                <Link
-                  className="nav-link text-dark fw-medium px-2"
-                  style={{ fontSize: 14 }}
-                  to="/admin/users">
-                  Người dùng
                 </Link>
               </li>
             </>

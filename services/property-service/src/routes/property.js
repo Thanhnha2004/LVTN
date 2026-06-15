@@ -401,16 +401,19 @@ router.patch("/:id/status", authMiddleware, async (req, res) => {
   if (req.user.role !== "admin")
     return res.status(403).json({ message: "Chỉ admin mới được duyệt tin" });
 
-  const { status } = req.body;
+  const { status, reject_reason } = req.body;
   const valid = ["approved", "rejected", "hidden"];
   if (!valid.includes(status))
     return res.status(400).json({ message: "Trạng thái không hợp lệ" });
 
+  if (status === "rejected" && !reject_reason)
+    return res.status(400).json({ message: "Vui lòng nhập lý do từ chối" });
+
   try {
-    await pool.query("UPDATE properties SET status = ? WHERE id = ?", [
-      status,
-      req.params.id,
-    ]);
+    await pool.query(
+      "UPDATE properties SET status = ?, reject_reason = ? WHERE id = ?",
+      [status, status === "rejected" ? reject_reason : null, req.params.id],
+    );
     res.json({ message: "Cập nhật trạng thái thành công" });
   } catch (err) {
     res.status(500).json({ message: "Lỗi server", error: err.message });
@@ -465,29 +468,24 @@ router.patch("/:id/sold", authMiddleware, async (req, res) => {
   }
 });
 
-// PATCH /api/property/:id/resubmit — Owner nộp lại tin bị rejected
-router.patch("/:id/resubmit", authMiddleware, async (req, res) => {
+router.patch("/:id/unhide", authMiddleware, async (req, res) => {
   if (req.user.role !== "owner")
     return res.status(403).json({ message: "Không có quyền" });
-
   try {
     const [rows] = await pool.query(
-      "SELECT owner_id, status FROM properties WHERE id = ?",
+      "SELECT owner_id FROM properties WHERE id = ?",
       [req.params.id],
     );
     if (rows.length === 0)
       return res.status(404).json({ message: "Không tìm thấy" });
     if (rows[0].owner_id !== req.user.id)
       return res.status(403).json({ message: "Không có quyền" });
-    if (rows[0].status !== "rejected")
-      return res
-        .status(400)
-        .json({ message: "Chỉ có thể nộp lại tin bị từ chối" });
 
-    await pool.query("UPDATE properties SET status = 'pending' WHERE id = ?", [
-      req.params.id,
-    ]);
-    res.json({ message: "Đã nộp lại, chờ Admin duyệt" });
+    await pool.query(
+      "UPDATE properties SET status = 'approved' WHERE id = ? AND status = 'hidden'",
+      [req.params.id],
+    );
+    res.json({ message: "Đã hiện lại tin" });
   } catch (err) {
     res.status(500).json({ message: "Lỗi server", error: err.message });
   }

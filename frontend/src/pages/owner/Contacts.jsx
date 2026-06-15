@@ -5,28 +5,6 @@ import Navbar from "../../components/Navbar";
 
 const VN = { fontFamily: "'Be Vietnam Pro', Inter, sans-serif" };
 
-function timeAgo(dateStr) {
-  if (!dateStr) return "";
-  const diff = (Date.now() - new Date(dateStr)) / 1000;
-  if (diff < 3600) return `${Math.floor(diff / 60)} phút trước`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)} giờ trước`;
-  if (diff < 172800)
-    return (
-      "Hôm qua, " +
-      new Date(dateStr).toLocaleTimeString("vi-VN", {
-        hour: "2-digit",
-        minute: "2-digit",
-      })
-    );
-  return new Date(dateStr).toLocaleString("vi-VN", {
-    hour: "2-digit",
-    minute: "2-digit",
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  });
-}
-
 function initials(name) {
   if (!name) return "?";
   return name
@@ -256,7 +234,7 @@ function ContactCard({ contact, onReplied }) {
             gap: 6,
             flexWrap: "wrap",
           }}>
-          🏠 Quan tâm:&nbsp;
+          Quan tâm:&nbsp;
           <Link
             to={`/property/${contact.property_id}`}
             style={{
@@ -308,12 +286,7 @@ function ContactCard({ contact, onReplied }) {
                   color: "#b51b17",
                   textTransform: "uppercase",
                   letterSpacing: ".04em",
-                }}>
-                Bạn đã trả lời:
-              </span>
-              <span style={{ fontSize: 12, color: "#757575" }}>
-                {timeAgo(contact.updated_at)}
-              </span>
+                }}></span>
             </div>
             <p style={{ fontSize: 14, color: "#1a1c1c", margin: 0, ...VN }}>
               {contact.owner_reply}
@@ -337,9 +310,7 @@ function ContactCard({ contact, onReplied }) {
               display: "flex",
               alignItems: "center",
               gap: 5,
-            }}>
-            📅 {timeAgo(contact.created_at)}
-          </span>
+            }}></span>
 
           {isPending ? (
             <button
@@ -375,7 +346,7 @@ function ContactCard({ contact, onReplied }) {
                   fontWeight: 500,
                   ...VN,
                 }}>
-                ✏️ Chỉnh sửa câu trả lời
+                Chỉnh sửa câu trả lời
               </button>
               <button
                 style={{
@@ -385,9 +356,7 @@ function ContactCard({ contact, onReplied }) {
                   border: "none",
                   cursor: "pointer",
                   ...VN,
-                }}>
-                🕑 Xem lịch sử
-              </button>
+                }}></button>
             </div>
           )}
         </div>
@@ -556,25 +525,6 @@ export default function OwnerContacts() {
                     color: "#1a1c1c",
                   }}
                 />
-              </div>
-              {/* Sort */}
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <span style={{ fontSize: 13, color: "#757575" }}>Sắp xếp:</span>
-                <select
-                  value={sort}
-                  onChange={(e) => setSort(e.target.value)}
-                  style={{
-                    border: "0.5px solid #E8E8E8",
-                    borderRadius: 8,
-                    padding: "6px 10px",
-                    fontSize: 13,
-                    background: "#fff",
-                    color: "#1a1c1c",
-                    outline: "none",
-                  }}>
-                  <option value="newest">Mới nhất</option>
-                  <option value="oldest">Cũ nhất</option>
-                </select>
               </div>
             </div>
           </div>
@@ -833,33 +783,8 @@ export default function OwnerContacts() {
             <p style={{ color: "#656464", fontSize: 13, margin: 0 }}>
               © 2024 Hệ thống Bất Động Sản Chuyên Nghiệp. All rights reserved.
             </p>
-            <div style={{ display: "flex", gap: 10 }}>
-              {["📘", "🐦"].map((icon, i) => (
-                <a
-                  key={i}
-                  href="#"
-                  style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: "50%",
-                    background: "#eeeeee",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: 14,
-                    textDecoration: "none",
-                    transition: "background 0.15s",
-                  }}
-                  onMouseEnter={(e) =>
-                    (e.currentTarget.style.background = "#b51b17")
-                  }
-                  onMouseLeave={(e) =>
-                    (e.currentTarget.style.background = "#eeeeee")
-                  }>
-                  {icon}
-                </a>
-              ))}
-            </div>
+
+
           </div>
         </div>
       </footer>

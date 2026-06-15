@@ -126,9 +126,7 @@ function PropertyCard({ property }) {
               background: "#eeeeee",
               color: "#bbb",
               fontSize: 48,
-            }}>
-            🏠
-          </div>
+            }}></div>
         )}
 
         {/* Badge */}
@@ -146,33 +144,6 @@ function PropertyCard({ property }) {
           }}>
           {isRent ? "CHO THUÊ" : "HOT"}
         </span>
-
-        {/* Favourite */}
-        <button
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            setSaved(!saved);
-          }}
-          style={{
-            position: "absolute",
-            top: 10,
-            right: 10,
-            width: 30,
-            height: 30,
-            borderRadius: "50%",
-            background: "rgba(255,255,255,0.9)",
-            border: "none",
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            fontSize: 14,
-            color: "#b51b17",
-            boxShadow: "0 1px 4px rgba(0,0,0,0.15)",
-          }}>
-          {saved ? "♥" : "♡"}
-        </button>
       </div>
 
       {/* Content */}
@@ -222,7 +193,7 @@ function PropertyCard({ property }) {
             fontSize: 13,
             marginBottom: 12,
           }}>
-          <span style={{ marginRight: 4 }}>📍</span>
+          <span style={{ marginRight: 4 }}></span>
           <span
             style={{
               overflow: "hidden",
@@ -465,7 +436,6 @@ export default function Home() {
                   borderRight: "1px solid #E8E8E8",
                   gap: 8,
                 }}>
-                <span style={{ color: "#757575", fontSize: 18 }}>📍</span>
                 <input
                   type="text"
                   placeholder="Thành phố, Quận, Phường..."
@@ -494,7 +464,6 @@ export default function Home() {
                   borderRight: "1px solid #E8E8E8",
                   gap: 8,
                 }}>
-                <span style={{ color: "#757575", fontSize: 16 }}>🏠</span>
                 <select
                   value={search.type}
                   onChange={(e) =>
@@ -525,7 +494,6 @@ export default function Home() {
                   padding: "0 14px",
                   gap: 8,
                 }}>
-                <span style={{ color: "#757575", fontSize: 16 }}>💰</span>
                 <select
                   value={search.price}
                   onChange={(e) =>
@@ -568,7 +536,7 @@ export default function Home() {
                 }}
                 onMouseEnter={(e) => (e.currentTarget.style.opacity = "0.9")}
                 onMouseLeave={(e) => (e.currentTarget.style.opacity = "1")}>
-                🔍 Tìm kiếm
+                Tìm kiếm
               </button>
             </div>
           </div>
@@ -606,18 +574,6 @@ export default function Home() {
               Dễ dàng tìm thấy loại hình bất động sản bạn đang quan tâm
             </p>
           </div>
-          <button
-            style={{
-              color: "#b51b17",
-              fontWeight: 600,
-              fontSize: 14,
-              background: "none",
-              border: "none",
-              cursor: "pointer",
-            }}
-            onClick={() => navigate("/")}>
-            Xem tất cả →
-          </button>
         </div>
 
         <div
@@ -1246,33 +1202,6 @@ export default function Home() {
             <p style={{ color: "#656464", fontSize: 13, margin: 0 }}>
               © 2024 Hệ thống Bất Động Sản Chuyên Nghiệp. All rights reserved.
             </p>
-            <div style={{ display: "flex", gap: 10 }}>
-              {["📘", "🐦"].map((icon, i) => (
-                <a
-                  key={i}
-                  href="#"
-                  style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: "50%",
-                    background: "#eeeeee",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: 14,
-                    textDecoration: "none",
-                    transition: "background 0.15s",
-                  }}
-                  onMouseEnter={(e) =>
-                    (e.currentTarget.style.background = "#b51b17")
-                  }
-                  onMouseLeave={(e) =>
-                    (e.currentTarget.style.background = "#eeeeee")
-                  }>
-                  {icon}
-                </a>
-              ))}
-            </div>
           </div>
         </div>
       </footer>

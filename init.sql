@@ -71,6 +71,7 @@ CREATE TABLE properties (
 
   -- Trạng thái
   status           ENUM('pending','approved','rejected','hidden','sold') NOT NULL DEFAULT 'pending',
+  reject_reason    VARCHAR(500) DEFAULT NULL,
   created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
   FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE CASCADE,
