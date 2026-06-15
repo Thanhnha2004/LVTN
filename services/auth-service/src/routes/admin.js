@@ -64,16 +64,25 @@ router.get("/users", authMiddleware, async (req, res) => {
   if (req.user.role !== "admin")
     return res.status(403).json({ message: "Không có quyền" });
 
-  const { page = 1, limit = 10 } = req.query;
+  const { page = 1, limit = 10, search } = req.query;
   const offset = (parseInt(page) - 1) * parseInt(limit);
+
+  let where = "";
+  let params = [];
+  if (search && search.trim()) {
+    where = "WHERE full_name LIKE ? OR email LIKE ?";
+    const kw = `%${search.trim()}%`;
+    params.push(kw, kw);
+  }
 
   try {
     const [rows] = await pool.query(
-      "SELECT id, full_name, email, role, status, created_at FROM users ORDER BY created_at DESC LIMIT ? OFFSET ?",
-      [parseInt(limit), offset],
+      `SELECT id, full_name, email, role, status, created_at FROM users ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+      [...params, parseInt(limit), offset],
     );
     const [[{ total }]] = await pool.query(
-      "SELECT COUNT(*) as total FROM users",
+      `SELECT COUNT(*) as total FROM users ${where}`,
+      params,
     );
     res.json({
       data: rows,
