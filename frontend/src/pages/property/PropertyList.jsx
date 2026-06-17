@@ -387,16 +387,20 @@ export default function PropertyList() {
                           }}
                         />
 
-                        <span
-                          className="badge"
-                          style={{
-                            position: "absolute",
-                            top: 12,
-                            left: 12,
-                            background: "#b51b17",
-                          }}>
-                          VIP
-                        </span>
+                        {item.is_featured &&
+                          (!item.featured_until ||
+                            new Date(item.featured_until) > new Date()) && (
+                            <span
+                              className="badge"
+                              style={{
+                                position: "absolute",
+                                top: 12,
+                                left: 12,
+                                background: "#d97706",
+                              }}>
+                              NỔI BẬT
+                            </span>
+                          )}
 
                       </div>
 

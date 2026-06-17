@@ -67,6 +67,32 @@ export default function PendingPage({ showToast }) {
     }
   };
 
+  const handleFeatured = async (prop) => {
+    const nextFeatured = !prop.is_featured;
+    setActionLoading((prev) => ({ ...prev, [prop.id]: true }));
+    try {
+      await apiFetch(`/api/property/${prop.id}/featured`, {
+        method: "PATCH",
+        body: {
+          is_featured: nextFeatured,
+          featured_until: nextFeatured ? prop.featured_until || null : null,
+        },
+      });
+      setProperties((prev) =>
+        prev.map((p) =>
+          p.id === prop.id
+            ? { ...p, is_featured: nextFeatured ? 1 : 0 }
+            : p,
+        ),
+      );
+      showToast(nextFeatured ? "Đã bật tin nổi bật" : "Đã tắt tin nổi bật");
+    } catch (e) {
+      showToast(e.message, "error");
+    } finally {
+      setActionLoading((prev) => ({ ...prev, [prop.id]: false }));
+    }
+  };
+
   const tabs = [
     { key: "pending", label: "Chờ duyệt" },
     { key: "approved", label: "Đã duyệt" },
@@ -302,21 +328,41 @@ export default function PendingPage({ showToast }) {
                           </>
                         )}
                         {prop.status === "approved" && (
-                          <button
-                            onClick={() => handleStatus(prop.id, "hidden")}
-                            style={{
-                              padding: "5px 12px",
-                              borderRadius: 6,
-                              border: `1px solid ${C.borderSubtle}`,
-                              background: C.surfaceContainerHigh,
-                              color: C.secondary,
-                              fontSize: 12,
-                              fontWeight: 600,
-                              cursor: "pointer",
-                              fontFamily: font.body,
-                            }}>
-                            Ẩn tin
-                          </button>
+                          <>
+                            <button
+                              onClick={() => handleFeatured(prop)}
+                              disabled={actionLoading[prop.id]}
+                              style={{
+                                padding: "5px 12px",
+                                borderRadius: 6,
+                                border: "1px solid #d9770630",
+                                background: prop.is_featured
+                                  ? "#fff7ed"
+                                  : "#fffbeb",
+                                color: "#b45309",
+                                fontSize: 12,
+                                fontWeight: 600,
+                                cursor: "pointer",
+                                fontFamily: font.body,
+                              }}>
+                              {prop.is_featured ? "Tắt nổi bật" : "Bật nổi bật"}
+                            </button>
+                            <button
+                              onClick={() => handleStatus(prop.id, "hidden")}
+                              style={{
+                                padding: "5px 12px",
+                                borderRadius: 6,
+                                border: `1px solid ${C.borderSubtle}`,
+                                background: C.surfaceContainerHigh,
+                                color: C.secondary,
+                                fontSize: 12,
+                                fontWeight: 600,
+                                cursor: "pointer",
+                                fontFamily: font.body,
+                              }}>
+                              Ẩn tin
+                            </button>
+                          </>
                         )}
                       </div>
                     </td>

@@ -174,7 +174,7 @@ export default function CreateProperty() {
   };
 
   const handleFiles = (files) => {
-    const arr = Array.from(files).slice(0, 8);
+    const arr = Array.from(files).slice(0, 5);
     setImages(arr);
     setImagePreviews(arr.map((f) => URL.createObjectURL(f)));
   };

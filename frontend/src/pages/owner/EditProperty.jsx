@@ -271,7 +271,7 @@ export default function EditProperty() {
 
   // ── Handle new file selection ─────────────────────────────────────────────
   const handleFiles = (files) => {
-    const arr = Array.from(files).slice(0, 8 - existingImages.length);
+    const arr = Array.from(files).slice(0, 5 - existingImages.length);
     setNewFiles(arr);
     setNewPreviews(arr.map((f) => URL.createObjectURL(f)));
   };
@@ -411,8 +411,8 @@ export default function EditProperty() {
                 lineHeight: 1.7,
                 marginBottom: 28,
               }}>
-              Thông tin bất động sản đã được lưu. Nếu tin đang hiển thị công
-              khai, thay đổi sẽ có hiệu lực ngay.
+              Thông tin bất động sản đã được cập nhật. Tin đang chờ Admin duyệt
+              lại trước khi hiển thị công khai.
             </p>
             <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
               <button
@@ -1031,7 +1031,7 @@ export default function EditProperty() {
             </SectionCard>
 
             {/* Section 4: Images */}
-            <SectionCard title={`Hình ảnh (${totalImages}/8)`}>
+            <SectionCard title={`Hình ảnh (${totalImages}/5)`}>
               {/* Existing images */}
               {existingImages.length > 0 && (
                 <div style={{ marginBottom: 16 }}>
@@ -1135,7 +1135,7 @@ export default function EditProperty() {
               )}
 
               {/* Upload zone */}
-              {totalImages < 8 && (
+              {totalImages < 5 && (
                 <div
                   onClick={() => fileRef.current?.click()}
                   onDragOver={(e) => e.preventDefault()}
@@ -1169,7 +1169,7 @@ export default function EditProperty() {
                     Kéo ảnh vào đây hoặc nhấn để chọn
                   </p>
                   <p style={{ fontSize: 12, color: "#8f706b", margin: 0 }}>
-                    JPG, PNG, WEBP — còn {8 - totalImages} ảnh
+                    JPG, PNG, WEBP — còn {5 - totalImages} ảnh
                   </p>
                   <input
                     ref={fileRef}
@@ -1245,7 +1245,7 @@ export default function EditProperty() {
                 ["Diện tích", form.area ? `${form.area} m²` : "—"],
                 ["Thành phố", form.city || "—"],
                 ["Phòng ngủ", form.bedrooms || "—"],
-                ["Ảnh", `${totalImages}/8`],
+                ["Ảnh", `${totalImages}/5`],
               ].map(([k, v]) => (
                 <div
                   key={k}

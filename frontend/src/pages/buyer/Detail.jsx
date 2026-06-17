@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import api from "../../api/axios";
 import Navbar from "../../components/Navbar";
+import LeafletMap from "../../components/LeafletMap";
 import { useAuth } from "../../context/AuthContext";
 
 function formatPrice(price) {
@@ -131,6 +132,9 @@ export default function Detail() {
   if (!property) return null;
 
   const images = Array.isArray(property.images) ? property.images : [];
+  const isFeatured =
+    property.is_featured &&
+    (!property.featured_until || new Date(property.featured_until) > new Date());
 
   return (
     <div style={{ background: "#f9f9f9", minHeight: "100vh" }}>
@@ -226,6 +230,23 @@ export default function Detail() {
                 }}>
                 {property.transaction_type === "sale" ? "Bán" : "Cho thuê"}
               </div>
+              {isFeatured && (
+                <div
+                  style={{
+                    position: "absolute",
+                    top: 16,
+                    left: 88,
+                    background: "#d97706",
+                    color: "#fff",
+                    fontSize: 12,
+                    fontWeight: 700,
+                    padding: "4px 12px",
+                    borderRadius: 4,
+                    fontFamily: "Inter, sans-serif",
+                  }}>
+                  NỔI BẬT
+                </div>
+              )}
             </div>
 
             {/* Right column: 2 stacked images */}
@@ -663,7 +684,7 @@ export default function Detail() {
               )}
             </div>
 
-            {/* Map placeholder */}
+            {/* Map */}
             {property.latitude && property.longitude && (
               <div
                 style={{
@@ -682,40 +703,37 @@ export default function Detail() {
                     marginBottom: 16,
                     marginTop: 0,
                   }}>
-                  Vị trí dự án
+                  Vị trí bất động sản
                 </h2>
-                <div
+                <LeafletMap
+                  height={280}
+                  zoom={15}
+                  markers={[
+                    {
+                      id: property.id,
+                      title: property.title,
+                      price: property.price,
+                      address: `${property.address || ""}, ${property.city || ""}`,
+                      latitude: property.latitude,
+                      longitude: property.longitude,
+                    },
+                  ]}
+                />
+                <a
+                  href={`https://www.google.com/maps?q=${property.latitude},${property.longitude}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
                   style={{
-                    background: "#eeeeee",
-                    borderRadius: 8,
-                    height: 240,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    flexDirection: "column",
-                    gap: 8,
-                    color: "#757575",
+                    display: "inline-block",
+                    fontFamily: "Inter, sans-serif",
+                    fontSize: 13,
+                    color: "#b51b17",
+                    textDecoration: "none",
+                    fontWeight: 600,
+                    marginTop: 10,
                   }}>
-                  <span style={{ fontSize: 40 }}>📍</span>
-                  <span
-                    style={{ fontFamily: "Inter, sans-serif", fontSize: 13 }}>
-                    {property.address}, {property.city}
-                  </span>
-                  <a
-                    href={`https://www.google.com/maps?q=${property.latitude},${property.longitude}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{
-                      fontFamily: "Inter, sans-serif",
-                      fontSize: 13,
-                      color: "#b51b17",
-                      textDecoration: "none",
-                      fontWeight: 600,
-                      marginTop: 4,
-                    }}>
-                    Xem trên Google Maps →
-                  </a>
-                </div>
+                  Xem trên Google Maps →
+                </a>
               </div>
             )}
           </div>

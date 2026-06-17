@@ -15,7 +15,6 @@ const TYPE_OPTIONS = [
 const TRANSACTION_OPTIONS = [
   { value: "sale", label: "Mua bán" },
   { value: "rent", label: "Cho thuê" },
-  { value: "", label: "Dự án" },
 ];
 
 const PRICE_OPTIONS = [
@@ -76,6 +75,9 @@ function timeAgo(dateStr) {
 function PropertyCard({ property }) {
   const [saved, setSaved] = useState(false);
   const isRent = property.transaction_type === "rent";
+  const isFeatured =
+    property.is_featured &&
+    (!property.featured_until || new Date(property.featured_until) > new Date());
 
   return (
     <div
@@ -135,14 +137,14 @@ function PropertyCard({ property }) {
             position: "absolute",
             top: 10,
             left: 10,
-            background: isRent ? "#006480" : "#b51b17",
+            background: isFeatured ? "#d97706" : isRent ? "#006480" : "#b51b17",
             color: "#fff",
             fontSize: 10,
             fontWeight: 700,
             padding: "3px 8px",
             borderRadius: 4,
           }}>
-          {isRent ? "CHO THUÊ" : "HOT"}
+          {isFeatured ? "NỔI BẬT" : isRent ? "CHO THUÊ" : "BÁN"}
         </span>
       </div>
 

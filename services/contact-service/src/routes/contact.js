@@ -71,8 +71,17 @@ router.get("/owner", authMiddleware, async (req, res) => {
   if (req.user.role !== "owner" && req.user.role !== "admin")
     return res.status(403).json({ message: "Không có quyền" });
 
-  const { page = 1, limit = 10 } = req.query;
+  const { page = 1, limit = 10, lead_status } = req.query;
   const offset = (parseInt(page) - 1) * parseInt(limit);
+  const conditions = ["p.owner_id = ?"];
+  const params = [req.user.id];
+
+  if (lead_status) {
+    conditions.push("c.lead_status = ?");
+    params.push(lead_status);
+  }
+
+  const where = conditions.join(" AND ");
 
   try {
     const [rows] = await pool.query(
@@ -81,20 +90,20 @@ router.get("/owner", authMiddleware, async (req, res) => {
       FROM contacts c
       JOIN properties p ON c.property_id = p.id
       JOIN users u ON c.buyer_id = u.id
-      WHERE p.owner_id = ?
+      WHERE ${where}
       ORDER BY c.created_at DESC
       LIMIT ? OFFSET ?
     `,
-      [req.user.id, parseInt(limit), offset],
+      [...params, parseInt(limit), offset],
     );
 
     const [[{ total }]] = await pool.query(
       `
       SELECT COUNT(*) as total FROM contacts c
       JOIN properties p ON c.property_id = p.id
-      WHERE p.owner_id = ?
+      WHERE ${where}
     `,
-      [req.user.id],
+      params,
     );
 
     res.json({
@@ -106,6 +115,51 @@ router.get("/owner", authMiddleware, async (req, res) => {
         total_pages: Math.ceil(total / limit),
       },
     });
+  } catch (err) {
+    res.status(500).json({ message: "Lỗi server", error: err.message });
+  }
+});
+
+// PATCH /api/contact/:id/lead — Owner cập nhật trạng thái chăm sóc khách
+router.patch("/:id/lead", authMiddleware, async (req, res) => {
+  if (req.user.role !== "owner")
+    return res
+      .status(403)
+      .json({ message: "Chỉ owner mới được cập nhật lead" });
+
+  const { lead_status, owner_note } = req.body;
+  const validStatuses = [
+    "new",
+    "contacted",
+    "scheduled",
+    "closed",
+    "cancelled",
+  ];
+
+  if (!validStatuses.includes(lead_status)) {
+    return res.status(400).json({ message: "Trạng thái lead không hợp lệ" });
+  }
+
+  try {
+    const [rows] = await pool.query(
+      `SELECT c.id
+       FROM contacts c
+       JOIN properties p ON c.property_id = p.id
+       WHERE c.id = ? AND p.owner_id = ?`,
+      [req.params.id, req.user.id],
+    );
+
+    if (rows.length === 0)
+      return res
+        .status(403)
+        .json({ message: "Không có quyền cập nhật lead này" });
+
+    await pool.query(
+      "UPDATE contacts SET lead_status = ?, owner_note = ? WHERE id = ?",
+      [lead_status, owner_note || null, req.params.id],
+    );
+
+    res.json({ message: "Cập nhật lead thành công" });
   } catch (err) {
     res.status(500).json({ message: "Lỗi server", error: err.message });
   }

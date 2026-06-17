@@ -196,6 +196,7 @@ function Thumb({ src, status }) {
 
 export default function OwnerDashboard() {
   const [properties, setProperties] = useState([]);
+  const [ownerStats, setOwnerStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("all");
   const [search, setSearch] = useState("");
@@ -207,8 +208,14 @@ export default function OwnerDashboard() {
   useEffect(() => {
     (async () => {
       try {
-        const res = await api.get("/api/property/owner/list");
-        setProperties(Array.isArray(res.data) ? res.data : res.data.data || []);
+        const [listRes, statsRes] = await Promise.all([
+          api.get("/api/property/owner/list"),
+          api.get("/api/property/owner/stats"),
+        ]);
+        setProperties(
+          Array.isArray(listRes.data) ? listRes.data : listRes.data.data || [],
+        );
+        setOwnerStats(statsRes.data);
       } catch (err) {
         if (err.response?.status === 401) navigate("/login");
       } finally {
@@ -254,7 +261,7 @@ export default function OwnerDashboard() {
     try {
       await api.patch(`/api/property/${id}/unhide`);
       setProperties((prev) =>
-        prev.map((p) => (p.id === id ? { ...p, status: "approved" } : p)),
+        prev.map((p) => (p.id === id ? { ...p, status: "pending" } : p)),
       );
     } catch (err) {
       console.error(err);
@@ -266,8 +273,12 @@ export default function OwnerDashboard() {
     (p) => p.status === "active" || p.status === "approved",
   ).length;
   const pending = properties.filter((p) => p.status === "pending").length;
-  const views = properties.reduce((s, p) => s + (p.views || 0), 0);
-  const contacts = properties.reduce((s, p) => s + (p.contact_count || 0), 0);
+  const views =
+    ownerStats?.overview?.total_views ??
+    properties.reduce((s, p) => s + (p.views || 0), 0);
+  const contacts =
+    ownerStats?.overview?.total_contacts ??
+    properties.reduce((s, p) => s + (p.contact_count || 0), 0);
   const unread = properties.reduce((s, p) => s + (p.unread_contacts || 0), 0);
 
   const tabCount = (key) => {
@@ -340,6 +351,12 @@ export default function OwnerDashboard() {
               label="Tổng lượt xem"
               value={views.toLocaleString("vi-VN")}
               sub="Tất cả các tin"
+            />
+            <StatCard
+              label="Liên hệ / chuyển đổi"
+              value={contacts.toLocaleString("vi-VN")}
+              sub={`Tỷ lệ ${ownerStats?.overview?.conversion_rate ?? 0}%`}
+              subColor="#0f6e56"
             />
           </div>
 

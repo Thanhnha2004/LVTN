@@ -158,7 +158,7 @@ router.get("/", async (req, res) => {
 
     // --- Sắp xếp ---
     const sortMap = {
-      newest: "p.created_at DESC",
+      newest: "active_featured DESC, p.created_at DESC",
       oldest: "p.created_at ASC",
       price_asc: "p.price ASC",
       price_desc: "p.price DESC",
@@ -182,7 +182,11 @@ router.get("/", async (req, res) => {
          p.address, p.ward, p.district, p.city,
          p.latitude, p.longitude,
          p.direction, p.legal_status,
-         p.status, p.created_at,
+         p.status, p.is_featured, p.featured_until, p.created_at,
+CASE
+  WHEN p.is_featured = 1 AND (p.featured_until IS NULL OR p.featured_until > NOW())
+  THEN 1 ELSE 0
+END AS active_featured,
          u.full_name AS owner_name,
          (SELECT pi.url
           FROM property_images pi
@@ -240,12 +244,14 @@ router.get("/:id", async (req, res) => {
          u.full_name  AS owner_name,
          u.email      AS owner_email,
          u.phone_number AS owner_phone,
-         GROUP_CONCAT(pi.url ORDER BY pi.\`order\` SEPARATOR ',') AS images
+         (
+           SELECT GROUP_CONCAT(pi.url ORDER BY pi.\`order\` SEPARATOR ',')
+           FROM property_images pi
+           WHERE pi.property_id = p.id
+         ) AS images
        FROM properties p
        JOIN users u ON p.owner_id = u.id
-       LEFT JOIN property_images pi ON p.id = pi.property_id
-       WHERE p.id = ? AND p.status = 'approved'
-       GROUP BY p.id`,
+       WHERE p.id = ? AND p.status = 'approved'`,
       [req.params.id],
     );
 

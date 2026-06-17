@@ -5,6 +5,14 @@ import Navbar from "../../components/Navbar";
 
 const VN = { fontFamily: "'Be Vietnam Pro', Inter, sans-serif" };
 
+const LEAD_STATUS = [
+  { value: "new", label: "Mới" },
+  { value: "contacted", label: "Đã liên hệ" },
+  { value: "scheduled", label: "Đã hẹn xem" },
+  { value: "closed", label: "Đã chốt" },
+  { value: "cancelled", label: "Đã hủy" },
+];
+
 function initials(name) {
   if (!name) return "?";
   return name
@@ -125,12 +133,32 @@ function ReplyBox({ contactId, onSent, onCancel }) {
 }
 
 // ── Contact Card ───────────────────────────────────────────
-function ContactCard({ contact, onReplied }) {
+function ContactCard({ contact, onReplied, onLeadUpdated }) {
   const [open, setOpen] = useState(false);
+  const [leadStatus, setLeadStatus] = useState(contact.lead_status || "new");
+  const [ownerNote, setOwnerNote] = useState(contact.owner_note || "");
+  const [leadSaving, setLeadSaving] = useState(false);
+  const [leadError, setLeadError] = useState("");
   const isPending = contact.status === "pending";
 
   const bgColor = isPending ? "#ffdad5" : "#e4e2e1";
   const textColor = isPending ? "#410001" : "#5f5e5e";
+
+  const saveLead = async () => {
+    setLeadSaving(true);
+    setLeadError("");
+    try {
+      await api.patch(`/api/contact/${contact.id}/lead`, {
+        lead_status: leadStatus,
+        owner_note: ownerNote,
+      });
+      onLeadUpdated(contact.id, leadStatus, ownerNote);
+    } catch (err) {
+      setLeadError(err.response?.data?.message || "Không thể cập nhật lead.");
+    } finally {
+      setLeadSaving(false);
+    }
+  };
 
   return (
     <div
@@ -294,6 +322,71 @@ function ContactCard({ contact, onReplied }) {
           </div>
         )}
 
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "180px 1fr auto",
+            gap: 10,
+            alignItems: "center",
+            marginBottom: 12,
+          }}>
+          <select
+            value={leadStatus}
+            onChange={(e) => setLeadStatus(e.target.value)}
+            style={{
+              height: 36,
+              border: "0.5px solid #E8E8E8",
+              borderRadius: 8,
+              padding: "0 10px",
+              fontSize: 13,
+              background: "#fff",
+              color: "#1a1c1c",
+              ...VN,
+            }}>
+            {LEAD_STATUS.map((s) => (
+              <option key={s.value} value={s.value}>
+                {s.label}
+              </option>
+            ))}
+          </select>
+          <input
+            value={ownerNote}
+            onChange={(e) => setOwnerNote(e.target.value)}
+            placeholder="Ghi chú chăm sóc khách hàng..."
+            style={{
+              height: 36,
+              border: "0.5px solid #E8E8E8",
+              borderRadius: 8,
+              padding: "0 12px",
+              fontSize: 13,
+              color: "#1a1c1c",
+              ...VN,
+            }}
+          />
+          <button
+            onClick={saveLead}
+            disabled={leadSaving}
+            style={{
+              height: 36,
+              border: "none",
+              borderRadius: 8,
+              padding: "0 14px",
+              background: leadSaving ? "#ccc" : "#1a1c1c",
+              color: "#fff",
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: leadSaving ? "not-allowed" : "pointer",
+              ...VN,
+            }}>
+            {leadSaving ? "Đang lưu" : "Lưu lead"}
+          </button>
+        </div>
+        {leadError && (
+          <div style={{ fontSize: 12, color: "#a32d2d", marginBottom: 10 }}>
+            {leadError}
+          </div>
+        )}
+
         {/* Bottom row */}
         <div
           style={{
@@ -419,9 +512,17 @@ export default function OwnerContacts() {
     );
   };
 
+  const handleLeadUpdated = (id, lead_status, owner_note) => {
+    setContacts((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, lead_status, owner_note } : c)),
+    );
+  };
+
   const total = contacts.length;
   const pending = contacts.filter((c) => c.status === "pending").length;
   const replied = contacts.filter((c) => c.status === "replied").length;
+  const scheduled = contacts.filter((c) => c.lead_status === "scheduled").length;
+  const closed = contacts.filter((c) => c.lead_status === "closed").length;
 
   const tabCount = { all: total, pending, replied };
 
@@ -429,6 +530,8 @@ export default function OwnerContacts() {
     .filter((c) => {
       if (activeTab === "pending") return c.status === "pending";
       if (activeTab === "replied") return c.status === "replied";
+      if (activeTab === "scheduled") return c.lead_status === "scheduled";
+      if (activeTab === "closed") return c.lead_status === "closed";
       return true;
     })
     .filter(
@@ -451,6 +554,8 @@ export default function OwnerContacts() {
     { key: "all", label: `Tất cả (${total})` },
     { key: "pending", label: `Chưa phản hồi (${pending})` },
     { key: "replied", label: `Đã phản hồi (${replied})` },
+    { key: "scheduled", label: `Đã hẹn (${scheduled})` },
+    { key: "closed", label: `Đã chốt (${closed})` },
   ];
 
   return (
@@ -590,7 +695,12 @@ export default function OwnerContacts() {
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               {paginated.map((c) => (
-                <ContactCard key={c.id} contact={c} onReplied={handleReplied} />
+                <ContactCard
+                  key={c.id}
+                  contact={c}
+                  onReplied={handleReplied}
+                  onLeadUpdated={handleLeadUpdated}
+                />
               ))}
             </div>
           )}

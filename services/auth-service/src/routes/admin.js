@@ -43,6 +43,37 @@ router.get("/stats", authMiddleware, async (req, res) => {
       ORDER BY month ASC
     `);
 
+    const [byTransactionType] = await pool.query(`
+  SELECT transaction_type, COUNT(*) AS count
+  FROM properties
+  GROUP BY transaction_type
+`);
+
+    const [byPropertyType] = await pool.query(`
+  SELECT type, COUNT(*) AS count
+  FROM properties
+  GROUP BY type
+`);
+
+    const [topOwners] = await pool.query(`
+  SELECT u.id, u.full_name, u.email, COUNT(p.id) AS property_count
+  FROM users u
+  JOIN properties p ON p.owner_id = u.id
+  WHERE u.role = 'owner'
+  GROUP BY u.id
+  ORDER BY property_count DESC
+  LIMIT 5
+`);
+
+    const [topViewedProperties] = await pool.query(`
+  SELECT p.id, p.title, p.city, p.district, COUNT(pv.id) AS view_count
+  FROM properties p
+  LEFT JOIN property_views pv ON pv.property_id = p.id
+  GROUP BY p.id
+  ORDER BY view_count DESC
+  LIMIT 5
+`);
+
     res.json({
       users: { total: total_users, buyers: total_buyers, owners: total_owners },
       properties: {
@@ -53,6 +84,10 @@ router.get("/stats", authMiddleware, async (req, res) => {
       },
       contacts: { total: total_contacts },
       monthly_properties: monthly,
+      properties_by_transaction_type: byTransactionType,
+      properties_by_type: byPropertyType,
+      top_owners: topOwners,
+      top_viewed_properties: topViewedProperties,
     });
   } catch (err) {
     res.status(500).json({ message: "Lỗi server", error: err.message });
@@ -137,7 +172,7 @@ router.get("/properties", authMiddleware, async (req, res) => {
     const [rows] = await pool.query(
       `
       SELECT p.id, p.title, p.type, p.transaction_type, p.price, p.city,
-             p.status, p.reject_reason, p.created_at, u.full_name as owner_name, u.email as owner_email
+             p.status, p.reject_reason, p.is_featured, p.featured_until, p.created_at, u.full_name as owner_name, u.email as owner_email
       FROM properties p
       JOIN users u ON p.owner_id = u.id
       ${where}

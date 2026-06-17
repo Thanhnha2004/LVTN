@@ -94,6 +94,21 @@ router.get("/owner/stats", authMiddleware, async (req, res) => {
       [req.user.id],
     );
 
+    const [topContactedProperties] = await pool.query(
+      `SELECT
+    p.id, p.title, p.status, p.price, p.city, p.district,
+    COUNT(c.id) AS contact_count,
+    (SELECT pi.url FROM property_images pi
+     WHERE pi.property_id = p.id ORDER BY pi.\`order\` LIMIT 1) AS thumbnail
+   FROM properties p
+   LEFT JOIN contacts c ON p.id = c.property_id
+   WHERE p.owner_id = ?
+   GROUP BY p.id
+   ORDER BY contact_count DESC
+   LIMIT 5`,
+      [req.user.id],
+    );
+
     // Views 7 ngày gần nhất (tất cả tin của owner)
     const [viewsByDay] = await pool.query(
       `SELECT
@@ -117,10 +132,32 @@ router.get("/owner/stats", authMiddleware, async (req, res) => {
       [req.user.id],
     );
 
+    const [leadStats] = await pool.query(
+      `SELECT c.lead_status, COUNT(*) AS count
+   FROM contacts c
+   JOIN properties p ON c.property_id = p.id
+   WHERE p.owner_id = ?
+   GROUP BY c.lead_status`,
+      [req.user.id],
+    );
+
+    const conversionRate =
+      Number(overview.total_views) > 0
+        ? Number(
+            ((overview.total_contacts / overview.total_views) * 100).toFixed(2),
+          )
+        : 0;
+
     res.json({
-      overview: { ...overview, pending_contacts },
+      overview: {
+        ...overview,
+        pending_contacts,
+        conversion_rate: conversionRate,
+      },
       top_properties: topProperties,
       views_by_day: viewsByDay,
+      top_contacted_properties: topContactedProperties,
+      lead_stats: leadStats,
     });
   } catch (err) {
     res.status(500).json({ message: "Lỗi server", error: err.message });
@@ -171,6 +208,11 @@ router.get("/owner/stats/:id", authMiddleware, async (req, res) => {
       [req.params.id],
     );
 
+    const conversionRate =
+      Number(total_views) > 0
+        ? Number(((total_contacts / total_views) * 100).toFixed(2))
+        : 0;
+
     // 5 liên hệ gần nhất
     const [recentContacts] = await pool.query(
       `SELECT c.id, c.message, c.status, c.created_at, c.owner_reply,
@@ -183,11 +225,25 @@ router.get("/owner/stats/:id", authMiddleware, async (req, res) => {
       [req.params.id],
     );
 
+    const [leadStats] = await pool.query(
+      `SELECT lead_status, COUNT(*) AS count
+   FROM contacts
+   WHERE property_id = ?
+   GROUP BY lead_status`,
+      [req.params.id],
+    );
+
     res.json({
       property,
-      stats: { total_views, total_contacts, pending_contacts },
+      stats: {
+        total_views,
+        total_contacts,
+        pending_contacts,
+        conversion_rate: conversionRate,
+      },
       views_by_day: viewsByDay,
       recent_contacts: recentContacts,
+      lead_stats: leadStats,
     });
   } catch (err) {
     res.status(500).json({ message: "Lỗi server", error: err.message });
@@ -244,7 +300,7 @@ router.post("/", authMiddleware, async (req, res) => {
         (owner_id, title, description, type, transaction_type,
          price, area, address, ward, district, city,
          bedrooms, bathrooms, direction, legal_status, latitude, longitude)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?)`,
       [
         req.user.id,
         title,
@@ -265,16 +321,17 @@ router.post("/", authMiddleware, async (req, res) => {
         longitude ? parseFloat(longitude) : null,
       ],
     );
-    res
-      .status(201)
-      .json({ message: "Tạo tin thành công", id: result.insertId });
+    res.status(201).json({
+      message: "Tạo tin thành công. Tin đang chờ admin duyệt.",
+      id: result.insertId,
+    });
   } catch (err) {
     res.status(500).json({ message: "Lỗi server", error: err.message });
   }
 });
 
 // GET /api/property/:id — chi tiết tin (owner/admin, kể cả pending)
-router.get("/:id", async (req, res) => {
+router.get("/:id", authMiddleware, async (req, res) => {
   try {
     const [rows] = await pool.query(
       `SELECT p.*, u.full_name as owner_name, u.phone_number as owner_phone,
@@ -290,6 +347,11 @@ router.get("/:id", async (req, res) => {
       return res.status(404).json({ message: "Không tìm thấy" });
 
     const property = rows[0];
+
+    if (req.user.role !== "admin" && property.owner_id !== req.user.id) {
+      return res.status(403).json({ message: "Không có quyền" });
+    }
+
     property.images = property.images ? property.images.split(",") : [];
     res.json(property);
   } catch (err) {
@@ -320,21 +382,28 @@ router.put("/:id", authMiddleware, async (req, res) => {
 
   try {
     const [rows] = await pool.query(
-      "SELECT owner_id FROM properties WHERE id = ?",
+      "SELECT owner_id, status FROM properties WHERE id = ?",
       [req.params.id],
     );
     if (rows.length === 0)
       return res.status(404).json({ message: "Không tìm thấy" });
     if (rows[0].owner_id !== req.user.id)
       return res.status(403).json({ message: "Không có quyền" });
+    if (rows[0].status === "sold") {
+      return res
+        .status(400)
+        .json({ message: "Tin đã bán/cho thuê, không thể chỉnh sửa" });
+    }
 
+    // THÀNH ĐOẠN NÀY:
     await pool.query(
       `UPDATE properties
-       SET title=?, description=?, type=?, transaction_type=?,
-           price=?, area=?, address=?, ward=?, district=?, city=?,
-           bedrooms=?, bathrooms=?, direction=?, legal_status=?,
-           latitude=?, longitude=?
-       WHERE id=?`,
+   SET title=?, description=?, type=?, transaction_type=?,
+       price=?, area=?, address=?, ward=?, district=?, city=?,
+       bedrooms=?, bathrooms=?, direction=?, legal_status=?,
+       latitude=?, longitude=?,
+       status='pending', reject_reason=NULL
+   WHERE id=?`,
       [
         title,
         description,
@@ -355,7 +424,7 @@ router.put("/:id", authMiddleware, async (req, res) => {
         req.params.id,
       ],
     );
-    res.json({ message: "Cập nhật thành công" });
+    res.json({ message: "Cập nhật thành công. Tin đang chờ duyệt lại." });
   } catch (err) {
     res.status(500).json({ message: "Lỗi server", error: err.message });
   }
@@ -402,7 +471,7 @@ router.patch("/:id/status", authMiddleware, async (req, res) => {
     return res.status(403).json({ message: "Chỉ admin mới được duyệt tin" });
 
   const { status, reject_reason } = req.body;
-  const valid = ["approved", "rejected", "hidden"];
+  const valid = ["pending", "approved", "rejected", "hidden"];
   if (!valid.includes(status))
     return res.status(400).json({ message: "Trạng thái không hợp lệ" });
 
@@ -410,11 +479,56 @@ router.patch("/:id/status", authMiddleware, async (req, res) => {
     return res.status(400).json({ message: "Vui lòng nhập lý do từ chối" });
 
   try {
+    // Kiểm tra tin tồn tại
+    const [rows] = await pool.query("SELECT id FROM properties WHERE id = ?", [
+      req.params.id,
+    ]);
+    if (rows.length === 0)
+      return res.status(404).json({ message: "Không tìm thấy tin đăng" });
+
     await pool.query(
       "UPDATE properties SET status = ?, reject_reason = ? WHERE id = ?",
       [status, status === "rejected" ? reject_reason : null, req.params.id],
     );
     res.json({ message: "Cập nhật trạng thái thành công" });
+  } catch (err) {
+    res.status(500).json({ message: "Lỗi server", error: err.message });
+  }
+});
+
+// PATCH /api/property/:id/featured — admin bật/tắt tin nổi bật
+router.patch("/:id/featured", authMiddleware, async (req, res) => {
+  if (req.user.role !== "admin")
+    return res
+      .status(403)
+      .json({ message: "Chỉ admin mới được cập nhật tin nổi bật" });
+
+  const { is_featured, featured_until } = req.body;
+
+  if (![0, 1, true, false].includes(is_featured)) {
+    return res.status(400).json({ message: "is_featured không hợp lệ" });
+  }
+
+  try {
+    const [rows] = await pool.query(
+      "SELECT id, status FROM properties WHERE id = ?",
+      [req.params.id],
+    );
+
+    if (rows.length === 0)
+      return res.status(404).json({ message: "Không tìm thấy tin đăng" });
+
+    if (rows[0].status !== "approved")
+      return res
+        .status(400)
+        .json({ message: "Chỉ có thể đặt nổi bật cho tin đã duyệt" });
+
+    await pool.query(
+      "UPDATE properties SET is_featured = ?, featured_until = ? WHERE id = ?",
+      [is_featured ? 1 : 0, featured_until || null, req.params.id],
+    );
+
+    res.json({ message: "Cập nhật tin nổi bật thành công" });
   } catch (err) {
     res.status(500).json({ message: "Lỗi server", error: err.message });
   }
@@ -427,13 +541,18 @@ router.patch("/:id/hide", authMiddleware, async (req, res) => {
 
   try {
     const [rows] = await pool.query(
-      "SELECT owner_id FROM properties WHERE id = ?",
+      "SELECT owner_id, status FROM properties WHERE id = ?",
       [req.params.id],
     );
     if (rows.length === 0)
       return res.status(404).json({ message: "Không tìm thấy" });
     if (rows[0].owner_id !== req.user.id)
       return res.status(403).json({ message: "Không có quyền" });
+    if (rows[0].status !== "approved") {
+      return res
+        .status(400)
+        .json({ message: "Chỉ có thể ẩn tin đang hiển thị" });
+    }
 
     await pool.query("UPDATE properties SET status = 'hidden' WHERE id = ?", [
       req.params.id,
@@ -451,13 +570,18 @@ router.patch("/:id/sold", authMiddleware, async (req, res) => {
 
   try {
     const [rows] = await pool.query(
-      "SELECT owner_id FROM properties WHERE id = ?",
+      "SELECT owner_id, status FROM properties WHERE id = ?",
       [req.params.id],
     );
     if (rows.length === 0)
       return res.status(404).json({ message: "Không tìm thấy" });
     if (rows[0].owner_id !== req.user.id)
       return res.status(403).json({ message: "Không có quyền" });
+    if (rows[0].status !== "approved") {
+      return res.status(400).json({
+        message: "Chỉ có thể đánh dấu đã giao dịch với tin đang hiển thị",
+      });
+    }
 
     await pool.query("UPDATE properties SET status = 'sold' WHERE id = ?", [
       req.params.id,
@@ -482,10 +606,10 @@ router.patch("/:id/unhide", authMiddleware, async (req, res) => {
       return res.status(403).json({ message: "Không có quyền" });
 
     await pool.query(
-      "UPDATE properties SET status = 'approved' WHERE id = ? AND status = 'hidden'",
+      "UPDATE properties SET status = 'pending', reject_reason = NULL WHERE id = ? AND status = 'hidden'",
       [req.params.id],
     );
-    res.json({ message: "Đã hiện lại tin" });
+    res.json({ message: "Đã gửi lại tin để chờ duyệt" });
   } catch (err) {
     res.status(500).json({ message: "Lỗi server", error: err.message });
   }
