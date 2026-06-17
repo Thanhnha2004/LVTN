@@ -25,6 +25,8 @@ export default function PendingPage({ showToast }) {
   const [actionLoading, setActionLoading] = useState({});
   const [rejectReason, setRejectReason] = useState("");
   const [rejectModal, setRejectModal] = useState(null);
+  const [detailModal, setDetailModal] = useState(null);
+  const [detailLoading, setDetailLoading] = useState(false);
   const LIMIT = 8;
 
   const loadProperties = useCallback(async () => {
@@ -47,6 +49,30 @@ export default function PendingPage({ showToast }) {
     loadProperties();
   }, [loadProperties]);
 
+  const openDetail = async (prop) => {
+    setDetailModal(prop);
+    setDetailLoading(true);
+    try {
+      const data = await apiFetch(`/api/property/${prop.id}`);
+      setDetailModal({ ...prop, ...data });
+    } catch (e) {
+      showToast(e.message, "error");
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
+  const getValidationItems = (prop) => [
+    { label: "Tiêu đề rõ ràng", ok: Boolean(prop?.title && prop.title.length >= 5) },
+    { label: "Có mô tả bất động sản", ok: Boolean(prop?.description) },
+    { label: "Giá và diện tích hợp lệ", ok: Number(prop?.price) > 0 && Number(prop?.area) > 0 },
+    { label: "Có địa chỉ / thành phố", ok: Boolean(prop?.address && prop?.city) },
+    { label: "Có thông tin pháp lý", ok: Boolean(prop?.legal_status) },
+    { label: "Có ảnh bất động sản", ok: Array.isArray(prop?.images) ? prop.images.length > 0 : Boolean(prop?.thumbnail) },
+    { label: "Có tọa độ bản đồ", ok: Boolean(prop?.latitude && prop?.longitude) },
+  ];
+
+
   const handleStatus = async (id, status, reason) => {
     setActionLoading((prev) => ({ ...prev, [id]: true }));
     try {
@@ -59,6 +85,7 @@ export default function PendingPage({ showToast }) {
         status === "approved" ? "✓ Đã duyệt tin đăng" : "✓ Đã từ chối tin đăng",
       );
       setRejectModal(null);
+      setDetailModal(null);
       setRejectReason("");
     } catch (e) {
       showToast(e.message, "error");
@@ -291,6 +318,21 @@ export default function PendingPage({ showToast }) {
                           gap: 6,
                           justifyContent: "flex-end",
                         }}>
+                        <button
+                          onClick={() => openDetail(prop)}
+                          style={{
+                            padding: "5px 12px",
+                            borderRadius: 6,
+                            border: `1px solid ${C.borderSubtle}`,
+                            background: C.surfaceContainerHigh,
+                            color: C.onSurface,
+                            fontSize: 12,
+                            fontWeight: 600,
+                            cursor: "pointer",
+                            fontFamily: font.body,
+                          }}>
+                          Xem kiểm tra
+                        </button>
                         {prop.status === "pending" && (
                           <>
                             <button
@@ -377,6 +419,245 @@ export default function PendingPage({ showToast }) {
           <Pagination page={page} totalPages={totalPages} setPage={setPage} />
         )}
       </div>
+
+      {/* Detail Modal */}
+      {detailModal && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.5)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
+            padding: 20,
+          }}
+          onClick={() => setDetailModal(null)}>
+          <div
+            style={{
+              background: C.surfaceContainerLowest,
+              borderRadius: 12,
+              width: "100%",
+              maxWidth: 920,
+              maxHeight: "90vh",
+              overflow: "auto",
+              fontFamily: font.body,
+            }}
+            onClick={(e) => e.stopPropagation()}>
+            <div
+              style={{
+                padding: "22px 26px",
+                borderBottom: `1px solid ${C.borderSubtle}`,
+                display: "flex",
+                justifyContent: "space-between",
+                gap: 16,
+              }}>
+              <div>
+                <div
+                  style={{
+                    fontFamily: font.headline,
+                    fontWeight: 800,
+                    fontSize: 20,
+                    color: C.onSurface,
+                  }}>
+                  Kiểm tra tin trước khi duyệt
+                </div>
+                <div style={{ fontSize: 13, color: C.textMuted, marginTop: 4 }}>
+                  ID #{detailModal.id} · {detailModal.owner_name || "Owner"}
+                </div>
+              </div>
+              <button
+                onClick={() => setDetailModal(null)}
+                style={{
+                  width: 34,
+                  height: 34,
+                  borderRadius: 8,
+                  border: `1px solid ${C.borderSubtle}`,
+                  background: C.surfaceContainerHigh,
+                  cursor: "pointer",
+                  fontSize: 18,
+                }}>
+                ×
+              </button>
+            </div>
+
+            {detailLoading ? (
+              <LoadingState />
+            ) : (
+              <div style={{ padding: 26 }}>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "280px 1fr",
+                    gap: 24,
+                    alignItems: "start",
+                  }}>
+                  <div>
+                    {(Array.isArray(detailModal.images) && detailModal.images[0]) || detailModal.thumbnail ? (
+                      <img
+                        src={(Array.isArray(detailModal.images) && detailModal.images[0]) || detailModal.thumbnail}
+                        alt={detailModal.title}
+                        style={{
+                          width: "100%",
+                          height: 190,
+                          objectFit: "cover",
+                          borderRadius: 10,
+                          border: `1px solid ${C.borderSubtle}`,
+                        }}
+                      />
+                    ) : (
+                      <div
+                        style={{
+                          height: 190,
+                          borderRadius: 10,
+                          border: `1px dashed ${C.borderSubtle}`,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          color: C.textMuted,
+                          background: C.surfaceContainerLow,
+                        }}>
+                        Chưa có ảnh
+                      </div>
+                    )}
+                    <div style={{ marginTop: 16 }}>
+                      <Badge status={detailModal.status} />
+                    </div>
+                  </div>
+
+                  <div>
+                    <h3 style={{ margin: "0 0 10px", fontSize: 20, color: C.onSurface }}>
+                      {detailModal.title}
+                    </h3>
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                        gap: 12,
+                        marginBottom: 18,
+                      }}>
+                      {[
+                        ["Giá", formatPrice(detailModal.price)],
+                        ["Diện tích", detailModal.area ? `${detailModal.area} m²` : "Chưa có"],
+                        ["Loại hình", detailModal.type || "Chưa có"],
+                        ["Giao dịch", detailModal.transaction_type === "sale" ? "Bán" : "Cho thuê"],
+                        ["Pháp lý", detailModal.legal_status || "Chưa có"],
+                        ["Vị trí", [detailModal.address, detailModal.ward, detailModal.district, detailModal.city].filter(Boolean).join(", ") || "Chưa có"],
+                      ].map(([label, value]) => (
+                        <div
+                          key={label}
+                          style={{
+                            padding: "10px 12px",
+                            background: C.surfaceContainerLow,
+                            borderRadius: 8,
+                          }}>
+                          <div style={{ fontSize: 11, color: C.textMuted, marginBottom: 3 }}>
+                            {label}
+                          </div>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: C.onSurface }}>
+                            {value}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div
+                      style={{
+                        padding: 14,
+                        borderRadius: 10,
+                        border: `1px solid ${C.borderSubtle}`,
+                        marginBottom: 18,
+                      }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>
+                        Mô tả tin đăng
+                      </div>
+                      <div style={{ fontSize: 13, color: C.secondary, lineHeight: 1.6 }}>
+                        {detailModal.description || "Chưa có mô tả"}
+                      </div>
+                    </div>
+
+                    <div
+                      style={{
+                        padding: 14,
+                        borderRadius: 10,
+                        background: C.surfaceContainerLow,
+                      }}>
+                      <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 10 }}>
+                        Checklist hợp lệ trước khi duyệt
+                      </div>
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 8 }}>
+                        {getValidationItems(detailModal).map((item) => (
+                          <div
+                            key={item.label}
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 8,
+                              fontSize: 13,
+                              color: item.ok ? "#0f6e56" : C.error,
+                              fontWeight: 600,
+                            }}>
+                            <span>{item.ok ? "✓" : "!"}</span>
+                            {item.label}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {detailModal.status === "pending" && (
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "flex-end",
+                      gap: 10,
+                      marginTop: 22,
+                      paddingTop: 18,
+                      borderTop: `1px solid ${C.borderSubtle}`,
+                    }}>
+                    <button
+                      onClick={() => {
+                        setRejectModal(detailModal);
+                        setDetailModal(null);
+                      }}
+                      style={{
+                        padding: "9px 18px",
+                        borderRadius: 8,
+                        border: `1px solid ${C.error}30`,
+                        background: C.errorContainer,
+                        color: C.error,
+                        fontSize: 14,
+                        fontWeight: 700,
+                        cursor: "pointer",
+                        fontFamily: font.body,
+                      }}>
+                      Từ chối
+                    </button>
+                    <button
+                      disabled={actionLoading[detailModal.id]}
+                      onClick={() => handleStatus(detailModal.id, "approved")}
+                      style={{
+                        padding: "9px 18px",
+                        borderRadius: 8,
+                        border: "none",
+                        background: "#0f6e56",
+                        color: "#fff",
+                        fontSize: 14,
+                        fontWeight: 800,
+                        cursor: "pointer",
+                        fontFamily: font.body,
+                      }}>
+                      {actionLoading[detailModal.id] ? "..." : "Duyệt tin"}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Reject Modal */}
       {rejectModal && (

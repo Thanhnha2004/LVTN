@@ -1,4 +1,4 @@
-// src/pages/profile/Profile.jsx
+﻿// src/pages/profile/Profile.jsx
 
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
@@ -311,7 +311,7 @@ export default function Profile() {
                   )}
                 </div>
 
-                {/* Input file ẩn — xoá input cũ trong editing block */}
+                {/* Input file ẩn */}
                 <input
                   id="avatarInput"
                   type="file"
@@ -400,7 +400,7 @@ export default function Profile() {
             {/* SAVED */}
             {activeTab === "saved" && (
               <div className="card border p-4" style={{ borderRadius: 12 }}>
-                <h5 className="fw-bold mb-4">❤️ Tin đã lưu ({saved.length})</h5>
+                <h5 className="fw-bold mb-4">❤ Tin đã lưu ({saved.length})</h5>
 
                 {saved.length === 0 ? (
                   <div className="text-center py-5">
@@ -492,6 +492,7 @@ export default function Profile() {
                         <tr>
                           <th>Bất động sản</th>
                           <th>Trạng thái</th>
+                          <th>Phản hồi của Owner</th>
                           <th>Ngày gửi</th>
                           <th></th>
                         </tr>
@@ -517,6 +518,30 @@ export default function Profile() {
                                   ? "Đã phản hồi"
                                   : "Đang chờ"}
                               </span>
+                            </td>
+
+                            <td style={{ minWidth: 260 }}>
+                              {c.status === "replied" && c.owner_reply ? (
+                                <div
+                                  style={{
+                                    background: "#f1f8f4",
+                                    border: "1px solid #cfe9d8",
+                                    borderRadius: 10,
+                                    padding: "10px 12px",
+                                    color: "#24563a",
+                                    fontSize: 13,
+                                    lineHeight: 1.5,
+                                  }}>
+                                  <div className="fw-semibold mb-1">
+                                    Owner đã phản hồi:
+                                  </div>
+                                  <div>{c.owner_reply}</div>
+                                </div>
+                              ) : (
+                                <span className="text-muted small">
+                                  Chưa có phản hồi
+                                </span>
+                              )}
                             </td>
 
                             <td>
@@ -607,3 +632,4 @@ export default function Profile() {
     </div>
   );
 }
+
