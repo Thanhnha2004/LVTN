@@ -185,6 +185,13 @@ router.post("/login", async (req, res) => {
     const match = await bcrypt.compare(password, user.password_hash);
     if (!match) return res.status(400).json({ message: "Sai mật khẩu" });
 
+    if (!user.email_verified)
+      return res.status(403).json({
+        code: "EMAIL_NOT_VERIFIED",
+        message:
+          "Tài khoản chưa được xác minh. Vui lòng nhập mã OTP đã gửi đến email trước khi đăng nhập.",
+      });
+
     const token = jwt.sign(
       { id: user.id, role: user.role },
       process.env.JWT_SECRET,

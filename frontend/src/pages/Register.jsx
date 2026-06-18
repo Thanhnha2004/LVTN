@@ -4,6 +4,23 @@ import api from "../api/axios";
 
 const STEPS = ["Thông tin", "Mật khẩu", "Vai trò"];
 
+function FeatureIcon({ name, color = "currentColor", size = 18 }) {
+  const paths = {
+    home: <><path d="M3 10.5 12 3l9 7.5" /><path d="M5 9.5V21h14V9.5" /><path d="M9 21v-6h6v6" /></>,
+    bell: <><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" /><path d="M10 21h4" /></>,
+    phone: <path d="M22 16.9v3a2 2 0 0 1-2.2 2A19.8 19.8 0 0 1 3.1 5.2 2 2 0 0 1 5.1 3h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L9.1 10.8a16 16 0 0 0 4.1 4.1l1.2-1.2a2 2 0 0 1 2.1-.5c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2Z" />,
+    shield: <><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z" /><path d="m9 12 2 2 4-4" /></>,
+    search: <><circle cx="11" cy="11" r="7" /><path d="m20 20-4-4" /></>,
+    building: <><path d="M3 21h18" /><path d="M5 21V7l7-4 7 4v14" /><path d="M9 10h1M14 10h1M9 14h1M14 14h1M10 21v-4h4v4" /></>,
+  };
+
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      {paths[name]}
+    </svg>
+  );
+}
+
 export default function Register() {
   const navigate = useNavigate();
   const [step, setStep] = useState(0);
@@ -50,7 +67,12 @@ export default function Register() {
         password: form.password,
         role: form.role,
       });
-      navigate("/login");
+      navigate(`/verify-email?email=${encodeURIComponent(form.email)}`, {
+        state: {
+          message:
+            "Đăng ký thành công. Vui lòng nhập mã OTP đã được gửi đến email để kích hoạt tài khoản.",
+        },
+      });
     } catch (err) {
       setError(err.response?.data?.message || "Đăng ký thất bại");
     } finally {
@@ -220,10 +242,10 @@ export default function Register() {
           {/* Benefits list */}
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             {[
-              { icon: "🏠", text: "Tiếp cận 12,000+ bất động sản" },
-              { icon: "🔔", text: "Nhận thông báo tin mới tức thì" },
-              { icon: "📞", text: "Kết nối trực tiếp với chủ nhà" },
-              { icon: "✓", text: "Uy tín & Bảo mật thông tin" },
+              { icon: "home", text: "Tiếp cận 12,000+ bất động sản" },
+              { icon: "bell", text: "Nhận thông báo tin mới tức thì" },
+              { icon: "phone", text: "Kết nối trực tiếp với chủ nhà" },
+              { icon: "shield", text: "Uy tín & Bảo mật thông tin" },
             ].map((b) => (
               <div
                 key={b.text}
@@ -239,7 +261,7 @@ export default function Register() {
                     justifyContent: "center",
                     fontSize: 14,
                   }}>
-                  {b.icon}
+                  <FeatureIcon name={b.icon} color="#A8D9A8" size={17} />
                 </div>
                 <span style={{ color: "rgba(255,255,255,0.65)", fontSize: 14 }}>
                   {b.text}
@@ -758,7 +780,7 @@ export default function Register() {
                     value: "buyer",
                     title: "Tìm Bất Động Sản",
                     subtitle: "Mua hoặc thuê nhà, đất, văn phòng",
-                    icon: "🔍",
+                    icon: "search",
                     color: "#2563EB",
                     bg: "#EFF6FF",
                     border: "#BFDBFE",
@@ -767,7 +789,7 @@ export default function Register() {
                     value: "owner",
                     title: "Đăng Tin BĐS",
                     subtitle: "Bán hoặc cho thuê bất động sản của bạn",
-                    icon: "🏡",
+                    icon: "building",
                     color: "#C8402A",
                     bg: "#FEF2F0",
                     border: "#FCCAC3",
@@ -799,7 +821,11 @@ export default function Register() {
                         fontSize: 22,
                         transition: "background 0.15s",
                       }}>
-                      {r.icon}
+                      <FeatureIcon
+                        name={r.icon}
+                        color={form.role === r.value ? "white" : "#666"}
+                        size={22}
+                      />
                     </div>
                     <div style={{ flex: 1 }}>
                       <div

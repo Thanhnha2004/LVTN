@@ -8,6 +8,7 @@ import {
   EmptyState,
   Pagination,
 } from "./Dashboard";
+import UiIcon from "../../components/UiIcon";
 
 export default function UsersPage({ showToast }) {
   const [users, setUsers] = useState([]);
@@ -171,7 +172,7 @@ export default function UsersPage({ showToast }) {
         ) : error ? (
           <ErrorState msg={error} />
         ) : users.length === 0 ? (
-          <EmptyState icon="👥" msg="Không có người dùng nào" />
+          <EmptyState icon="users" msg="Không có người dùng nào" />
         ) : (
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>

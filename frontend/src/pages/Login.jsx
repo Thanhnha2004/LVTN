@@ -23,6 +23,12 @@ export default function Login() {
       else if (role === "owner") navigate("/owner/dashboard");
       else navigate("/");
     } catch (err) {
+      if (err.response?.data?.code === "EMAIL_NOT_VERIFIED") {
+        navigate(`/verify-email?email=${encodeURIComponent(form.email)}`, {
+          state: { message: err.response.data.message },
+        });
+        return;
+      }
       setError(err.response?.data?.message || "Đăng nhập thất bại");
     } finally {
       setLoading(false);

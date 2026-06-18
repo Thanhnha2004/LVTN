@@ -14,6 +14,7 @@ import {
   EmptyState,
   Pagination,
 } from "./Dashboard";
+import UiIcon from "../../components/UiIcon";
 
 export default function PendingPage({ showToast }) {
   const [properties, setProperties] = useState([]);
@@ -257,7 +258,8 @@ export default function PendingPage({ showToast }) {
                             color: C.textMuted,
                             marginTop: 2,
                           }}>
-                          📍 {prop.city} · ID #{prop.id}
+                          <UiIcon name="location" size={12} style={{ verticalAlign: "-2px", marginRight: 3 }} />
+                          {prop.city} · ID #{prop.id}
                         </div>
                       </div>
                     </td>

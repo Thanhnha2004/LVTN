@@ -1,7 +1,11 @@
-import { useState, useEffect, useRef } from "react";
+﻿import { useState, useEffect, useRef } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import api from "../../api/axios";
 import Navbar from "../../components/Navbar";
+import UiIcon from "../../components/UiIcon";
+import SiteFooter from "../../components/SiteFooter";
+import PropertyMeta from "../../components/PropertyMeta";
+import { formatPrice, timeAgo } from "../../shared/property";
 
 // ─── Constants ────────────────────────────────────────────────
 const TYPE_OPTIONS = [
@@ -52,23 +56,6 @@ const CATEGORIES = [
     img: "https://images.unsplash.com/photo-1500382017468-9049fed747ef?w=600&q=80",
   },
 ];
-
-// ─── Helpers ──────────────────────────────────────────────────
-function formatPrice(price) {
-  if (!price && price !== 0) return "—";
-  if (price >= 1_000_000_000)
-    return (price / 1_000_000_000).toFixed(1).replace(".0", "") + " Tỷ";
-  if (price >= 1_000_000) return (price / 1_000_000).toFixed(0) + " Triệu";
-  return price.toLocaleString("vi-VN") + " đ";
-}
-
-function timeAgo(dateStr) {
-  const diff = (Date.now() - new Date(dateStr)) / 1000;
-  if (diff < 3600) return `${Math.floor(diff / 60)} phút trước`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)} giờ trước`;
-  if (diff < 604800) return `${Math.floor(diff / 86400)} ngày trước`;
-  return new Date(dateStr).toLocaleDateString("vi-VN");
-}
 
 // ─── Property Card ────────────────────────────────────────────
 // ─── Property Card ────────────────────────────────────────────
@@ -220,9 +207,7 @@ function PropertyCard({ property }) {
               color: "#757575",
               fontSize: 12,
             }}>
-            {property.area && <span>📐 {property.area}m²</span>}
-            {property.bedrooms && <span>🛏 {property.bedrooms}</span>}
-            {property.bathrooms && <span>🚿 {property.bathrooms}</span>}
+            <PropertyMeta property={property} />
           </div>
           <span style={{ color: "#aaa", fontSize: 12, whiteSpace: "nowrap" }}>
             {timeAgo(property.created_at)}
@@ -721,7 +706,7 @@ export default function Home() {
             </div>
           ) : properties.length === 0 ? (
             <div style={{ textAlign: "center", padding: "60px 0" }}>
-              <div style={{ fontSize: 56 }}>🏚️</div>
+              <UiIcon name="home" size={56} color="#9a9a9a" />
               <h5 style={{ color: "#757575", marginTop: 12 }}>
                 Không tìm thấy bất động sản nào
               </h5>
@@ -818,13 +803,13 @@ export default function Home() {
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               {[
                 {
-                  icon: "📈",
+                  icon: "trend",
                   city: "TP. Hồ Chí Minh",
                   pct: "+ 4.2% so với quý trước",
                   color: "#e8f4fe",
                 },
                 {
-                  icon: "📊",
+                  icon: "chart",
                   city: "Hà Nội",
                   pct: "+ 3.8% so với quý trước",
                   color: "#e8f4f8",
@@ -853,7 +838,7 @@ export default function Home() {
                       fontSize: 22,
                       flexShrink: 0,
                     }}>
-                    {item.icon}
+                    <UiIcon name={item.icon} size={22} />
                   </div>
                   <div>
                     <p
@@ -1091,122 +1076,8 @@ export default function Home() {
           </form>
         </div>
       </section>
-
-      {/* ── FOOTER ── */}
-      <footer style={{ background: "#e2e2e2", borderTop: "1px solid #E8E8E8" }}>
-        <div
-          style={{
-            maxWidth: 1200,
-            margin: "0 auto",
-            padding: "48px 40px 32px",
-          }}>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "2fr 1fr 1fr 1fr",
-              gap: 40,
-              marginBottom: 40,
-            }}>
-            <div>
-              <Link
-                to="/"
-                style={{
-                  fontFamily: "Manrope",
-                  fontWeight: 700,
-                  fontSize: 18,
-                  color: "#b51b17",
-                  textDecoration: "none",
-                  display: "block",
-                  marginBottom: 16,
-                }}>
-                Bất Động Sản
-              </Link>
-              <p
-                style={{
-                  color: "#656464",
-                  fontSize: 14,
-                  lineHeight: 1.7,
-                  maxWidth: 280,
-                }}>
-                Hệ thống kết nối bất động sản hàng đầu Việt Nam, cung cấp thông
-                tin chính xác, minh bạch và nhanh chóng cho người dùng.
-              </p>
-            </div>
-            {[
-              {
-                title: "KHÁM PHÁ",
-                links: ["Mua bán nhà đất", "Cho thuê căn hộ", "Dự án mới"],
-              },
-              {
-                title: "HỖ TRỢ",
-                links: [
-                  "Về chúng tôi",
-                  "Liên hệ quảng cáo",
-                  "Hướng dẫn đăng tin",
-                ],
-              },
-              {
-                title: "PHÁP LÝ",
-                links: ["Chính sách bảo mật", "Điều khoản sử dụng"],
-              },
-            ].map((col) => (
-              <div key={col.title}>
-                <h4
-                  style={{
-                    fontSize: 12,
-                    fontWeight: 600,
-                    color: "#1a1c1c",
-                    marginBottom: 20,
-                    letterSpacing: "0.08em",
-                  }}>
-                  {col.title}
-                </h4>
-                <ul
-                  style={{
-                    listStyle: "none",
-                    padding: 0,
-                    margin: 0,
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: 12,
-                  }}>
-                  {col.links.map((l) => (
-                    <li key={l}>
-                      <a
-                        href="#"
-                        style={{
-                          color: "#656464",
-                          fontSize: 14,
-                          textDecoration: "none",
-                        }}
-                        onMouseEnter={(e) =>
-                          (e.currentTarget.style.color = "#b51b17")
-                        }
-                        onMouseLeave={(e) =>
-                          (e.currentTarget.style.color = "#656464")
-                        }>
-                        {l}
-                      </a>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </div>
-          <div
-            style={{
-              paddingTop: 24,
-              borderTop: "1px solid #E8E8E8",
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-            }}>
-            <p style={{ color: "#656464", fontSize: 13, margin: 0 }}>
-              © 2024 Hệ thống Bất Động Sản Chuyên Nghiệp. All rights reserved.
-            </p>
-          </div>
-        </div>
-      </footer>
+      <SiteFooter />
     </div>
   );
 }
+

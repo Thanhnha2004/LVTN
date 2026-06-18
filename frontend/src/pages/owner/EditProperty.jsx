@@ -2,87 +2,24 @@ import { useState, useEffect, useRef } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
 import api from "../../api/axios";
 import Navbar from "../../components/Navbar";
+import UiIcon from "../../components/UiIcon";
+import {
+  CITIES,
+  DIRECTIONS,
+  LEGAL_OPTIONS,
+  PROPERTY_TYPES,
+  formatInputPrice as formatPrice,
+} from "../../shared/property";
+import {
+  blurInput,
+  focusInput,
+  inputStyle,
+  labelStyle,
+} from "../../shared/formStyles";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const VN = { fontFamily: "'Be Vietnam Pro', Inter, sans-serif" };
 
-const PROPERTY_TYPES = [
-  { value: "apartment", label: "Căn hộ chung cư" },
-  { value: "house", label: "Nhà phố / Biệt thự" },
-  { value: "land", label: "Đất nền" },
-  { value: "office", label: "Văn phòng" },
-];
-
-const DIRECTIONS = [
-  { value: "north", label: "Bắc" },
-  { value: "south", label: "Nam" },
-  { value: "east", label: "Đông" },
-  { value: "west", label: "Tây" },
-  { value: "northeast", label: "Đông Bắc" },
-  { value: "northwest", label: "Tây Bắc" },
-  { value: "southeast", label: "Đông Nam" },
-  { value: "southwest", label: "Tây Nam" },
-];
-
-const LEGAL_OPTIONS = [
-  { value: "sohong", label: "Sổ hồng" },
-  { value: "sokhongdo", label: "Sổ đỏ" },
-  { value: "dangchoso", label: "Đang chờ sổ" },
-  { value: "other", label: "Khác" },
-];
-
-const CITIES = [
-  "Hà Nội",
-  "TP. Hồ Chí Minh",
-  "Đà Nẵng",
-  "Hải Phòng",
-  "Cần Thơ",
-  "Biên Hòa",
-  "Nha Trang",
-  "Huế",
-  "Vũng Tàu",
-  "Đà Lạt",
-  "Quảng Ninh",
-  "Bình Dương",
-  "Đồng Nai",
-  "Long An",
-];
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-const formatPrice = (val) => {
-  const num = parseFloat(val);
-  if (!num || isNaN(num)) return "";
-  if (num >= 1_000_000_000) return `${(num / 1_000_000_000).toFixed(2)} tỷ`;
-  if (num >= 1_000_000) return `${(num / 1_000_000).toFixed(0)} triệu`;
-  return `${num.toLocaleString("vi-VN")} đ`;
-};
-
-// ─── Shared styles ─────────────────────────────────────────────────────────────
-const inputStyle = {
-  width: "100%",
-  padding: "11px 14px",
-  border: "1.5px solid #E8E8E8",
-  borderRadius: 8,
-  fontSize: 14,
-  color: "#1a1c1c",
-  background: "#fff",
-  outline: "none",
-  fontFamily: "Inter, sans-serif",
-  transition: "border-color 0.15s",
-  boxSizing: "border-box",
-};
-
-const labelStyle = {
-  display: "block",
-  fontSize: 13,
-  fontWeight: 600,
-  color: "#1a1c1c",
-  marginBottom: 6,
-  fontFamily: "Inter, sans-serif",
-};
-
-const focusInput = (e) => (e.target.style.borderColor = "#b51b17");
-const blurInput = (e) => (e.target.style.borderColor = "#E8E8E8");
 
 // ─── SectionCard ──────────────────────────────────────────────────────────────
 function SectionCard({ icon, title, children }) {
@@ -188,7 +125,7 @@ function ImageCard({ url, isFirst, onDelete }) {
               justifyContent: "center",
               color: "#b51b17",
             }}>
-            🗑️
+            <UiIcon name="trash" size={17} />
           </button>
         </div>
       )}
@@ -575,7 +512,7 @@ export default function EditProperty() {
               alignItems: "center",
               gap: 10,
             }}>
-            <span style={{ fontSize: 16 }}>⚠️</span>
+            <UiIcon name="alert" size={18} />
             <span style={{ fontSize: 13, color: "#b51b17", fontWeight: 500 }}>
               {error}
             </span>
@@ -1158,7 +1095,7 @@ export default function EditProperty() {
                   onMouseLeave={(e) =>
                     (e.currentTarget.style.borderColor = "#e4beb9")
                   }>
-                  <div style={{ fontSize: 32, marginBottom: 8 }}>📸</div>
+                  <div style={{ marginBottom: 8 }}><UiIcon name="camera" size={32} /></div>
                   <p
                     style={{
                       fontSize: 14,
@@ -1194,7 +1131,7 @@ export default function EditProperty() {
                     alignItems: "center",
                     gap: 10,
                   }}>
-                  <span>⚠️</span>
+                  <UiIcon name="alert" size={18} />
                   <span style={{ fontSize: 13, color: "#795548" }}>
                     Tin không có ảnh sẽ ít được chú ý hơn.
                   </span>

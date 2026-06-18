@@ -2,6 +2,15 @@ import { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../../api/axios";
 import Navbar from "../../components/Navbar";
+import UiIcon from "../../components/UiIcon";
+import {
+  CITIES,
+  DIRECTIONS,
+  LEGAL_OPTIONS,
+  PROPERTY_TYPES,
+  formatInputPrice as formatPrice,
+} from "../../shared/property";
+import { inputStyle, labelStyle } from "../../shared/formStyles";
 
 const STEPS = [
   { id: 1, label: "Thông tin cơ bản"},
@@ -11,79 +20,6 @@ const STEPS = [
   { id: 5, label: "Xác nhận"},
 ];
 
-const PROPERTY_TYPES = [
-  { value: "apartment", label: "Căn hộ chung cư"},
-  { value: "house", label: "Nhà phố / Biệt thự"},
-  { value: "land", label: "Đất nền"},
-  { value: "office", label: "Văn phòng"},
-];
-
-const DIRECTIONS = [
-  { value: "north", label: "Bắc" },
-  { value: "south", label: "Nam" },
-  { value: "east", label: "Đông" },
-  { value: "west", label: "Tây" },
-  { value: "northeast", label: "Đông Bắc" },
-  { value: "northwest", label: "Tây Bắc" },
-  { value: "southeast", label: "Đông Nam" },
-  { value: "southwest", label: "Tây Nam" },
-];
-
-const LEGAL_OPTIONS = [
-  { value: "sohong", label: "Sổ hồng" },
-  { value: "sokhongdo", label: "Sổ đỏ" },
-  { value: "dangchoso", label: "Đang chờ sổ" },
-  { value: "other", label: "Khác" },
-];
-
-const CITIES = [
-  "Hà Nội",
-  "TP. Hồ Chí Minh",
-  "Đà Nẵng",
-  "Hải Phòng",
-  "Cần Thơ",
-  "Biên Hòa",
-  "Nha Trang",
-  "Huế",
-  "Vũng Tàu",
-  "Đà Lạt",
-  "Quảng Ninh",
-  "Bình Dương",
-  "Đồng Nai",
-  "Long An",
-  "Bà Rịa - Vũng Tàu",
-];
-
-const formatPrice = (val) => {
-  const num = parseFloat(val);
-  if (!num) return "";
-  if (num >= 1_000_000_000) return `${(num / 1_000_000_000).toFixed(2)} tỷ`;
-  if (num >= 1_000_000) return `${(num / 1_000_000).toFixed(0)} triệu`;
-  return `${num.toLocaleString("vi-VN")} đ`;
-};
-
-const inputStyle = {
-  width: "100%",
-  padding: "11px 14px",
-  border: "1.5px solid #E8E8E8",
-  borderRadius: 8,
-  fontSize: 14,
-  color: "#1a1c1c",
-  background: "#fff",
-  outline: "none",
-  fontFamily: "Inter, sans-serif",
-  transition: "border-color 0.15s",
-  boxSizing: "border-box",
-};
-
-const labelStyle = {
-  display: "block",
-  fontSize: 13,
-  fontWeight: 600,
-  color: "#1a1c1c",
-  marginBottom: 6,
-  fontFamily: "Inter, sans-serif",
-};
 
 const sectionTitle = (icon, text) => (
   <div
@@ -251,7 +187,7 @@ export default function CreateProperty() {
               padding: "48px 40px",
               boxShadow: "0 4px 24px rgba(0,0,0,0.06)",
             }}>
-            <div style={{ fontSize: 64, marginBottom: 20 }}>🎉</div>
+            <div style={{ color: "#18753c", marginBottom: 20 }}><UiIcon name="success" size={64} /></div>
             <h2
               style={{
                 fontFamily: "Manrope, sans-serif",
@@ -505,7 +441,7 @@ export default function CreateProperty() {
                   alignItems: "center",
                   gap: 10,
                 }}>
-                <span style={{ fontSize: 16 }}>⚠️</span>
+                <UiIcon name="alert" size={18} />
                 <span
                   style={{ fontSize: 13, color: "#b51b17", fontWeight: 500 }}>
                   {error}
@@ -836,7 +772,7 @@ export default function CreateProperty() {
                       color: "#8f706b",
                       cursor: "pointer",
                     }}>
-                    <span style={{ fontSize: 32 }}>🗺️</span>
+                    <UiIcon name="map" size={32} />
                     <span style={{ fontSize: 14, fontWeight: 500 }}>
                       Nhấn để chọn vị trí trên bản đồ
                     </span>
@@ -1117,7 +1053,7 @@ export default function CreateProperty() {
                   onMouseLeave={(e) =>
                     (e.currentTarget.style.borderColor = "#e4beb9")
                   }>
-                  <div style={{ fontSize: 40, marginBottom: 12 }}>📸</div>
+                  <div style={{ marginBottom: 12 }}><UiIcon name="camera" size={40} /></div>
                   <p
                     style={{
                       fontSize: 15,
@@ -1231,7 +1167,7 @@ export default function CreateProperty() {
                       alignItems: "center",
                       gap: 10,
                     }}>
-                    <span>⚠️</span>
+                    <UiIcon name="alert" size={18} />
                     <span style={{ fontSize: 13, color: "#795548" }}>
                       Bạn có thể bỏ qua bước này và thêm ảnh sau trong phần quản
                       lý tin.
@@ -1471,7 +1407,7 @@ export default function CreateProperty() {
                       Đang đăng tin...
                     </>
                   ) : (
-                    "🚀 Đăng tin ngay"
+                    "Đăng tin ngay"
                   )}
                 </button>
               )}

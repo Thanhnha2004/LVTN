@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import api from "../../api/axios";
 import Navbar from "../../components/Navbar";
+import UiIcon from "../../components/UiIcon";
 
 export default function Profile() {
   const [searchParams] = useSearchParams();
@@ -400,7 +401,7 @@ export default function Profile() {
             {/* SAVED */}
             {activeTab === "saved" && (
               <div className="card border p-4" style={{ borderRadius: 12 }}>
-                <h5 className="fw-bold mb-4">❤ Tin đã lưu ({saved.length})</h5>
+                <h5 className="fw-bold mb-4"><UiIcon name="heart" size={19} style={{ verticalAlign: "-3px", marginRight: 6 }} />Tin đã lưu ({saved.length})</h5>
 
                 {saved.length === 0 ? (
                   <div className="text-center py-5">
@@ -432,7 +433,7 @@ export default function Profile() {
                                 background: "#eee",
                                 fontSize: 40,
                               }}>
-                              🏠
+                              <UiIcon name="home" size={40} color="#888" />
                             </div>
                           )}
 
@@ -478,7 +479,8 @@ export default function Profile() {
             {activeTab === "contacts" && (
               <div className="card border p-4" style={{ borderRadius: 12 }}>
                 <h5 className="fw-bold mb-4">
-                  ✉ Yêu cầu liên hệ ({contacts.length})
+                  <UiIcon name="message" size={19} style={{ verticalAlign: "-3px", marginRight: 6 }} />
+                  Yêu cầu liên hệ ({contacts.length})
                 </h5>
 
                 {contacts.length === 0 ? (
@@ -632,4 +634,3 @@ export default function Profile() {
     </div>
   );
 }
-

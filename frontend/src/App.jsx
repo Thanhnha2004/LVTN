@@ -4,6 +4,7 @@ import "bootstrap/dist/css/bootstrap.min.css";
 
 import Login from "./pages/Login";
 import Register from "./pages/Register";
+import VerifyEmail from "./pages/VerifyEmail";
 import Home from "./pages/buyer/Home";
 import Detail from "./pages/buyer/Detail";
 import OwnerDashboard from "./pages/owner/Dashboard";
@@ -32,6 +33,7 @@ export default function App() {
           <Route path="/" element={<Home />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/verify-email" element={<VerifyEmail />} />
           <Route path="/property/:id" element={<Detail />} />
           <Route path="/profile" element={<Profile />} />
           <Route path="/search" element={<PropertyList />} />

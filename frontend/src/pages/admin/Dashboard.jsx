@@ -3,6 +3,7 @@ import Navbar from "../../components/Navbar";
 import { C, font, getToken, apiFetch } from "./adminShared";
 import UsersPage from "./Users";
 import PendingPage from "./Pending";
+import UiIcon from "../../components/UiIcon";
 
 // ─── SHARED COMPONENTS ─────────────────────────────────────
 
@@ -272,7 +273,7 @@ export function Toast({ msg, type, onClose }) {
         alignItems: "center",
         gap: 8,
       }}>
-      <span>{type === "error" ? "⚠️" : "✓"}</span>
+      <UiIcon name={type === "error" ? "alert" : "check"} size={18} />
       {msg}
       <button
         onClick={onClose}
@@ -333,7 +334,7 @@ export function ErrorState({ msg }) {
         color: C.error,
         fontFamily: font.body,
       }}>
-      <span style={{ fontSize: 32 }}>⚠️</span>
+      <UiIcon name="alert" size={32} />
       <div style={{ fontSize: 14 }}>{msg}</div>
     </div>
   );
@@ -351,7 +352,7 @@ export function EmptyState({ icon, msg }) {
         color: C.textMuted,
         fontFamily: font.body,
       }}>
-      <span style={{ fontSize: 40, marginBottom: 12 }}>{icon}</span>
+      <span style={{ marginBottom: 12 }}><UiIcon name={icon} size={40} /></span>
       <div style={{ fontSize: 14 }}>{msg}</div>
     </div>
   );
@@ -470,7 +471,7 @@ function LoginPage({ onLogin }) {
               fontSize: 24,
               marginBottom: 16,
             }}>
-            🏢
+            <UiIcon name="building" size={25} color="white" />
           </div>
           <div
             style={{

@@ -1,40 +1,18 @@
-import { useState, useEffect } from "react";
+﻿import { useState, useEffect } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import api from "../../api/axios";
 import Navbar from "../../components/Navbar";
 import LeafletMap from "../../components/LeafletMap";
 import { useAuth } from "../../context/AuthContext";
-
-function formatPrice(price) {
-  if (price >= 1000000000) return (price / 1000000000).toFixed(1) + " tỷ";
-  if (price >= 1000000) return (price / 1000000).toFixed(0) + " triệu";
-  return price.toLocaleString() + " đ";
-}
-
-const TYPE_LABEL = {
-  apartment: "Căn hộ",
-  house: "Nhà phố",
-  land: "Đất nền",
-  office: "Văn phòng",
-};
-
-const DIRECTION_LABEL = {
-  north: "Bắc",
-  south: "Nam",
-  east: "Đông",
-  west: "Tây",
-  northeast: "Đông Bắc",
-  northwest: "Tây Bắc",
-  southeast: "Đông Nam",
-  southwest: "Tây Nam",
-};
-
-const LEGAL_LABEL = {
-  sohong: "Sổ hồng",
-  sokhongdo: "Sổ đỏ",
-  dangchoso: "Đang chờ sổ",
-  other: "Khác",
-};
+import UiIcon from "../../components/UiIcon";
+import SiteFooter from "../../components/SiteFooter";
+import PropertyMeta from "../../components/PropertyMeta";
+import {
+  DIRECTION_LABEL,
+  LEGAL_LABEL,
+  TYPE_LABEL,
+  formatPrice,
+} from "../../shared/property";
 
 export default function Detail() {
   const { id } = useParams();
@@ -208,7 +186,7 @@ export default function Detail() {
                     alignItems: "center",
                     justifyContent: "center",
                   }}>
-                  <span style={{ fontSize: 72, opacity: 0.3 }}>🏠</span>
+                  <UiIcon name="home" size={72} style={{ opacity: 0.3 }} />
                 </div>
               )}
               {/* Transaction badge */}
@@ -368,7 +346,8 @@ export default function Detail() {
                   color: saved ? "#b51b17" : "#5f5e5e",
                   transition: "all 0.15s",
                 }}>
-                {saved ? "❤️" : "🤍"} {saved ? "Đã lưu" : "Lưu tin"}
+                <UiIcon name="heart" size={17} fill={saved ? "#b51b17" : "none"} />
+                {saved ? "Đã lưu" : "Lưu tin"}
               </button>
             </div>
 
@@ -383,7 +362,7 @@ export default function Detail() {
                 fontFamily: "Inter, sans-serif",
                 fontSize: 14,
               }}>
-              <span>📍</span>
+              <UiIcon name="location" size={17} />
               <span>
                 {property.address && `${property.address}, `}
                 {property.city}
@@ -447,19 +426,19 @@ export default function Detail() {
                 }}>
                 {[
                   {
-                    icon: "📐",
+                    icon: "area",
                     label: "Diện tích",
                     value: `${property.area} m²`,
                   },
                   {
-                    icon: "🏷️",
+                    icon: "tag",
                     label: "Loại hình",
                     value: TYPE_LABEL[property.type] || property.type,
                   },
                   ...(property.bedrooms != null
                     ? [
                         {
-                          icon: "🛏️",
+                          icon: "bed",
                           label: "Phòng ngủ",
                           value: `${property.bedrooms} PN`,
                         },
@@ -468,7 +447,7 @@ export default function Detail() {
                   ...(property.bathrooms != null
                     ? [
                         {
-                          icon: "🚿",
+                          icon: "bath",
                           label: "Phòng tắm",
                           value: `${property.bathrooms} WC`,
                         },
@@ -477,7 +456,7 @@ export default function Detail() {
                   ...(property.direction
                     ? [
                         {
-                          icon: "🧭",
+                          icon: "compass",
                           label: "Hướng",
                           value:
                             DIRECTION_LABEL[property.direction] ||
@@ -488,7 +467,7 @@ export default function Detail() {
                   ...(property.legal_status
                     ? [
                         {
-                          icon: "📋",
+                          icon: "clipboard",
                           label: "Pháp lý",
                           value:
                             LEGAL_LABEL[property.legal_status] ||
@@ -497,7 +476,7 @@ export default function Detail() {
                       ]
                     : []),
                   {
-                    icon: "🗓️",
+                    icon: "calendar",
                     label: "Ngày đăng",
                     value: new Date(property.created_at).toLocaleDateString(
                       "vi-VN",
@@ -515,7 +494,7 @@ export default function Detail() {
                         textAlign: "center",
                       }}>
                       <div style={{ fontSize: 20, marginBottom: 4 }}>
-                        {item.icon}
+                        <UiIcon name={item.icon} size={20} />
                       </div>
                       <div
                         style={{
@@ -824,7 +803,7 @@ export default function Detail() {
                   textDecoration: "none",
                   letterSpacing: 0.5,
                 }}>
-                📞{" "}
+                <UiIcon name="phone" size={17} style={{ verticalAlign: "-3px", marginRight: 6 }} />
                 {property.owner_phone
                   ? property.owner_phone.replace(/(\d{4})(\d+)/, "$1 ***")
                   : "Xem số điện thoại"}
@@ -872,7 +851,7 @@ export default function Detail() {
 
               {contactSent ? (
                 <div style={{ textAlign: "center", padding: "20px 0" }}>
-                  <div style={{ fontSize: 40, marginBottom: 8 }}>✅</div>
+                  <div style={{ marginBottom: 8, color: "#18753c" }}><UiIcon name="success" size={40} /></div>
                   <p
                     style={{
                       fontFamily: "Inter, sans-serif",
@@ -1096,7 +1075,7 @@ export default function Detail() {
                             alignItems: "center",
                             justifyContent: "center",
                           }}>
-                          <span style={{ fontSize: 40, opacity: 0.4 }}>🏠</span>
+                          <UiIcon name="home" size={40} style={{ opacity: 0.4 }} />
                         </div>
                       )}
                       <span
@@ -1152,9 +1131,7 @@ export default function Detail() {
                           fontSize: 12,
                           color: "#757575",
                         }}>
-                        {p.bedrooms != null && <span>🛏 {p.bedrooms}</span>}
-                        {p.area && <span>📐 {p.area}m²</span>}
-                        <span>📍 {p.city}</span>
+                        <PropertyMeta property={p} showLocation />
                       </div>
                     </div>
                   </div>
@@ -1164,124 +1141,8 @@ export default function Detail() {
           </section>
         )}
       </div>
-
-      {/* ── FOOTER ── */}
-      <footer style={{ background: "#e2e2e2", borderTop: "1px solid #E8E8E8" }}>
-        <div
-          style={{
-            maxWidth: 1200,
-            margin: "0 auto",
-            padding: "48px 40px 32px",
-          }}>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "2fr 1fr 1fr 1fr",
-              gap: 40,
-              marginBottom: 40,
-            }}>
-            <div>
-              <Link
-                to="/"
-                style={{
-                  fontFamily: "Manrope",
-                  fontWeight: 700,
-                  fontSize: 18,
-                  color: "#b51b17",
-                  textDecoration: "none",
-                  display: "block",
-                  marginBottom: 16,
-                }}>
-                Bất Động Sản
-              </Link>
-              <p
-                style={{
-                  color: "#656464",
-                  fontSize: 14,
-                  lineHeight: 1.7,
-                  maxWidth: 280,
-                }}>
-                Hệ thống kết nối bất động sản hàng đầu Việt Nam, cung cấp thông
-                tin chính xác, minh bạch và nhanh chóng cho người dùng.
-              </p>
-            </div>
-            {[
-              {
-                title: "KHÁM PHÁ",
-                links: ["Mua bán nhà đất", "Cho thuê căn hộ", "Dự án mới"],
-              },
-              {
-                title: "HỖ TRỢ",
-                links: [
-                  "Về chúng tôi",
-                  "Liên hệ quảng cáo",
-                  "Hướng dẫn đăng tin",
-                ],
-              },
-              {
-                title: "PHÁP LÝ",
-                links: ["Chính sách bảo mật", "Điều khoản sử dụng"],
-              },
-            ].map((col) => (
-              <div key={col.title}>
-                <h4
-                  style={{
-                    fontSize: 12,
-                    fontWeight: 600,
-                    color: "#1a1c1c",
-                    marginBottom: 20,
-                    letterSpacing: "0.08em",
-                  }}>
-                  {col.title}
-                </h4>
-                <ul
-                  style={{
-                    listStyle: "none",
-                    padding: 0,
-                    margin: 0,
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: 12,
-                  }}>
-                  {col.links.map((l) => (
-                    <li key={l}>
-                      <a
-                        href="#"
-                        style={{
-                          color: "#656464",
-                          fontSize: 14,
-                          textDecoration: "none",
-                        }}
-                        onMouseEnter={(e) =>
-                          (e.currentTarget.style.color = "#b51b17")
-                        }
-                        onMouseLeave={(e) =>
-                          (e.currentTarget.style.color = "#656464")
-                        }>
-                        {l}
-                      </a>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </div>
-          <div
-            style={{
-              paddingTop: 24,
-              borderTop: "1px solid #E8E8E8",
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-            }}>
-            <p style={{ color: "#656464", fontSize: 13, margin: 0 }}>
-              © 2024 Hệ thống Bất Động Sản Chuyên Nghiệp. All rights reserved.
-            </p>
-
-
-          </div>
-        </div>
-      </footer>
+      <SiteFooter />
     </div>
   );
 }
+
