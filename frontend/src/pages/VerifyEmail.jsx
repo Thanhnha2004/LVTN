@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import api from "../api/axios";
+import { useToast } from "../components/ToastProvider";
 
 export default function VerifyEmail() {
   const navigate = useNavigate();
+  const { showToast } = useToast();
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const email = searchParams.get("email") || "";
@@ -17,18 +19,23 @@ export default function VerifyEmail() {
     event.preventDefault();
     if (!/^\d{6}$/.test(otp)) {
       setError("Mã OTP phải gồm đúng 6 chữ số.");
+      showToast("Mã OTP phải gồm đúng 6 chữ số.", "error");
       return;
     }
     setError("");
     setLoading(true);
     try {
       await api.post("/api/auth/verify-email", { email, otp });
+      showToast("Xác minh email thành công. Bạn có thể đăng nhập.");
       navigate("/login", {
         replace: true,
         state: { message: "Xác minh email thành công. Bạn có thể đăng nhập." },
       });
     } catch (err) {
-      setError(err.response?.data?.message || "Xác minh email thất bại.");
+      const message =
+        err.response?.data?.message || "Xác minh email thất bại.";
+      setError(message);
+      showToast(message, "error");
     } finally {
       setLoading(false);
     }
@@ -40,9 +47,14 @@ export default function VerifyEmail() {
     setResending(true);
     try {
       const res = await api.post("/api/auth/send-otp", { email });
-      setMessage(res.data.message || "Đã gửi lại mã OTP.");
+      const message = res.data.message || "Đã gửi lại mã OTP.";
+      setMessage(message);
+      showToast(message);
     } catch (err) {
-      setError(err.response?.data?.message || "Không thể gửi lại mã OTP.");
+      const message =
+        err.response?.data?.message || "Không thể gửi lại mã OTP.";
+      setError(message);
+      showToast(message, "error");
     } finally {
       setResending(false);
     }

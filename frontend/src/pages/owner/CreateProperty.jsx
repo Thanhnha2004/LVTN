@@ -11,6 +11,7 @@ import {
   formatInputPrice as formatPrice,
 } from "../../shared/property";
 import { inputStyle, labelStyle } from "../../shared/formStyles";
+import { useToast } from "../../components/ToastProvider";
 
 const STEPS = [
   { id: 1, label: "Thông tin cơ bản"},
@@ -40,6 +41,7 @@ const sectionTitle = (icon, text) => (
 
 export default function CreateProperty() {
   const navigate = useNavigate();
+  const { showToast } = useToast();
   const fileRef = useRef();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
@@ -79,20 +81,49 @@ export default function CreateProperty() {
     setError("");
     if (step === 1) {
       if (!form.title || form.title.trim().length < 5)
-        return setError("Tiêu đề phải có ít nhất 5 ký tự") || false;
+        return (
+          setError("Tiêu đề phải có ít nhất 5 ký tự") ||
+          showToast("Tiêu đề phải có ít nhất 5 ký tự", "error") ||
+          false
+        );
       if (!form.description || form.description.trim().length < 20)
-        return setError("Mô tả phải có ít nhất 20 ký tự") || false;
+        return (
+          setError("Mô tả phải có ít nhất 20 ký tự") ||
+          showToast("Mô tả phải có ít nhất 20 ký tự", "error") ||
+          false
+        );
       if (!form.type)
-        return setError("Vui lòng chọn loại hình bất động sản") || false;
+        return (
+          setError("Vui lòng chọn loại hình bất động sản") ||
+          showToast("Vui lòng chọn loại hình bất động sản", "error") ||
+          false
+        );
       if (!form.price || parseFloat(form.price) <= 0)
-        return setError("Vui lòng nhập giá hợp lệ") || false;
+        return (
+          setError("Vui lòng nhập giá hợp lệ") ||
+          showToast("Vui lòng nhập giá hợp lệ", "error") ||
+          false
+        );
       if (!form.area || parseFloat(form.area) <= 0)
-        return setError("Vui lòng nhập diện tích hợp lệ") || false;
+        return (
+          setError("Vui lòng nhập diện tích hợp lệ") ||
+          showToast("Vui lòng nhập diện tích hợp lệ", "error") ||
+          false
+        );
     }
     if (step === 2) {
       if (!form.address.trim())
-        return setError("Vui lòng nhập địa chỉ") || false;
-      if (!form.city) return setError("Vui lòng chọn tỉnh/thành phố") || false;
+        return (
+          setError("Vui lòng nhập địa chỉ") ||
+          showToast("Vui lòng nhập địa chỉ", "error") ||
+          false
+        );
+      if (!form.city)
+        return (
+          setError("Vui lòng chọn tỉnh/thành phố") ||
+          showToast("Vui lòng chọn tỉnh/thành phố", "error") ||
+          false
+        );
     }
     return true;
   };
@@ -157,10 +188,12 @@ export default function CreateProperty() {
       }
 
       setSuccess(true);
+      showToast("Đăng tin thành công. Tin đang chờ admin duyệt.");
     } catch (err) {
-      setError(
-        err.response?.data?.message || "Đăng tin thất bại, vui lòng thử lại.",
-      );
+      const message =
+        err.response?.data?.message || "Đăng tin thất bại, vui lòng thử lại.";
+      setError(message);
+      showToast(message, "error");
     } finally {
       setLoading(false);
     }

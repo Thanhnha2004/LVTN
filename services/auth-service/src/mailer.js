@@ -44,4 +44,37 @@ async function sendOtpEmail({ toEmail, toName, otp }) {
   });
 }
 
-module.exports = { sendOtpEmail };
+async function sendResetPasswordOtpEmail({ toEmail, toName, otp }) {
+  await transporter.sendMail({
+    from: `"BDS Platform" <${process.env.MAIL_USER}>`,
+    to: toEmail,
+    subject: `[BDS Platform] Mã đặt lại mật khẩu của bạn: ${otp}`,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto;">
+        <h2 style="color: #B51B17;">Đặt lại mật khẩu</h2>
+        <p>Xin chào <strong>${toName}</strong>,</p>
+        <p>Mã OTP để đặt lại mật khẩu của bạn là:</p>
+        <div style="
+          font-size: 36px;
+          font-weight: bold;
+          letter-spacing: 12px;
+          color: #B51B17;
+          background: #FFF0EF;
+          border: 2px solid #B51B17;
+          border-radius: 8px;
+          padding: 16px 24px;
+          text-align: center;
+          margin: 24px 0;
+        ">${otp}</div>
+        <p>Mã có hiệu lực trong <strong>10 phút</strong>.</p>
+        <p>Nếu bạn không yêu cầu đặt lại mật khẩu, vui lòng bỏ qua email này.</p>
+        <hr style="border: none; border-top: 1px solid #E2E8F0; margin: 24px 0;"/>
+        <p style="color: #64748B; font-size: 12px;">
+          Email này được gửi tự động từ BDS Platform. Vui lòng không trả lời.
+        </p>
+      </div>
+    `,
+  });
+}
+
+module.exports = { sendOtpEmail, sendResetPasswordOtpEmail };

@@ -7,6 +7,7 @@ import { useAuth } from "../../context/AuthContext";
 import UiIcon from "../../components/UiIcon";
 import SiteFooter from "../../components/SiteFooter";
 import PropertyMeta from "../../components/PropertyMeta";
+import { useToast } from "../../components/ToastProvider";
 import {
   DIRECTION_LABEL,
   LEGAL_LABEL,
@@ -18,6 +19,7 @@ export default function Detail() {
   const { id } = useParams();
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { showToast } = useToast();
 
   const [property, setProperty] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -67,8 +69,9 @@ export default function Detail() {
         await api.post("/api/contact/saved", { property_id: id });
       }
       setSaved(!saved);
+      showToast(saved ? "Đã bỏ lưu tin quan tâm" : "Đã lưu tin quan tâm");
     } catch (err) {
-      console.error(err);
+      showToast(err.response?.data?.message || "Không thể cập nhật tin đã lưu", "error");
     }
   };
 
@@ -83,8 +86,11 @@ export default function Detail() {
         message: contact.message,
       });
       setContactSent(true);
+      showToast("Đã gửi yêu cầu liên hệ. Owner sẽ phản hồi trong hệ thống.");
     } catch (err) {
-      setContactError(err.response?.data?.message || "Gửi thất bại");
+      const message = err.response?.data?.message || "Gửi thất bại";
+      setContactError(message);
+      showToast(message, "error");
     } finally {
       setContactLoading(false);
     }
@@ -719,115 +725,6 @@ export default function Detail() {
 
           {/* RIGHT COLUMN — STICKY SIDEBAR */}
           <div style={{ position: "sticky", top: 80 }}>
-            {/* Agent / Owner card */}
-            <div
-              style={{
-                background: "#fff",
-                border: "1px solid #E8E8E8",
-                borderRadius: 12,
-                padding: "20px 24px",
-                marginBottom: 16,
-              }}>
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 12,
-                  marginBottom: 16,
-                }}>
-                <div
-                  style={{
-                    width: 48,
-                    height: 48,
-                    borderRadius: "50%",
-                    background: "linear-gradient(135deg, #b51b17, #d9372d)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    color: "#fff",
-                    fontSize: 20,
-                    fontFamily: "Manrope, sans-serif",
-                    fontWeight: 700,
-                    flexShrink: 0,
-                  }}>
-                  {property.owner_name?.charAt(0)?.toUpperCase()}
-                </div>
-                <div>
-                  <div
-                    style={{
-                      fontFamily: "Manrope, sans-serif",
-                      fontSize: 15,
-                      fontWeight: 700,
-                      color: "#1a1c1c",
-                    }}>
-                    {property.owner_name}
-                  </div>
-                  <div
-                    style={{
-                      fontFamily: "Inter, sans-serif",
-                      fontSize: 12,
-                      color: "#00A550",
-                      fontWeight: 600,
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 4,
-                    }}>
-                    <span
-                      style={{
-                        display: "inline-block",
-                        width: 6,
-                        height: 6,
-                        borderRadius: "50%",
-                        background: "#00A550",
-                      }}
-                    />
-                    Đang hoạt động
-                  </div>
-                </div>
-              </div>
-
-              {/* Call button */}
-              <a
-                href={`tel:${property.owner_phone || ""}`}
-                style={{
-                  display: "block",
-                  textAlign: "center",
-                  background: "#b51b17",
-                  color: "#fff",
-                  padding: "12px 0",
-                  borderRadius: 8,
-                  marginBottom: 10,
-                  fontFamily: "Inter, sans-serif",
-                  fontSize: 14,
-                  fontWeight: 600,
-                  textDecoration: "none",
-                  letterSpacing: 0.5,
-                }}>
-                <UiIcon name="phone" size={17} style={{ verticalAlign: "-3px", marginRight: 6 }} />
-                {property.owner_phone
-                  ? property.owner_phone.replace(/(\d{4})(\d+)/, "$1 ***")
-                  : "Xem số điện thoại"}
-              </a>
-
-              {/* Request button */}
-              <button
-                style={{
-                  display: "block",
-                  width: "100%",
-                  background: "#fff",
-                  color: "#b51b17",
-                  border: "1.5px solid #b51b17",
-                  padding: "10px 0",
-                  borderRadius: 8,
-                  fontFamily: "Inter, sans-serif",
-                  fontSize: 14,
-                  fontWeight: 600,
-                  cursor: "pointer",
-                }}>
-                Gửi yêu cầu
-              </button>
-            </div>
-
             {/* Contact form */}
             <div
               style={{

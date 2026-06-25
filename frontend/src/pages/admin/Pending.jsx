@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+﻿import { useState, useEffect, useCallback } from "react";
 import {
   C,
   font,
@@ -15,8 +15,13 @@ import {
   Pagination,
 } from "./Dashboard";
 import UiIcon from "../../components/UiIcon";
+import { useToast } from "../../components/ToastProvider";
+import { useConfirm } from "../../components/ConfirmProvider";
 
 export default function PendingPage({ showToast }) {
+  const { showToast: globalToast } = useToast();
+  const { confirm } = useConfirm();
+  const notify = showToast || globalToast;
   const [properties, setProperties] = useState([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState("pending");
@@ -40,7 +45,7 @@ export default function PendingPage({ showToast }) {
       setTotal(data?.pagination?.total || list.length);
       setTotalPages(data?.pagination?.total_pages || 1);
     } catch (e) {
-      showToast(e.message, "error");
+      notify(e.message, "error");
     } finally {
       setLoading(false);
     }
@@ -57,7 +62,7 @@ export default function PendingPage({ showToast }) {
       const data = await apiFetch(`/api/property/${prop.id}`);
       setDetailModal({ ...prop, ...data });
     } catch (e) {
-      showToast(e.message, "error");
+      notify(e.message, "error");
     } finally {
       setDetailLoading(false);
     }
@@ -75,6 +80,30 @@ export default function PendingPage({ showToast }) {
 
 
   const handleStatus = async (id, status, reason) => {
+    const statusText = {
+      approved: "duyệt tin",
+      rejected: "từ chối tin",
+      hidden: "ẩn tin",
+      pending: "chuyển về chờ duyệt",
+    }[status];
+    const ok = await confirm({
+      title: `Xác nhận ${statusText}?`,
+      message:
+        status === "rejected"
+          ? "Tin sẽ bị từ chối và Owner sẽ nhìn thấy lý do từ chối."
+          : status === "approved"
+            ? "Tin sẽ được hiển thị công khai cho Buyer."
+            : "Trạng thái tin đăng sẽ được cập nhật trong hệ thống.",
+      confirmText:
+        status === "approved"
+          ? "Duyệt tin"
+          : status === "rejected"
+            ? "Từ chối"
+            : "Xác nhận",
+      danger: status === "rejected" || status === "hidden",
+    });
+    if (!ok) return;
+
     setActionLoading((prev) => ({ ...prev, [id]: true }));
     try {
       await apiFetch(`/api/property/${id}/status`, {
@@ -82,14 +111,14 @@ export default function PendingPage({ showToast }) {
         body: { status, ...(reason ? { reject_reason: reason } : {}) },
       });
       setProperties((prev) => prev.filter((p) => p.id !== id));
-      showToast(
+      notify(
         status === "approved" ? "✓ Đã duyệt tin đăng" : "✓ Đã từ chối tin đăng",
       );
       setRejectModal(null);
       setDetailModal(null);
       setRejectReason("");
     } catch (e) {
-      showToast(e.message, "error");
+      notify(e.message, "error");
     } finally {
       setActionLoading((prev) => ({ ...prev, [id]: false }));
     }
@@ -97,6 +126,15 @@ export default function PendingPage({ showToast }) {
 
   const handleFeatured = async (prop) => {
     const nextFeatured = !prop.is_featured;
+    const ok = await confirm({
+      title: nextFeatured ? "Bật tin nổi bật?" : "Tắt tin nổi bật?",
+      message: nextFeatured
+        ? "Tin này sẽ được ưu tiên hiển thị nổi bật trên hệ thống."
+        : "Tin này sẽ không còn được ưu tiên hiển thị nổi bật.",
+      confirmText: nextFeatured ? "Bật nổi bật" : "Tắt nổi bật",
+    });
+    if (!ok) return;
+
     setActionLoading((prev) => ({ ...prev, [prop.id]: true }));
     try {
       await apiFetch(`/api/property/${prop.id}/featured`, {
@@ -113,9 +151,9 @@ export default function PendingPage({ showToast }) {
             : p,
         ),
       );
-      showToast(nextFeatured ? "Đã bật tin nổi bật" : "Đã tắt tin nổi bật");
+      notify(nextFeatured ? "Đã bật tin nổi bật" : "Đã tắt tin nổi bật");
     } catch (e) {
-      showToast(e.message, "error");
+      notify(e.message, "error");
     } finally {
       setActionLoading((prev) => ({ ...prev, [prop.id]: false }));
     }

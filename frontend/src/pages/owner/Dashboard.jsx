@@ -4,6 +4,8 @@ import api from "../../api/axios";
 import Navbar from "../../components/Navbar";
 import UiIcon from "../../components/UiIcon";
 import SiteFooter from "../../components/SiteFooter";
+import { useToast } from "../../components/ToastProvider";
+import { useConfirm } from "../../components/ConfirmProvider";
 import {
   FaListAlt,
   FaComments,
@@ -17,6 +19,7 @@ import {
   FaTrash,
   FaRedo,
   FaEyeSlash,
+  FaHistory,
 } from "react-icons/fa";
 
 const VN = { fontFamily: "'Be Vietnam Pro', Inter, sans-serif" };
@@ -57,6 +60,30 @@ const STATUS_MAP = {
   sold: { label: "Đã bán", dot: "#888", bg: "#f3f3f3", color: "#5f5e5e" },
   hidden: { label: "Đã ẩn", dot: "#888", bg: "#f3f3f3", color: "#5f5e5e" },
 };
+
+const HISTORY_STATUS_LABEL = {
+  pending: "Chờ duyệt",
+  approved: "Đã duyệt",
+  rejected: "Từ chối",
+  hidden: "Đã ẩn",
+  sold: "Đã giao dịch",
+};
+
+const HIDDEN_HISTORY_NOTES = [
+  "Admin duyệt tin đăng",
+  "Owner tạo tin đăng",
+];
+
+function formatDateTime(value) {
+  if (!value) return "—";
+  return new Date(value).toLocaleString("vi-VN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+}
 
 const TABS = [
   { key: "all", label: "Tất cả" },
@@ -205,7 +232,12 @@ export default function OwnerDashboard() {
   const [page, setPage] = useState(1);
   const PER_PAGE = 10;
   const navigate = useNavigate();
+  const { showToast } = useToast();
+  const { confirm } = useConfirm();
   const [rejectModal, setRejectModal] = useState(null);
+  const [historyModal, setHistoryModal] = useState(null);
+  const [historyItems, setHistoryItems] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -227,46 +259,92 @@ export default function OwnerDashboard() {
   }, []);
 
   const handleDelete = async (id) => {
-    if (!window.confirm("Xác nhận xoá tin này?")) return;
+    const ok = await confirm({
+      title: "Xóa tin đăng?",
+      message: "Tin đăng sẽ bị xóa khỏi hệ thống và không thể khôi phục.",
+      confirmText: "Xóa tin",
+      danger: true,
+    });
+    if (!ok) return;
     try {
       await api.delete(`/api/property/${id}`);
       setProperties((prev) => prev.filter((p) => p.id !== id));
+      showToast("Đã xoá tin đăng");
     } catch (err) {
-      console.error(err);
+      showToast(err.response?.data?.message || "Không thể xoá tin đăng", "error");
     }
   };
 
   const handleHide = async (id) => {
+    const ok = await confirm({
+      title: "Ẩn tin đăng?",
+      message: "Tin này sẽ không còn hiển thị công khai cho Buyer.",
+      confirmText: "Ẩn tin",
+    });
+    if (!ok) return;
     try {
       await api.patch(`/api/property/${id}/hide`);
       setProperties((prev) =>
         prev.map((p) => (p.id === id ? { ...p, status: "hidden" } : p)),
       );
+      showToast("Đã ẩn tin đăng");
     } catch (err) {
-      console.error(err);
+      showToast(err.response?.data?.message || "Không thể ẩn tin đăng", "error");
     }
   };
 
   const handleSold = async (id) => {
-    if (!window.confirm("Đánh dấu tin này là đã bán?")) return;
+    const ok = await confirm({
+      title: "Đánh dấu đã giao dịch?",
+      message: "Sau khi đánh dấu đã giao dịch, tin sẽ không thể chỉnh sửa như tin đang hiển thị.",
+      confirmText: "Đánh dấu",
+    });
+    if (!ok) return;
     try {
       await api.patch(`/api/property/${id}/sold`);
       setProperties((prev) =>
         prev.map((p) => (p.id === id ? { ...p, status: "sold" } : p)),
       );
+      showToast("Đã đánh dấu tin là đã giao dịch");
     } catch (err) {
-      console.error(err);
+      showToast(
+        err.response?.data?.message || "Không thể đánh dấu đã giao dịch",
+        "error",
+      );
     }
   };
 
   const handleUnhide = async (id) => {
+    const ok = await confirm({
+      title: "Gửi lại tin để chờ duyệt?",
+      message: "Tin sẽ chuyển về trạng thái chờ Admin duyệt trước khi hiển thị lại.",
+      confirmText: "Gửi duyệt",
+    });
+    if (!ok) return;
     try {
       await api.patch(`/api/property/${id}/unhide`);
       setProperties((prev) =>
-        prev.map((p) => (p.id === id ? { ...p, status: "pending" } : p)),
+        prev.map((p) =>
+          p.id === id ? { ...p, status: "pending", reject_reason: null } : p,
+        ),
       );
+      showToast("Đã gửi lại tin để chờ duyệt");
     } catch (err) {
-      console.error(err);
+      showToast(err.response?.data?.message || "Không thể gửi lại tin", "error");
+    }
+  };
+
+  const openHistory = async (property) => {
+    setHistoryModal(property);
+    setHistoryLoading(true);
+    try {
+      const res = await api.get(`/api/property/${property.id}/history`);
+      setHistoryItems(Array.isArray(res.data) ? res.data : []);
+    } catch (err) {
+      showToast("Không thể tải lịch sử trạng thái", "error");
+      setHistoryItems([]);
+    } finally {
+      setHistoryLoading(false);
     }
   };
 
@@ -688,10 +766,14 @@ export default function OwnerDashboard() {
                               gap: 4,
                               justifyContent: "flex-end",
                             }}>
-                            {p.status !== "sold" && p.status !== "rejected" && (
+                            {p.status !== "sold" && (
                               <Link
                                 to={`/owner/edit/${p.id}`}
-                                title="Chỉnh sửa"
+                                title={
+                                  p.status === "rejected"
+                                    ? "Chỉnh sửa để gửi duyệt lại"
+                                    : "Chỉnh sửa"
+                                }
                                 style={{
                                   width: 30,
                                   height: 30,
@@ -716,6 +798,33 @@ export default function OwnerDashboard() {
                                 <FaEdit />
                               </Link>
                             )}
+
+                            <button
+                              onClick={() => openHistory(p)}
+                              title="Xem lịch sử trạng thái"
+                              style={{
+                                width: 30,
+                                height: 30,
+                                borderRadius: 6,
+                                border: "0.5px solid #E8E8E8",
+                                background: "#fff",
+                                cursor: "pointer",
+                                fontSize: 14,
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                color: "#5f5e5e",
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.background = "#f3f3f3";
+                                e.currentTarget.style.borderColor = "#aaa";
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.background = "#fff";
+                                e.currentTarget.style.borderColor = "#E8E8E8";
+                              }}>
+                              <FaHistory />
+                            </button>
 
                             {(p.status === "active" ||
                               p.status === "approved") && (
@@ -1051,6 +1160,151 @@ export default function OwnerDashboard() {
                   }}>
                   {rejectModal.reject_reason}
                 </div>
+                <Link
+                  to={`/owner/edit/${rejectModal.id}`}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    marginTop: 14,
+                    height: 36,
+                    padding: "0 14px",
+                    borderRadius: 8,
+                    background: "#b51b17",
+                    color: "#fff",
+                    textDecoration: "none",
+                    fontSize: 13,
+                    fontWeight: 600,
+                  }}>
+                  Chỉnh sửa và gửi duyệt lại
+                </Link>
+              </div>
+            </div>
+          </div>
+        )}
+        {historyModal && (
+          <div
+            onClick={() => setHistoryModal(null)}
+            style={{
+              position: "fixed",
+              inset: 0,
+              background: "rgba(0,0,0,0.4)",
+              zIndex: 1000,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: 16,
+            }}>
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                background: "#fff",
+                borderRadius: 14,
+                width: "100%",
+                maxWidth: 560,
+                boxShadow: "0 8px 32px rgba(0,0,0,0.12)",
+                overflow: "hidden",
+                ...VN,
+              }}>
+              <div
+                style={{
+                  padding: "18px 20px",
+                  borderBottom: "0.5px solid #E8E8E8",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  gap: 12,
+                }}>
+                <div>
+                  <div style={{ fontSize: 15, fontWeight: 700 }}>
+                    Lịch sử trạng thái tin
+                  </div>
+                  <div style={{ fontSize: 12, color: "#757575", marginTop: 3 }}>
+                    {historyModal.title}
+                  </div>
+                </div>
+                <button
+                  onClick={() => setHistoryModal(null)}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    fontSize: 18,
+                    color: "#5f5e5e",
+                    cursor: "pointer",
+                    lineHeight: 1,
+                    padding: 0,
+                    flexShrink: 0,
+                  }}>
+                  ×
+                </button>
+              </div>
+
+              <div style={{ padding: "18px 20px" }}>
+                {historyLoading ? (
+                  <div style={{ textAlign: "center", padding: "28px 0" }}>
+                    Đang tải lịch sử...
+                  </div>
+                ) : historyItems.length === 0 ? (
+                  <div
+                    style={{
+                      padding: "20px 0",
+                      textAlign: "center",
+                      color: "#757575",
+                      fontSize: 13,
+                    }}>
+                    Chưa có lịch sử trạng thái
+                  </div>
+                ) : (
+                  <div style={{ display: "grid", gap: 10 }}>
+                    {historyItems.map((item) => (
+                      <div
+                        key={item.id}
+                        style={{
+                          border: "0.5px solid #E8E8E8",
+                          borderRadius: 10,
+                          padding: "12px 14px",
+                          background: "#fafafa",
+                        }}>
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            gap: 10,
+                            marginBottom: 6,
+                          }}>
+                          <div style={{ fontSize: 13, fontWeight: 700 }}>
+                            {HISTORY_STATUS_LABEL[item.old_status] || "Mới"}{" "}
+                            → {HISTORY_STATUS_LABEL[item.new_status] || item.new_status}
+                          </div>
+                          <div
+                            style={{
+                              fontSize: 11,
+                              color: "#757575",
+                              whiteSpace: "nowrap",
+                            }}>
+                            {formatDateTime(item.created_at)}
+                          </div>
+                        </div>
+                        <div style={{ fontSize: 12, color: "#5f5e5e" }}>
+                          Người thực hiện: {item.actor_name || "Hệ thống"}
+                        </div>
+                        {item.note && !HIDDEN_HISTORY_NOTES.includes(item.note) && (
+                          <div
+                            style={{
+                              fontSize: 12,
+                              color:
+                                item.new_status === "rejected"
+                                  ? "#a32d2d"
+                                  : "#5f5e5e",
+                              marginTop: 5,
+                              lineHeight: 1.5,
+                            }}>
+                            {item.note}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           </div>

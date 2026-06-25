@@ -4,6 +4,23 @@ const authMiddleware = require("../middleware/auth");
 const router = express.Router();
 const { upload, cloudinary } = require("../cloudinary");
 
+async function addStatusHistory(propertyId, oldStatus, newStatus, actorId, note) {
+  await pool.query(
+    `INSERT INTO property_status_history
+      (property_id, old_status, new_status, actor_id, note)
+     VALUES (?, ?, ?, ?, ?)`,
+    [propertyId, oldStatus || null, newStatus, actorId || null, note || null],
+  );
+}
+
+async function createNotification(userId, type, title, message, link) {
+  await pool.query(
+    `INSERT INTO notifications (user_id, type, title, message, link)
+     VALUES (?, ?, ?, ?, ?)`,
+    [userId, type, title, message || null, link || null],
+  );
+}
+
 // GET /api/property/owner/list — danh sách tin của Owner
 router.get("/owner/list", authMiddleware, async (req, res) => {
   if (req.user.role !== "owner")
@@ -321,6 +338,13 @@ router.post("/", authMiddleware, async (req, res) => {
         longitude ? parseFloat(longitude) : null,
       ],
     );
+    await addStatusHistory(
+      result.insertId,
+      null,
+      "pending",
+      req.user.id,
+      "Owner tạo tin đăng",
+    );
     res.status(201).json({
       message: "Tạo tin thành công. Tin đang chờ admin duyệt.",
       id: result.insertId,
@@ -402,7 +426,8 @@ router.put("/:id", authMiddleware, async (req, res) => {
        price=?, area=?, address=?, ward=?, district=?, city=?,
        bedrooms=?, bathrooms=?, direction=?, legal_status=?,
        latitude=?, longitude=?,
-       status='pending', reject_reason=NULL
+       status='pending', reject_reason=NULL,
+       rejected_at=NULL, hidden_at=NULL
    WHERE id=?`,
       [
         title,
@@ -423,6 +448,15 @@ router.put("/:id", authMiddleware, async (req, res) => {
         longitude ? parseFloat(longitude) : null,
         req.params.id,
       ],
+    );
+    await addStatusHistory(
+      req.params.id,
+      rows[0].status,
+      "pending",
+      req.user.id,
+      rows[0].status === "rejected"
+        ? "Owner chỉnh sửa tin bị từ chối và gửi duyệt lại"
+        : "Owner cập nhật tin và gửi duyệt lại",
     );
     res.json({ message: "Cập nhật thành công. Tin đang chờ duyệt lại." });
   } catch (err) {
@@ -480,17 +514,95 @@ router.patch("/:id/status", authMiddleware, async (req, res) => {
 
   try {
     // Kiểm tra tin tồn tại
-    const [rows] = await pool.query("SELECT id FROM properties WHERE id = ?", [
-      req.params.id,
-    ]);
+    const [rows] = await pool.query(
+      "SELECT id, owner_id, title, status FROM properties WHERE id = ?",
+      [req.params.id],
+    );
     if (rows.length === 0)
       return res.status(404).json({ message: "Không tìm thấy tin đăng" });
+    const property = rows[0];
+    const reason = status === "rejected" ? reject_reason.trim() : null;
 
     await pool.query(
-      "UPDATE properties SET status = ?, reject_reason = ? WHERE id = ?",
-      [status, status === "rejected" ? reject_reason : null, req.params.id],
+      `UPDATE properties
+       SET status = ?,
+           reject_reason = ?,
+           approved_at = IF(? = 'approved', NOW(), approved_at),
+           rejected_at = IF(? = 'rejected', NOW(), rejected_at),
+           hidden_at = IF(? = 'hidden', NOW(), hidden_at)
+       WHERE id = ?`,
+      [status, reason, status, status, status, req.params.id],
     );
+
+    await addStatusHistory(
+      req.params.id,
+      property.status,
+      status,
+      req.user.id,
+      status === "rejected"
+        ? reason
+        : status === "approved"
+          ? "Admin duyệt tin đăng"
+          : "Admin ẩn tin đăng",
+    );
+
+    if (status === "approved") {
+      await createNotification(
+        property.owner_id,
+        "property_approved",
+        "Tin đăng đã được duyệt",
+        `Tin "${property.title}" đã được admin duyệt và đang hiển thị công khai.`,
+        "/owner/dashboard",
+      );
+    }
+
+    if (status === "rejected") {
+      await createNotification(
+        property.owner_id,
+        "property_rejected",
+        "Tin đăng bị từ chối",
+        `Tin "${property.title}" bị từ chối. Lý do: ${reason}`,
+        "/owner/dashboard",
+      );
+    }
+
+    if (status === "hidden") {
+      await createNotification(
+        property.owner_id,
+        "property_hidden",
+        "Tin đăng đã bị ẩn",
+        `Tin "${property.title}" đã bị admin ẩn khỏi hệ thống.`,
+        "/owner/dashboard",
+      );
+    }
+
     res.json({ message: "Cập nhật trạng thái thành công" });
+  } catch (err) {
+    res.status(500).json({ message: "Lỗi server", error: err.message });
+  }
+});
+
+// GET /api/property/:id/history — lịch sử trạng thái của tin
+router.get("/:id/history", authMiddleware, async (req, res) => {
+  try {
+    const [props] = await pool.query(
+      "SELECT id, owner_id FROM properties WHERE id = ?",
+      [req.params.id],
+    );
+    if (props.length === 0)
+      return res.status(404).json({ message: "Không tìm thấy tin đăng" });
+    if (req.user.role !== "admin" && props[0].owner_id !== req.user.id)
+      return res.status(403).json({ message: "Không có quyền" });
+
+    const [history] = await pool.query(
+      `SELECT h.*, u.full_name AS actor_name, u.role AS actor_role
+       FROM property_status_history h
+       LEFT JOIN users u ON h.actor_id = u.id
+       WHERE h.property_id = ?
+       ORDER BY h.created_at DESC`,
+      [req.params.id],
+    );
+    res.json(history);
   } catch (err) {
     res.status(500).json({ message: "Lỗi server", error: err.message });
   }
@@ -554,9 +666,17 @@ router.patch("/:id/hide", authMiddleware, async (req, res) => {
         .json({ message: "Chỉ có thể ẩn tin đang hiển thị" });
     }
 
-    await pool.query("UPDATE properties SET status = 'hidden' WHERE id = ?", [
+    await pool.query(
+      "UPDATE properties SET status = 'hidden', hidden_at = NOW() WHERE id = ?",
+      [req.params.id],
+    );
+    await addStatusHistory(
       req.params.id,
-    ]);
+      rows[0].status,
+      "hidden",
+      req.user.id,
+      "Owner ẩn tin đăng",
+    );
     res.json({ message: "Đã ẩn tin" });
   } catch (err) {
     res.status(500).json({ message: "Lỗi server", error: err.message });
@@ -583,9 +703,17 @@ router.patch("/:id/sold", authMiddleware, async (req, res) => {
       });
     }
 
-    await pool.query("UPDATE properties SET status = 'sold' WHERE id = ?", [
+    await pool.query(
+      "UPDATE properties SET status = 'sold', sold_at = NOW() WHERE id = ?",
+      [req.params.id],
+    );
+    await addStatusHistory(
       req.params.id,
-    ]);
+      rows[0].status,
+      "sold",
+      req.user.id,
+      "Owner đánh dấu đã giao dịch",
+    );
     res.json({ message: "Đã đánh dấu giao dịch thành công" });
   } catch (err) {
     res.status(500).json({ message: "Lỗi server", error: err.message });
@@ -597,7 +725,7 @@ router.patch("/:id/unhide", authMiddleware, async (req, res) => {
     return res.status(403).json({ message: "Không có quyền" });
   try {
     const [rows] = await pool.query(
-      "SELECT owner_id FROM properties WHERE id = ?",
+      "SELECT owner_id, status FROM properties WHERE id = ?",
       [req.params.id],
     );
     if (rows.length === 0)
@@ -606,8 +734,15 @@ router.patch("/:id/unhide", authMiddleware, async (req, res) => {
       return res.status(403).json({ message: "Không có quyền" });
 
     await pool.query(
-      "UPDATE properties SET status = 'pending', reject_reason = NULL WHERE id = ? AND status = 'hidden'",
+      "UPDATE properties SET status = 'pending', reject_reason = NULL, hidden_at = NULL WHERE id = ? AND status = 'hidden'",
       [req.params.id],
+    );
+    await addStatusHistory(
+      req.params.id,
+      rows[0].status,
+      "pending",
+      req.user.id,
+      "Owner gửi lại tin để chờ duyệt",
     );
     res.json({ message: "Đã gửi lại tin để chờ duyệt" });
   } catch (err) {

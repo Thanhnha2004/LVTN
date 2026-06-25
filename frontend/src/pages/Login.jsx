@@ -2,10 +2,12 @@ import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import api from "../api/axios";
+import { useToast } from "../components/ToastProvider";
 
 export default function Login() {
   const { login } = useAuth();
   const navigate = useNavigate();
+  const { showToast } = useToast();
   const [form, setForm] = useState({ email: "", password: "" });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -18,18 +20,22 @@ export default function Login() {
     try {
       const res = await api.post("/api/auth/login", form);
       login(res.data.token, res.data.user);
+      showToast("Đăng nhập thành công");
       const role = res.data.user.role;
       if (role === "admin") navigate("/admin/dashboard");
       else if (role === "owner") navigate("/owner/dashboard");
       else navigate("/");
     } catch (err) {
       if (err.response?.data?.code === "EMAIL_NOT_VERIFIED") {
+        showToast("Tài khoản chưa xác minh email", "error");
         navigate(`/verify-email?email=${encodeURIComponent(form.email)}`, {
           state: { message: err.response.data.message },
         });
         return;
       }
-      setError(err.response?.data?.message || "Đăng nhập thất bại");
+      const message = err.response?.data?.message || "Đăng nhập thất bại";
+      setError(message);
+      showToast(message, "error");
     } finally {
       setLoading(false);
     }

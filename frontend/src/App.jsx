@@ -1,10 +1,13 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
+import { ToastProvider } from "./components/ToastProvider";
+import { ConfirmProvider } from "./components/ConfirmProvider";
 import "bootstrap/dist/css/bootstrap.min.css";
 
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import VerifyEmail from "./pages/VerifyEmail";
+import ForgotPassword from "./pages/ForgotPassword";
 import Home from "./pages/buyer/Home";
 import Detail from "./pages/buyer/Detail";
 import OwnerDashboard from "./pages/owner/Dashboard";
@@ -27,13 +30,16 @@ function ProtectedRoute({ children, roles }) {
 export default function App() {
   return (
     <AuthProvider>
-      <BrowserRouter>
-        <Routes>
+      <ToastProvider>
+        <ConfirmProvider>
+          <BrowserRouter>
+            <Routes>
           {/* Public */}
           <Route path="/" element={<Home />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/verify-email" element={<VerifyEmail />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/property/:id" element={<Detail />} />
           <Route path="/profile" element={<Profile />} />
           <Route path="/search" element={<PropertyList />} />
@@ -97,8 +103,10 @@ export default function App() {
               </ProtectedRoute>
             }
           />
-        </Routes>
-      </BrowserRouter>
+            </Routes>
+          </BrowserRouter>
+        </ConfirmProvider>
+      </ToastProvider>
     </AuthProvider>
   );
 }

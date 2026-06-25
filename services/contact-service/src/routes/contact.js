@@ -3,6 +3,14 @@ const pool = require("../db");
 const authMiddleware = require("../middleware/auth");
 const router = express.Router();
 
+async function createNotification(userId, type, title, message, link) {
+  await pool.query(
+    `INSERT INTO notifications (user_id, type, title, message, link)
+     VALUES (?, ?, ?, ?, ?)`,
+    [userId, type, title, message || null, link || null],
+  );
+}
+
 // POST /api/contact — Buyer gửi yêu cầu liên hệ
 router.post("/", authMiddleware, async (req, res) => {
   if (req.user.role !== "buyer")
@@ -178,7 +186,7 @@ router.patch("/:id/reply", authMiddleware, async (req, res) => {
     // Kiểm tra contact thuộc về tin của owner này không
     const [rows] = await pool.query(
       `
-      SELECT c.id FROM contacts c
+      SELECT c.id, c.buyer_id, p.title AS property_title FROM contacts c
       JOIN properties p ON c.property_id = p.id
       WHERE c.id = ? AND p.owner_id = ?
     `,
@@ -192,6 +200,15 @@ router.patch("/:id/reply", authMiddleware, async (req, res) => {
       "UPDATE contacts SET owner_reply = ?, status = 'replied' WHERE id = ?",
       [owner_reply, req.params.id],
     );
+
+    await createNotification(
+      rows[0].buyer_id,
+      "contact_replied",
+      "Owner đã phản hồi yêu cầu liên hệ",
+      `Yêu cầu liên hệ của bạn về tin "${rows[0].property_title}" đã có phản hồi.`,
+      "/profile?tab=contacts",
+    );
+
     res.json({ message: "Phản hồi thành công" });
   } catch (err) {
     res.status(500).json({ message: "Lỗi server", error: err.message });
@@ -209,9 +226,12 @@ router.get("/buyer", authMiddleware, async (req, res) => {
   try {
     const [rows] = await pool.query(
       `
-      SELECT c.*, p.title as property_title, p.city, p.price
+      SELECT c.*, p.title as property_title, p.city, p.price,
+             o.full_name as owner_name, o.phone_number as owner_phone,
+             o.email as owner_email
       FROM contacts c
       JOIN properties p ON c.property_id = p.id
+      JOIN users o ON p.owner_id = o.id
       WHERE c.buyer_id = ?
       ORDER BY c.created_at DESC
       LIMIT ? OFFSET ?

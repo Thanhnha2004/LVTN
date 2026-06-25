@@ -9,8 +9,13 @@ import {
   Pagination,
 } from "./Dashboard";
 import UiIcon from "../../components/UiIcon";
+import { useToast } from "../../components/ToastProvider";
+import { useConfirm } from "../../components/ConfirmProvider";
 
 export default function UsersPage({ showToast }) {
+  const { showToast: globalToast } = useToast();
+  const { confirm } = useConfirm();
+  const notify = showToast || globalToast;
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -46,6 +51,20 @@ export default function UsersPage({ showToast }) {
   }, [loadUsers]);
 
   const handleStatus = async (id, newStatus) => {
+    const ok = await confirm({
+      title:
+        newStatus === "banned"
+          ? "Vô hiệu hóa tài khoản?"
+          : "Kích hoạt tài khoản?",
+      message:
+        newStatus === "banned"
+          ? "Người dùng này sẽ không thể đăng nhập và sử dụng hệ thống."
+          : "Tài khoản này sẽ được phép đăng nhập và sử dụng lại hệ thống.",
+      confirmText: newStatus === "banned" ? "Vô hiệu hóa" : "Kích hoạt",
+      danger: newStatus === "banned",
+    });
+    if (!ok) return;
+
     setActionLoading((prev) => ({ ...prev, [id]: true }));
     try {
       await apiFetch(`/api/admin/users/${id}/status`, {
@@ -55,11 +74,11 @@ export default function UsersPage({ showToast }) {
       setUsers((prev) =>
         prev.map((u) => (u.id === id ? { ...u, status: newStatus } : u)),
       );
-      showToast(
+      notify(
         newStatus === "banned" ? "Đã cấm tài khoản" : "Đã kích hoạt tài khoản",
       );
     } catch (e) {
-      showToast(e.message, "error");
+      notify(e.message, "error");
     } finally {
       setActionLoading((prev) => ({ ...prev, [id]: false }));
     }

@@ -5,6 +5,8 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import api from "../../api/axios";
 import Navbar from "../../components/Navbar";
 import UiIcon from "../../components/UiIcon";
+import { useToast } from "../../components/ToastProvider";
+import { useConfirm } from "../../components/ConfirmProvider";
 
 export default function Profile() {
   const [searchParams] = useSearchParams();
@@ -25,6 +27,8 @@ export default function Profile() {
   const [avatarFile, setAvatarFile] = useState(null);
 
   const navigate = useNavigate();
+  const { showToast } = useToast();
+  const { confirm } = useConfirm();
 
   useEffect(() => {
     const tab = searchParams.get("tab");
@@ -87,14 +91,20 @@ export default function Profile() {
   };
 
   const handleUnsave = async (propertyId) => {
-    if (!window.confirm("Bạn muốn bỏ lưu tin này?")) return;
+    const ok = await confirm({
+      title: "Bỏ lưu tin?",
+      message: "Tin này sẽ được xóa khỏi danh sách bất động sản đã lưu của bạn.",
+      confirmText: "Bỏ lưu",
+    });
+    if (!ok) return;
 
     try {
       await api.delete(`/api/contact/saved/${propertyId}`);
 
       setSaved((prev) => prev.filter((item) => item.id !== propertyId));
+      showToast("Đã bỏ lưu tin quan tâm");
     } catch (err) {
-      alert(err.response?.data?.message || "Bỏ lưu thất bại");
+      showToast(err.response?.data?.message || "Bỏ lưu thất bại", "error");
     }
   };
 
@@ -125,15 +135,18 @@ export default function Profile() {
       setEditing(false);
       setAvatarFile(null);
 
-      alert("Cập nhật thành công");
+      showToast("Cập nhật hồ sơ thành công");
     } catch (err) {
-      alert(err.response?.data?.message || "Không thể cập nhật thông tin");
+      showToast(
+        err.response?.data?.message || "Không thể cập nhật thông tin",
+        "error",
+      );
     }
   };
 
   const handleChangePassword = async () => {
     if (passwordData.new_password !== passwordData.confirm_password) {
-      return alert("Xác nhận mật khẩu không khớp");
+      return showToast("Xác nhận mật khẩu không khớp", "error");
     }
 
     try {
@@ -142,7 +155,7 @@ export default function Profile() {
         new_password: passwordData.new_password,
       });
 
-      alert("Đổi mật khẩu thành công");
+      showToast("Đổi mật khẩu thành công");
 
       setPasswordData({
         old_password: "",
@@ -150,7 +163,7 @@ export default function Profile() {
         confirm_password: "",
       });
     } catch (err) {
-      alert(err.response?.data?.message || "Không thể đổi mật khẩu");
+      showToast(err.response?.data?.message || "Không thể đổi mật khẩu", "error");
     }
   };
 
@@ -401,7 +414,14 @@ export default function Profile() {
             {/* SAVED */}
             {activeTab === "saved" && (
               <div className="card border p-4" style={{ borderRadius: 12 }}>
-                <h5 className="fw-bold mb-4"><UiIcon name="heart" size={19} style={{ verticalAlign: "-3px", marginRight: 6 }} />Tin đã lưu ({saved.length})</h5>
+                <h5 className="fw-bold mb-4">
+                  <UiIcon
+                    name="heart"
+                    size={19}
+                    style={{ verticalAlign: "-3px", marginRight: 6 }}
+                  />
+                  Tin đã lưu ({saved.length})
+                </h5>
 
                 {saved.length === 0 ? (
                   <div className="text-center py-5">
@@ -479,7 +499,11 @@ export default function Profile() {
             {activeTab === "contacts" && (
               <div className="card border p-4" style={{ borderRadius: 12 }}>
                 <h5 className="fw-bold mb-4">
-                  <UiIcon name="message" size={19} style={{ verticalAlign: "-3px", marginRight: 6 }} />
+                  <UiIcon
+                    name="message"
+                    size={19}
+                    style={{ verticalAlign: "-3px", marginRight: 6 }}
+                  />
                   Yêu cầu liên hệ ({contacts.length})
                 </h5>
 
@@ -538,6 +562,55 @@ export default function Profile() {
                                     Owner đã phản hồi:
                                   </div>
                                   <div>{c.owner_reply}</div>
+                                  <div
+                                    style={{
+                                      marginTop: 10,
+                                      paddingTop: 10,
+                                      borderTop: "1px solid #cfe9d8",
+                                      color: "#1f3f2f",
+                                    }}>
+                                    <div className="fw-semibold mb-1">
+                                      Thông tin Owner :
+                                    </div>
+                                    <div>
+                                      Chủ sở hữu:{" "}
+                                      <span className="fw-semibold">
+                                        {c.owner_name || "Chưa cập nhật"}
+                                      </span>
+                                    </div>
+                                    <div>
+                                      Số điện thoại:{" "}
+                                      {c.owner_phone ? (
+                                        <a
+                                          href={`tel:${c.owner_phone}`}
+                                          style={{
+                                            color: "#0f6e56",
+                                            fontWeight: 600,
+                                            textDecoration: "none",
+                                          }}>
+                                          {c.owner_phone}
+                                        </a>
+                                      ) : (
+                                        <span className="text-muted">
+                                          Chưa cập nhật
+                                        </span>
+                                      )}
+                                    </div>
+                                    {c.owner_email && (
+                                      <div>
+                                        Email:{" "}
+                                        <a
+                                          href={`mailto:${c.owner_email}`}
+                                          style={{
+                                            color: "#0f6e56",
+                                            fontWeight: 600,
+                                            textDecoration: "none",
+                                          }}>
+                                          {c.owner_email}
+                                        </a>
+                                      </div>
+                                    )}
+                                  </div>
                                 </div>
                               ) : (
                                 <span className="text-muted small">

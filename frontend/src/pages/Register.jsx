@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import api from "../api/axios";
+import { useToast } from "../components/ToastProvider";
 
 const STEPS = ["Thông tin", "Mật khẩu", "Vai trò"];
 
@@ -23,6 +24,7 @@ function FeatureIcon({ name, color = "currentColor", size = 18 }) {
 
 export default function Register() {
   const navigate = useNavigate();
+  const { showToast } = useToast();
   const [step, setStep] = useState(0);
   const [form, setForm] = useState({
     full_name: "",
@@ -38,25 +40,30 @@ export default function Register() {
   const [showConfirm, setShowConfirm] = useState(false);
   const [agreed, setAgreed] = useState(false);
 
+  const showError = (message) => {
+    setError(message);
+    showToast(message, "error");
+  };
+
   const handleNext = () => {
     setError("");
     if (step === 0) {
       if (!form.full_name || form.full_name.trim().length < 2)
-        return setError("Họ tên phải có ít nhất 2 ký tự");
+        return showError("Họ tên phải có ít nhất 2 ký tự");
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email))
-        return setError("Email không hợp lệ");
+        return showError("Email không hợp lệ");
     }
     if (step === 1) {
       if (form.password.length < 6)
-        return setError("Mật khẩu phải có ít nhất 6 ký tự");
+        return showError("Mật khẩu phải có ít nhất 6 ký tự");
       if (form.password !== form.confirm_password)
-        return setError("Mật khẩu xác nhận không khớp");
+        return showError("Mật khẩu xác nhận không khớp");
     }
     setStep((s) => s + 1);
   };
 
   const handleSubmit = async () => {
-    if (!agreed) return setError("Bạn cần đồng ý với điều khoản sử dụng");
+    if (!agreed) return showError("Bạn cần đồng ý với điều khoản sử dụng");
     setError("");
     setLoading(true);
     try {
@@ -67,6 +74,7 @@ export default function Register() {
         password: form.password,
         role: form.role,
       });
+      showToast("Đăng ký thành công. Vui lòng xác minh email.");
       navigate(`/verify-email?email=${encodeURIComponent(form.email)}`, {
         state: {
           message:
@@ -74,7 +82,7 @@ export default function Register() {
         },
       });
     } catch (err) {
-      setError(err.response?.data?.message || "Đăng ký thất bại");
+      showError(err.response?.data?.message || "Đăng ký thất bại");
     } finally {
       setLoading(false);
     }

@@ -4,6 +4,7 @@ import api from "../../api/axios";
 import Navbar from "../../components/Navbar";
 import UiIcon from "../../components/UiIcon";
 import SiteFooter from "../../components/SiteFooter";
+import { useToast } from "../../components/ToastProvider";
 
 const VN = { fontFamily: "'Be Vietnam Pro', Inter, sans-serif" };
 
@@ -32,7 +33,7 @@ const SIDEBAR = [
 ];
 
 // ── Reply Box ──────────────────────────────────────────────
-function ReplyBox({ contactId, onSent, onCancel }) {
+function ReplyBox({ contactId, onSent, onCancel, showToast }) {
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
@@ -44,8 +45,11 @@ function ReplyBox({ contactId, onSent, onCancel }) {
     try {
       await api.patch(`/api/contact/${contactId}/reply`, { owner_reply: text });
       onSent(contactId, text);
+      showToast("Đã gửi phản hồi cho Buyer");
     } catch (err) {
-      setError(err.response?.data?.message || "Gửi thất bại, thử lại.");
+      const message = err.response?.data?.message || "Gửi thất bại, thử lại.";
+      setError(message);
+      showToast(message, "error");
     } finally {
       setSending(false);
     }
@@ -135,7 +139,7 @@ function ReplyBox({ contactId, onSent, onCancel }) {
 }
 
 // ── Contact Card ───────────────────────────────────────────
-function ContactCard({ contact, onReplied, onLeadUpdated }) {
+function ContactCard({ contact, onReplied, onLeadUpdated, showToast }) {
   const [open, setOpen] = useState(false);
   const [leadStatus, setLeadStatus] = useState(contact.lead_status || "new");
   const [ownerNote, setOwnerNote] = useState(contact.owner_note || "");
@@ -155,8 +159,12 @@ function ContactCard({ contact, onReplied, onLeadUpdated }) {
         owner_note: ownerNote,
       });
       onLeadUpdated(contact.id, leadStatus, ownerNote);
+      showToast("Đã lưu trạng thái chăm sóc khách hàng");
     } catch (err) {
-      setLeadError(err.response?.data?.message || "Không thể cập nhật lead.");
+      const message =
+        err.response?.data?.message || "Không thể cập nhật lead.";
+      setLeadError(message);
+      showToast(message, "error");
     } finally {
       setLeadSaving(false);
     }
@@ -466,6 +474,7 @@ function ContactCard({ contact, onReplied, onLeadUpdated }) {
               onReplied(id, text);
             }}
             onCancel={() => setOpen(false)}
+            showToast={showToast}
           />
         )}
       </div>
@@ -483,6 +492,7 @@ export default function OwnerContacts() {
   const [page, setPage] = useState(1);
   const PER_PAGE = 5;
   const navigate = useNavigate();
+  const { showToast } = useToast();
 
   useEffect(() => {
     (async () => {
@@ -703,6 +713,7 @@ export default function OwnerContacts() {
                   contact={c}
                   onReplied={handleReplied}
                   onLeadUpdated={handleLeadUpdated}
+                  showToast={showToast}
                 />
               ))}
             </div>

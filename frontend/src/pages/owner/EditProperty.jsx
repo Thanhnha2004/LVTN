@@ -16,6 +16,7 @@ import {
   inputStyle,
   labelStyle,
 } from "../../shared/formStyles";
+import { useToast } from "../../components/ToastProvider";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const VN = { fontFamily: "'Be Vietnam Pro', Inter, sans-serif" };
@@ -137,6 +138,7 @@ function ImageCard({ url, isFirst, onDelete }) {
 export default function EditProperty() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { showToast } = useToast();
   const fileRef = useRef();
 
   const [loading, setLoading] = useState(true);
@@ -196,7 +198,10 @@ export default function EditProperty() {
         setExistingImages(p.images || []);
       } catch (err) {
         if (err.response?.status === 401) navigate("/login");
-        else setError("Không thể tải thông tin bất động sản.");
+        else {
+          setError("Không thể tải thông tin bất động sản.");
+          showToast("Không thể tải thông tin bất động sản", "error");
+        }
       } finally {
         setLoading(false);
       }
@@ -239,6 +244,7 @@ export default function EditProperty() {
     const err = validate();
     if (err) {
       setError(err);
+      showToast(err, "error");
       return;
     }
 
@@ -277,10 +283,12 @@ export default function EditProperty() {
       }
 
       setSuccess(true);
+      showToast("Cập nhật tin thành công. Tin đang chờ duyệt lại.");
     } catch (err) {
-      setError(
-        err.response?.data?.message || "Lưu thất bại, vui lòng thử lại.",
-      );
+      const message =
+        err.response?.data?.message || "Lưu thất bại, vui lòng thử lại.";
+      setError(message);
+      showToast(message, "error");
     } finally {
       setSaving(false);
     }

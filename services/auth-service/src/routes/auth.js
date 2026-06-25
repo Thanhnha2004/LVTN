@@ -3,7 +3,7 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const pool = require("../db");
 const authMiddleware = require("../middleware/auth");
-const { sendOtpEmail } = require("../mailer");
+const { sendOtpEmail, sendResetPasswordOtpEmail } = require("../mailer");
 const { cloudinary, upload } = require("../cloudinary");
 const router = express.Router();
 
@@ -161,6 +161,108 @@ router.post("/verify-email", async (req, res) => {
     ]);
 
     res.json({ message: "Xác minh email thành công! Bạn có thể đăng nhập." });
+  } catch (err) {
+    res.status(500).json({ message: "Lỗi server", error: err.message });
+  }
+});
+
+// POST /api/auth/forgot-password
+// Gửi OTP đặt lại mật khẩu đến email tài khoản
+router.post("/forgot-password", async (req, res) => {
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ message: "Thiếu email" });
+
+  try {
+    const [rows] = await pool.query(
+      "SELECT id, full_name, email, status FROM users WHERE email = ?",
+      [email],
+    );
+
+    if (rows.length === 0)
+      return res.status(404).json({ message: "Email không tồn tại" });
+
+    const user = rows[0];
+    if (user.status === "banned")
+      return res.status(403).json({ message: "Tài khoản đang bị khóa" });
+
+    await pool.query(
+      "UPDATE otp_codes SET used = 1 WHERE user_id = ? AND type = 'reset_password' AND used = 0",
+      [user.id],
+    );
+
+    const otp = generateOtp();
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+
+    await pool.query(
+      "INSERT INTO otp_codes (user_id, code, type, expires_at) VALUES (?, ?, 'reset_password', ?)",
+      [user.id, otp, expiresAt],
+    );
+
+    sendResetPasswordOtpEmail({
+      toEmail: user.email,
+      toName: user.full_name,
+      otp,
+    }).catch((err) => console.error("Send reset password OTP error:", err.message));
+
+    res.json({ message: "Đã gửi mã OTP đặt lại mật khẩu về email" });
+  } catch (err) {
+    res.status(500).json({ message: "Lỗi server", error: err.message });
+  }
+});
+
+// POST /api/auth/reset-password
+// Kiểm tra OTP và cập nhật mật khẩu mới
+router.post("/reset-password", async (req, res) => {
+  const { email, otp, new_password } = req.body;
+
+  if (!email || !otp || !new_password)
+    return res.status(400).json({ message: "Thiếu email, OTP hoặc mật khẩu mới" });
+
+  if (new_password.length < 6)
+    return res
+      .status(400)
+      .json({ message: "Mật khẩu mới phải có ít nhất 6 ký tự" });
+
+  try {
+    const [users] = await pool.query(
+      "SELECT id, status FROM users WHERE email = ?",
+      [email],
+    );
+
+    if (users.length === 0)
+      return res.status(404).json({ message: "Email không tồn tại" });
+
+    const user = users[0];
+    if (user.status === "banned")
+      return res.status(403).json({ message: "Tài khoản đang bị khóa" });
+
+    const [otpRows] = await pool.query(
+      `SELECT id FROM otp_codes
+       WHERE user_id = ?
+         AND code = ?
+         AND type = 'reset_password'
+         AND used = 0
+         AND expires_at > NOW()
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [user.id, otp],
+    );
+
+    if (otpRows.length === 0)
+      return res
+        .status(400)
+        .json({ message: "Mã OTP không hợp lệ hoặc đã hết hạn" });
+
+    const hash = await bcrypt.hash(new_password, 10);
+    await pool.query("UPDATE users SET password_hash = ? WHERE id = ?", [
+      hash,
+      user.id,
+    ]);
+    await pool.query("UPDATE otp_codes SET used = 1 WHERE id = ?", [
+      otpRows[0].id,
+    ]);
+
+    res.json({ message: "Đặt lại mật khẩu thành công. Bạn có thể đăng nhập." });
   } catch (err) {
     res.status(500).json({ message: "Lỗi server", error: err.message });
   }
