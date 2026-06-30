@@ -19,6 +19,7 @@ import Pending from "./pages/admin/Pending";
 import Users from "./pages/admin/Users";
 import Profile from "./pages/profile/Profile";
 import PropertyList from "./pages/property/PropertyList";
+import VnpayReturn from "./pages/payment/VnpayReturn";
 
 function ProtectedRoute({ children, roles }) {
   const { user } = useAuth();
@@ -43,6 +44,7 @@ export default function App() {
           <Route path="/property/:id" element={<Detail />} />
           <Route path="/profile" element={<Profile />} />
           <Route path="/search" element={<PropertyList />} />
+          <Route path="/payment/vnpay-return" element={<VnpayReturn />} />
 
           {/* Owner */}
           <Route

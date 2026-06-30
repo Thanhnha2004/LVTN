@@ -11,9 +11,11 @@ DROP TABLE IF EXISTS saved_properties;
 DROP TABLE IF EXISTS contacts;
 DROP TABLE IF EXISTS property_views;
 DROP TABLE IF EXISTS property_images;
+DROP TABLE IF EXISTS featured_orders;
 DROP TABLE IF EXISTS notifications;
 DROP TABLE IF EXISTS property_status_history;
 DROP TABLE IF EXISTS properties;
+DROP TABLE IF EXISTS featured_packages;
 DROP TABLE IF EXISTS otp_codes;
 DROP TABLE IF EXISTS users;
 SET FOREIGN_KEY_CHECKS = 1;
@@ -141,6 +143,45 @@ CREATE TABLE notifications (
 );
 
 -- =============================================
+-- BẢNG featured_packages (gói nổi bật tin đăng)
+-- =============================================
+CREATE TABLE featured_packages (
+  id            INT AUTO_INCREMENT PRIMARY KEY,
+  name          VARCHAR(100) NOT NULL,
+  description   VARCHAR(500) DEFAULT NULL,
+  price         DECIMAL(15,2) NOT NULL,
+  duration_days INT NOT NULL,
+  priority      INT NOT NULL DEFAULT 1,
+  is_active     TINYINT(1) NOT NULL DEFAULT 1,
+  created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_featured_package_active (is_active)
+);
+
+-- =============================================
+-- BẢNG featured_orders (đơn thanh toán gói nổi bật)
+-- =============================================
+CREATE TABLE featured_orders (
+  id                INT AUTO_INCREMENT PRIMARY KEY,
+  property_id       INT NOT NULL,
+  owner_id          INT NOT NULL,
+  package_id        INT NOT NULL,
+  amount            DECIMAL(15,2) NOT NULL,
+  payment_method    ENUM('demo_online','bank_transfer','vnpay') NOT NULL DEFAULT 'demo_online',
+  status            ENUM('pending','paid','failed','cancelled') NOT NULL DEFAULT 'pending',
+  payment_code      VARCHAR(50) NOT NULL UNIQUE,
+  paid_at           DATETIME DEFAULT NULL,
+  featured_start_at DATETIME DEFAULT NULL,
+  featured_end_at   DATETIME DEFAULT NULL,
+  created_at        TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (property_id) REFERENCES properties(id) ON DELETE CASCADE,
+  FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY (package_id) REFERENCES featured_packages(id),
+  INDEX idx_featured_order_owner (owner_id),
+  INDEX idx_featured_order_property (property_id),
+  INDEX idx_featured_order_status (status)
+);
+
+-- =============================================
 -- BẢNG property_images
 -- =============================================
 CREATE TABLE property_images (
@@ -213,6 +254,11 @@ INSERT INTO users (full_name, email, password_hash, phone_number, role, status, 
 ('Lê Hoàng Nam',          'owner2@bds.com', '$2b$10$nvgzofSTXqsU4CssCm..8eCx4WAN.biG8CFnpbfyQULMwF.Wq9l8y', '0901000004', 'owner', 'active', 1),
 ('Phạm Thị Mai',          'buyer2@bds.com', '$2b$10$nvgzofSTXqsU4CssCm..8eCx4WAN.biG8CFnpbfyQULMwF.Wq9l8y', '0901000005', 'buyer', 'active', 1),
 ('Tài khoản bị khóa',     'banned@bds.com', '$2b$10$nvgzofSTXqsU4CssCm..8eCx4WAN.biG8CFnpbfyQULMwF.Wq9l8y', '0901000006', 'buyer', 'banned', 1);
+
+INSERT INTO featured_packages (name, description, price, duration_days, priority, is_active) VALUES
+('Gói nổi bật 7 ngày', 'Tin được ưu tiên hiển thị trong danh sách tìm kiếm trong 7 ngày.', 99000, 7, 1, 1),
+('Gói nổi bật 15 ngày', 'Tin được ưu tiên hiển thị trong danh sách tìm kiếm trong 15 ngày.', 179000, 15, 2, 1),
+('Gói nổi bật 30 ngày', 'Tin được ưu tiên hiển thị trong danh sách tìm kiếm trong 30 ngày.', 299000, 30, 3, 1);
 
 INSERT INTO properties
   (owner_id, title, description, type, transaction_type, price, area,
@@ -322,6 +368,17 @@ INSERT INTO property_status_history (property_id, old_status, new_status, actor_
 (10, NULL, 'pending', 4, 'Owner tạo tin đăng', DATE_SUB(NOW(), INTERVAL 23 DAY)),
 (10, 'pending', 'approved', 1, 'Admin duyệt tin đăng', DATE_SUB(NOW(), INTERVAL 22 DAY)),
 (10, 'approved', 'sold', 4, 'Owner đánh dấu đã giao dịch', DATE_SUB(NOW(), INTERVAL 3 DAY));
+
+INSERT INTO featured_orders
+  (property_id, owner_id, package_id, amount, payment_method, status, payment_code,
+   paid_at, featured_start_at, featured_end_at, created_at)
+VALUES
+(1, 2, 3, 299000, 'demo_online', 'paid', 'VIP-SEED-0001',
+ DATE_SUB(NOW(), INTERVAL 1 DAY), DATE_SUB(NOW(), INTERVAL 1 DAY), DATE_ADD(NOW(), INTERVAL 30 DAY), DATE_SUB(NOW(), INTERVAL 1 DAY)),
+(3, 2, 2, 179000, 'demo_online', 'paid', 'VIP-SEED-0002',
+ DATE_SUB(NOW(), INTERVAL 2 DAY), DATE_SUB(NOW(), INTERVAL 2 DAY), DATE_ADD(NOW(), INTERVAL 15 DAY), DATE_SUB(NOW(), INTERVAL 2 DAY)),
+(8, 4, 3, 299000, 'demo_online', 'paid', 'VIP-SEED-0003',
+ DATE_SUB(NOW(), INTERVAL 3 DAY), DATE_SUB(NOW(), INTERVAL 3 DAY), DATE_ADD(NOW(), INTERVAL 45 DAY), DATE_SUB(NOW(), INTERVAL 3 DAY));
 
 INSERT INTO property_images (property_id, url, `order`) VALUES
 (1, 'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?w=1000&q=80', 1),

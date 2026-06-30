@@ -159,13 +159,13 @@ router.get("/", async (req, res) => {
     // --- Sắp xếp ---
     const sortMap = {
       newest: "active_featured DESC, p.created_at DESC",
-      oldest: "p.created_at ASC",
-      price_asc: "p.price ASC",
-      price_desc: "p.price DESC",
-      area_asc: "p.area ASC",
-      area_desc: "p.area DESC",
+      oldest: "active_featured DESC, p.created_at ASC",
+      price_asc: "active_featured DESC, p.price ASC",
+      price_desc: "active_featured DESC, p.price DESC",
+      area_asc: "active_featured DESC, p.area ASC",
+      area_desc: "active_featured DESC, p.area DESC",
     };
-    const orderBy = sortMap[sort] || "p.created_at DESC";
+    const orderBy = sortMap[sort] || sortMap.newest;
 
     // --- Phân trang ---
     const pageNum = Math.max(1, parseInt(page) || 1);

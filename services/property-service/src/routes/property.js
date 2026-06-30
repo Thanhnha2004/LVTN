@@ -1,8 +1,24 @@
 const express = require("express");
 const pool = require("../db");
 const authMiddleware = require("../middleware/auth");
+const crypto = require("crypto");
 const router = express.Router();
 const { upload, cloudinary } = require("../cloudinary");
+
+const VNPAY_CONFIG = {
+  tmnCode: process.env.VNPAY_TMN_CODE || "D68FF5DQ",
+  hashSecret:
+    process.env.VNPAY_HASH_SECRET || "5WMMD8V438TL6J50GB9M5ENV9BNW43DN",
+  paymentUrl:
+    process.env.VNPAY_PAYMENT_URL ||
+    "https://sandbox.vnpayment.vn/paymentv2/vpcpay.html",
+  returnUrl:
+    process.env.VNPAY_RETURN_URL ||
+    "https://lvtn-bds.vercel.app/payment/vnpay-return",
+  ipnUrl:
+    process.env.VNPAY_IPN_URL ||
+    "http://localhost:3000/api/property/vnpay-ipn",
+};
 
 async function addStatusHistory(propertyId, oldStatus, newStatus, actorId, note) {
   await pool.query(
@@ -20,6 +36,232 @@ async function createNotification(userId, type, title, message, link) {
     [userId, type, title, message || null, link || null],
   );
 }
+
+function generatePaymentCode() {
+  return `VIP-${Date.now()}-${Math.floor(Math.random() * 10000)
+    .toString()
+    .padStart(4, "0")}`;
+}
+
+function addDays(date, days) {
+  const result = new Date(date);
+  result.setDate(result.getDate() + Number(days));
+  return result;
+}
+
+function getFeaturedStartDate(featuredUntil) {
+  const now = new Date();
+  if (featuredUntil && new Date(featuredUntil) > now) return new Date(featuredUntil);
+  return now;
+}
+
+function formatVnpayDate(date) {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Ho_Chi_Minh",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  })
+    .formatToParts(date)
+    .reduce((acc, part) => {
+      if (part.type !== "literal") acc[part.type] = part.value;
+      return acc;
+    }, {});
+
+  return (
+    parts.year +
+    parts.month +
+    parts.day +
+    parts.hour +
+    parts.minute +
+    parts.second
+  );
+}
+
+function sortObject(obj) {
+  return Object.keys(obj)
+    .sort()
+    .reduce((sorted, key) => {
+      sorted[key] = obj[key];
+      return sorted;
+    }, {});
+}
+
+function encodeVnpayValue(value) {
+  return encodeURIComponent(String(value)).replace(/%20/g, "+");
+}
+
+function buildVnpayQuery(params) {
+  return Object.entries(sortObject(params))
+    .map(([key, value]) => `${key}=${encodeVnpayValue(value)}`)
+    .join("&");
+}
+
+function createVnpayPaymentUrl({ orderId, amount, orderInfo, ipAddr }) {
+  const now = new Date();
+  const expireDate = new Date(now.getTime() + 30 * 60 * 1000);
+
+  let params = {
+    vnp_Version: "2.1.0",
+    vnp_Command: "pay",
+    vnp_TmnCode: VNPAY_CONFIG.tmnCode,
+    vnp_Locale: "vn",
+    vnp_CurrCode: "VND",
+    vnp_TxnRef: String(orderId),
+    vnp_OrderInfo: orderInfo,
+    vnp_OrderType: "billpayment",
+    vnp_Amount: Math.round(Number(amount) * 100),
+    vnp_ReturnUrl: VNPAY_CONFIG.returnUrl,
+    vnp_IpAddr: ipAddr || "127.0.0.1",
+    vnp_CreateDate: formatVnpayDate(now),
+    vnp_ExpireDate: formatVnpayDate(expireDate),
+  };
+
+  const signData = buildVnpayQuery(params);
+  const secureHash = crypto
+    .createHmac("sha512", VNPAY_CONFIG.hashSecret)
+    .update(Buffer.from(signData, "utf-8"))
+    .digest("hex");
+
+  return `${VNPAY_CONFIG.paymentUrl}?${signData}&vnp_SecureHash=${secureHash}`;
+}
+
+function verifyVnpayReturn(query) {
+  const params = { ...query };
+  const secureHash = params.vnp_SecureHash;
+  delete params.vnp_SecureHash;
+  delete params.vnp_SecureHashType;
+
+  const signData = buildVnpayQuery(params);
+  const signed = crypto
+    .createHmac("sha512", VNPAY_CONFIG.hashSecret)
+    .update(Buffer.from(signData, "utf-8"))
+    .digest("hex");
+
+  return secureHash === signed;
+}
+
+function getPropertyTypeLabel(type) {
+  return (
+    {
+      apartment: "căn hộ",
+      house: "nhà phố",
+      land: "đất nền",
+      office: "văn phòng",
+    }[type] || "bất động sản"
+  );
+}
+
+function getTransactionLabel(transactionType) {
+  return transactionType === "rent" ? "cho thuê" : "bán";
+}
+
+function getDirectionLabel(direction) {
+  return (
+    {
+      north: "Bắc",
+      south: "Nam",
+      east: "Đông",
+      west: "Tây",
+      northeast: "Đông Bắc",
+      northwest: "Tây Bắc",
+      southeast: "Đông Nam",
+      southwest: "Tây Nam",
+    }[direction] || ""
+  );
+}
+
+function getLegalLabel(legalStatus) {
+  return (
+    {
+      pink_book: "sổ hồng",
+      red_book: "sổ đỏ",
+      contract: "hợp đồng mua bán",
+      waiting: "đang chờ sổ",
+    }[legalStatus] || ""
+  );
+}
+
+function formatPriceText(price, transactionType) {
+  const value = Number(price);
+  if (!value || value <= 0) return "";
+
+  const suffix = transactionType === "rent" ? "/tháng" : "";
+  if (value >= 1000000000) {
+    return `${(value / 1000000000).toFixed(value % 1000000000 === 0 ? 0 : 1)} tỷ${suffix}`;
+  }
+  if (value >= 1000000) {
+    return `${Math.round(value / 1000000)} triệu${suffix}`;
+  }
+  return `${value.toLocaleString("vi-VN")} đồng${suffix}`;
+}
+
+function buildAiDescription(data) {
+  const typeLabel = getPropertyTypeLabel(data.type);
+  const transactionLabel = getTransactionLabel(data.transaction_type);
+  const priceText = formatPriceText(data.price, data.transaction_type);
+  const address = [data.address, data.ward, data.district, data.city]
+    .filter(Boolean)
+    .join(", ");
+  const details = [];
+
+  if (data.area) details.push(`diện tích ${data.area} m2`);
+  if (data.bedrooms) details.push(`${data.bedrooms} phòng ngủ`);
+  if (data.bathrooms) details.push(`${data.bathrooms} phòng tắm`);
+
+  const direction = getDirectionLabel(data.direction);
+  if (direction) details.push(`hướng ${direction}`);
+
+  const legal = getLegalLabel(data.legal_status);
+  if (legal) details.push(`pháp lý ${legal}`);
+
+  const lines = [
+    `${data.title || `${typeLabel.charAt(0).toUpperCase() + typeLabel.slice(1)} ${transactionLabel}`} là lựa chọn phù hợp cho khách hàng đang tìm kiếm ${typeLabel} ${transactionLabel} tại khu vực ${data.city || "trung tâm"}.`,
+  ];
+
+  if (address) {
+    lines.push(
+      `Bất động sản tọa lạc tại ${address}, thuận tiện di chuyển và phù hợp để ở, đầu tư hoặc khai thác cho thuê.`,
+    );
+  }
+
+  if (details.length > 0) {
+    lines.push(`Thông tin nổi bật gồm ${details.join(", ")}.`);
+  }
+
+  if (priceText) {
+    lines.push(
+      `Mức giá ${priceText} được đưa ra rõ ràng, giúp khách hàng dễ dàng cân nhắc theo nhu cầu tài chính.`,
+    );
+  }
+
+  lines.push(
+    "Chủ sở hữu sẵn sàng trao đổi thêm thông tin, hỗ trợ khách xem bất động sản và thương lượng trực tiếp khi có nhu cầu.",
+  );
+
+  return lines.join("\n\n");
+}
+
+// POST /api/property/ai-description — gợi ý mô tả tin đăng cho Owner
+router.post("/ai-description", authMiddleware, async (req, res) => {
+  if (req.user.role !== "owner") {
+    return res.status(403).json({ message: "Chỉ owner mới được dùng tính năng này" });
+  }
+
+  const { title, type, transaction_type, price, area, address, city } = req.body;
+
+  if (!title && !type && !price && !area && !address && !city) {
+    return res
+      .status(400)
+      .json({ message: "Vui lòng nhập một số thông tin tin đăng trước khi tạo mô tả" });
+  }
+
+  res.json({ description: buildAiDescription(req.body) });
+});
 
 // GET /api/property/owner/list — danh sách tin của Owner
 router.get("/owner/list", authMiddleware, async (req, res) => {
@@ -351,6 +593,421 @@ router.post("/", authMiddleware, async (req, res) => {
     });
   } catch (err) {
     res.status(500).json({ message: "Lỗi server", error: err.message });
+  }
+});
+
+// GET /api/property/featured-packages — danh sách gói nổi bật
+router.get("/featured-packages", authMiddleware, async (req, res) => {
+  if (req.user.role !== "owner")
+    return res.status(403).json({ message: "Chỉ owner mới được xem gói nổi bật" });
+
+  try {
+    const [packages] = await pool.query(
+      `SELECT id, name, description, price, duration_days, priority
+       FROM featured_packages
+       WHERE is_active = 1
+       ORDER BY priority ASC, price ASC`,
+    );
+    res.json(packages);
+  } catch (err) {
+    res.status(500).json({ message: "Lỗi server", error: err.message });
+  }
+});
+
+// GET /api/property/owner/featured-orders — lịch sử mua gói của Owner
+router.get("/owner/featured-orders", authMiddleware, async (req, res) => {
+  if (req.user.role !== "owner")
+    return res.status(403).json({ message: "Không có quyền" });
+
+  try {
+    const [orders] = await pool.query(
+      `SELECT fo.*, fp.name AS package_name, fp.duration_days, p.title AS property_title
+       FROM featured_orders fo
+       JOIN featured_packages fp ON fo.package_id = fp.id
+       JOIN properties p ON fo.property_id = p.id
+       WHERE fo.owner_id = ?
+       ORDER BY fo.created_at DESC
+       LIMIT 20`,
+      [req.user.id],
+    );
+    res.json(orders);
+  } catch (err) {
+    res.status(500).json({ message: "Lỗi server", error: err.message });
+  }
+});
+
+// POST /api/property/:id/featured-orders — tạo đơn thanh toán gói nổi bật
+router.post("/:id/featured-orders", authMiddleware, async (req, res) => {
+  if (req.user.role !== "owner")
+    return res.status(403).json({ message: "Chỉ owner mới được mua gói nổi bật" });
+
+  const packageId = parseInt(req.body.package_id, 10);
+  const paymentMethod = req.body.payment_method || "vnpay";
+
+  if (!packageId) {
+    return res.status(400).json({ message: "Vui lòng chọn gói nổi bật" });
+  }
+  if (!["demo_online", "bank_transfer", "vnpay"].includes(paymentMethod)) {
+    return res.status(400).json({ message: "Phương thức thanh toán không hợp lệ" });
+  }
+
+  try {
+    const [[property]] = await pool.query(
+      `SELECT id, owner_id, title, status
+       FROM properties
+       WHERE id = ?`,
+      [req.params.id],
+    );
+
+    if (!property)
+      return res.status(404).json({ message: "Không tìm thấy tin đăng" });
+    if (property.owner_id !== req.user.id)
+      return res.status(403).json({ message: "Không có quyền mua gói cho tin này" });
+    if (property.status !== "approved")
+      return res.status(400).json({ message: "Chỉ tin đã được duyệt mới có thể mua gói nổi bật" });
+
+    const [[pkg]] = await pool.query(
+      `SELECT id, name, price, duration_days
+       FROM featured_packages
+       WHERE id = ? AND is_active = 1`,
+      [packageId],
+    );
+
+    if (!pkg) return res.status(404).json({ message: "Không tìm thấy gói nổi bật" });
+
+    const paymentCode = generatePaymentCode();
+    const [result] = await pool.query(
+      `INSERT INTO featured_orders
+        (property_id, owner_id, package_id, amount, payment_method, status, payment_code)
+       VALUES (?, ?, ?, ?, ?, 'pending', ?)`,
+      [property.id, req.user.id, pkg.id, pkg.price, paymentMethod, paymentCode],
+    );
+
+    const order = {
+      id: result.insertId,
+      property_id: property.id,
+      property_title: property.title,
+      package_id: pkg.id,
+      package_name: pkg.name,
+      amount: pkg.price,
+      duration_days: pkg.duration_days,
+      payment_method: paymentMethod,
+      status: "pending",
+      payment_code: paymentCode,
+    };
+
+    const paymentUrl =
+      paymentMethod === "vnpay"
+        ? createVnpayPaymentUrl({
+            orderId: result.insertId,
+            amount: pkg.price,
+            orderInfo: `Thanh toan goi noi bat ${pkg.name} cho tin ${property.id}`,
+            ipAddr:
+              req.headers["x-forwarded-for"]?.split(",")[0] ||
+              req.socket.remoteAddress ||
+              "127.0.0.1",
+          })
+        : null;
+
+    res.status(201).json({
+      message: "Đã tạo đơn thanh toán gói nổi bật",
+      order,
+      payment_url: paymentUrl,
+    });
+  } catch (err) {
+    res.status(500).json({ message: "Lỗi server", error: err.message });
+  }
+});
+
+// POST /api/property/featured-orders/:orderId/pay — xác nhận thanh toán mô phỏng
+router.post("/featured-orders/:orderId/pay", authMiddleware, async (req, res) => {
+  if (req.user.role !== "owner")
+    return res.status(403).json({ message: "Không có quyền thanh toán đơn này" });
+
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    const [[order]] = await connection.query(
+      `SELECT fo.*, fp.name AS package_name, fp.duration_days, p.title AS property_title,
+              p.featured_until, p.owner_id, p.status AS property_status
+       FROM featured_orders fo
+       JOIN featured_packages fp ON fo.package_id = fp.id
+       JOIN properties p ON fo.property_id = p.id
+       WHERE fo.id = ? AND fo.owner_id = ?
+       FOR UPDATE`,
+      [req.params.orderId, req.user.id],
+    );
+
+    if (!order) {
+      await connection.rollback();
+      return res.status(404).json({ message: "Không tìm thấy đơn thanh toán" });
+    }
+    if (order.status !== "pending") {
+      await connection.rollback();
+      return res.status(400).json({ message: "Đơn thanh toán này đã được xử lý" });
+    }
+    if (order.property_status !== "approved") {
+      await connection.rollback();
+      return res.status(400).json({ message: "Tin không còn ở trạng thái được duyệt" });
+    }
+
+    const startDate = getFeaturedStartDate(order.featured_until);
+    const endDate = addDays(startDate, order.duration_days);
+
+    await connection.query(
+      `UPDATE featured_orders
+       SET status = 'paid', paid_at = NOW(), featured_start_at = ?, featured_end_at = ?
+       WHERE id = ?`,
+      [startDate, endDate, order.id],
+    );
+
+    await connection.query(
+      `UPDATE properties
+       SET is_featured = 1, featured_until = ?
+       WHERE id = ?`,
+      [endDate, order.property_id],
+    );
+
+    await connection.query(
+      `INSERT INTO notifications (user_id, type, title, message, link)
+       VALUES (?, 'featured_paid', 'Thanh toán gói nổi bật thành công', ?, '/owner/dashboard')`,
+      [
+        req.user.id,
+        `Tin "${order.property_title}" đã được kích hoạt gói ${order.package_name} đến ${endDate.toLocaleDateString("vi-VN")}.`,
+      ],
+    );
+
+    await connection.commit();
+
+    res.json({
+      message: "Thanh toán thành công. Tin đã được kích hoạt nổi bật.",
+      property_id: order.property_id,
+      featured_until: endDate,
+      order_id: order.id,
+    });
+  } catch (err) {
+    await connection.rollback();
+    res.status(500).json({ message: "Lỗi server", error: err.message });
+  } finally {
+    connection.release();
+  }
+});
+
+// GET /api/property/vnpay-return — xác thực kết quả thanh toán VNPay sandbox
+router.get("/vnpay-return", async (req, res) => {
+  if (!verifyVnpayReturn(req.query)) {
+    return res.status(400).json({
+      success: false,
+      message: "Chữ ký VNPay không hợp lệ",
+    });
+  }
+
+  const orderId = parseInt(req.query.vnp_TxnRef, 10);
+  const responseCode = req.query.vnp_ResponseCode;
+
+  if (!orderId) {
+    return res.status(400).json({
+      success: false,
+      message: "Mã đơn thanh toán không hợp lệ",
+    });
+  }
+
+  if (responseCode !== "00") {
+    return res.json({
+      success: false,
+      message: "Thanh toán VNPay không thành công",
+      response_code: responseCode,
+      order_id: orderId,
+    });
+  }
+
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    const [[order]] = await connection.query(
+      `SELECT fo.*, fp.name AS package_name, fp.duration_days, p.title AS property_title,
+              p.featured_until, p.status AS property_status
+       FROM featured_orders fo
+       JOIN featured_packages fp ON fo.package_id = fp.id
+       JOIN properties p ON fo.property_id = p.id
+       WHERE fo.id = ?
+       FOR UPDATE`,
+      [orderId],
+    );
+
+    if (!order) {
+      await connection.rollback();
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy đơn thanh toán",
+      });
+    }
+
+    if (order.status === "paid") {
+      await connection.commit();
+      return res.json({
+        success: true,
+        message: "Đơn thanh toán đã được xử lý trước đó",
+        order_id: order.id,
+        property_id: order.property_id,
+        featured_until: order.featured_end_at,
+      });
+    }
+
+    if (order.status !== "pending" || order.payment_method !== "vnpay") {
+      await connection.rollback();
+      return res.status(400).json({
+        success: false,
+        message: "Đơn thanh toán không hợp lệ",
+      });
+    }
+
+    if (order.property_status !== "approved") {
+      await connection.rollback();
+      return res.status(400).json({
+        success: false,
+        message: "Tin không còn ở trạng thái được duyệt",
+      });
+    }
+
+    const startDate = getFeaturedStartDate(order.featured_until);
+    const endDate = addDays(startDate, order.duration_days);
+
+    await connection.query(
+      `UPDATE featured_orders
+       SET status = 'paid', paid_at = NOW(), featured_start_at = ?, featured_end_at = ?
+       WHERE id = ?`,
+      [startDate, endDate, order.id],
+    );
+
+    await connection.query(
+      `UPDATE properties
+       SET is_featured = 1, featured_until = ?
+       WHERE id = ?`,
+      [endDate, order.property_id],
+    );
+
+    await connection.query(
+      `INSERT INTO notifications (user_id, type, title, message, link)
+       VALUES (?, 'featured_paid', 'Thanh toán VNPay thành công', ?, '/owner/dashboard')`,
+      [
+        order.owner_id,
+        `Tin "${order.property_title}" đã được kích hoạt gói ${order.package_name} đến ${endDate.toLocaleDateString("vi-VN")}.`,
+      ],
+    );
+
+    await connection.commit();
+
+    res.json({
+      success: true,
+      message: "Thanh toán VNPay thành công. Tin đã được kích hoạt nổi bật.",
+      order_id: order.id,
+      property_id: order.property_id,
+      featured_until: endDate,
+    });
+  } catch (err) {
+    await connection.rollback();
+    res.status(500).json({
+      success: false,
+      message: "Lỗi server",
+      error: err.message,
+    });
+  } finally {
+    connection.release();
+  }
+});
+
+// GET /api/property/vnpay-ipn — VNPay gọi server-to-server để cập nhật trạng thái
+router.get("/vnpay-ipn", async (req, res) => {
+  if (!verifyVnpayReturn(req.query)) {
+    return res.json({ RspCode: "97", Message: "Invalid signature" });
+  }
+
+  const orderId = parseInt(req.query.vnp_TxnRef, 10);
+  const responseCode = req.query.vnp_ResponseCode;
+  const paidAmount = Number(req.query.vnp_Amount || 0) / 100;
+
+  if (!orderId) {
+    return res.json({ RspCode: "01", Message: "Order not found" });
+  }
+
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    const [[order]] = await connection.query(
+      `SELECT fo.*, fp.name AS package_name, fp.duration_days, p.title AS property_title,
+              p.featured_until, p.status AS property_status
+       FROM featured_orders fo
+       JOIN featured_packages fp ON fo.package_id = fp.id
+       JOIN properties p ON fo.property_id = p.id
+       WHERE fo.id = ?
+       FOR UPDATE`,
+      [orderId],
+    );
+
+    if (!order) {
+      await connection.rollback();
+      return res.json({ RspCode: "01", Message: "Order not found" });
+    }
+
+    if (Number(order.amount) !== paidAmount) {
+      await connection.rollback();
+      return res.json({ RspCode: "04", Message: "Invalid amount" });
+    }
+
+    if (order.status === "paid") {
+      await connection.commit();
+      return res.json({ RspCode: "02", Message: "Order already confirmed" });
+    }
+
+    if (responseCode !== "00") {
+      await connection.query(
+        `UPDATE featured_orders SET status = 'failed' WHERE id = ?`,
+        [order.id],
+      );
+      await connection.commit();
+      return res.json({ RspCode: "00", Message: "Confirm failed payment" });
+    }
+
+    if (order.property_status !== "approved") {
+      await connection.rollback();
+      return res.json({ RspCode: "99", Message: "Invalid property status" });
+    }
+
+    const startDate = getFeaturedStartDate(order.featured_until);
+    const endDate = addDays(startDate, order.duration_days);
+
+    await connection.query(
+      `UPDATE featured_orders
+       SET status = 'paid', paid_at = NOW(), featured_start_at = ?, featured_end_at = ?
+       WHERE id = ?`,
+      [startDate, endDate, order.id],
+    );
+
+    await connection.query(
+      `UPDATE properties SET is_featured = 1, featured_until = ? WHERE id = ?`,
+      [endDate, order.property_id],
+    );
+
+    await connection.query(
+      `INSERT INTO notifications (user_id, type, title, message, link)
+       VALUES (?, 'featured_paid', 'Thanh toán VNPay thành công', ?, '/owner/dashboard')`,
+      [
+        order.owner_id,
+        `Tin "${order.property_title}" đã được kích hoạt gói ${order.package_name} đến ${endDate.toLocaleDateString("vi-VN")}.`,
+      ],
+    );
+
+    await connection.commit();
+    res.json({ RspCode: "00", Message: "Confirm success" });
+  } catch (err) {
+    await connection.rollback();
+    res.json({ RspCode: "99", Message: "Unknown error" });
+  } finally {
+    connection.release();
   }
 });
 

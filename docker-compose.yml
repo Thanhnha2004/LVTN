@@ -68,12 +68,15 @@ services:
       DB_USER: ${DB_USER}
       DB_PASS: ${DB_PASS}
       DB_NAME: ${DB_NAME}
-      # ✅ FIX: thêm JWT_SECRET — thiếu cái này middleware auth sẽ crash
       JWT_SECRET: ${JWT_SECRET}
-      # ✅ THÊM: Cloudinary credentials
       CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME}
       CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY}
       CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET}
+      VNPAY_TMN_CODE: ${VNPAY_TMN_CODE}
+      VNPAY_HASH_SECRET: ${VNPAY_HASH_SECRET}
+      VNPAY_PAYMENT_URL: ${VNPAY_PAYMENT_URL}
+      VNPAY_RETURN_URL: ${VNPAY_RETURN_URL}
+      VNPAY_IPN_URL: ${VNPAY_IPN_URL}
       PORT: 3002
     ports:
       - "3002:3002"

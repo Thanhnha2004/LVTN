@@ -20,6 +20,8 @@ import {
   FaRedo,
   FaEyeSlash,
   FaHistory,
+  FaStar,
+  FaCreditCard,
 } from "react-icons/fa";
 
 const VN = { fontFamily: "'Be Vietnam Pro', Inter, sans-serif" };
@@ -30,6 +32,82 @@ function formatPrice(price) {
     return (price / 1_000_000_000).toFixed(1).replace(".0", "") + " Tỷ";
   if (price >= 1_000_000) return (price / 1_000_000).toFixed(0) + " Tr/tháng";
   return price.toLocaleString("vi-VN") + " đ";
+}
+
+function formatCurrency(value) {
+  const amount = Number(value || 0);
+  return amount.toLocaleString("vi-VN") + " đ";
+}
+
+function isFeaturedActive(property) {
+  return (
+    property?.is_featured === 1 &&
+    property?.featured_until &&
+    new Date(property.featured_until) > new Date()
+  );
+}
+
+function FeaturedStatusBadge({ property }) {
+  if (!isFeaturedActive(property)) return null;
+
+  return (
+    <div
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 5,
+        marginTop: 4,
+        padding: "2px 8px",
+        borderRadius: 20,
+        background: "#e8f1ff",
+        color: "#2456a6",
+        fontSize: 10,
+        fontWeight: 700,
+        ...VN,
+      }}>
+      <FaCreditCard size={10} />
+      Đang có gói đến {formatDateTime(property.featured_until)}
+    </div>
+  );
+}
+
+function FeaturedActionButton({ property, onClick }) {
+  const active = isFeaturedActive(property);
+
+  return (
+    <button
+      onClick={() => onClick(property)}
+      title={active ? "Gia hạn gói nổi bật" : "Mua gói nổi bật"}
+      style={{
+        height: 30,
+        minWidth: 74,
+        padding: "0 9px",
+        borderRadius: 6,
+        border: active ? "0.5px solid #b9dfd3" : "0.5px solid #f0ce7a",
+        background: active ? "#e6f9f0" : "#fff4d6",
+        cursor: "pointer",
+        fontSize: 12,
+        fontWeight: 700,
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 5,
+        color: active ? "#0f6e56" : "#8a5a00",
+        whiteSpace: "nowrap",
+        ...VN,
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.background = active ? "#d7f3e7" : "#ffe8a3";
+        e.currentTarget.style.borderColor = active ? "#0f6e56" : "#d99a00";
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.background = active ? "#e6f9f0" : "#fff4d6";
+        e.currentTarget.style.borderColor = active ? "#b9dfd3" : "#f0ce7a";
+      }}>
+      {active ? <FaRedo size={12} /> : <FaStar size={12} />}
+      {active ? "Gia hạn" : "Mua gói"}
+    </button>
+  );
 }
 
 const STATUS_MAP = {
@@ -238,18 +316,29 @@ export default function OwnerDashboard() {
   const [historyModal, setHistoryModal] = useState(null);
   const [historyItems, setHistoryItems] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [featuredPackages, setFeaturedPackages] = useState([]);
+  const [featuredOrders, setFeaturedOrders] = useState([]);
+  const [paymentModal, setPaymentModal] = useState(null);
+  const [selectedPackageId, setSelectedPackageId] = useState("");
+  const [paymentOrder, setPaymentOrder] = useState(null);
+  const [paymentUrl, setPaymentUrl] = useState("");
+  const [paymentLoading, setPaymentLoading] = useState(false);
 
   useEffect(() => {
     (async () => {
       try {
-        const [listRes, statsRes] = await Promise.all([
+        const [listRes, statsRes, packagesRes, ordersRes] = await Promise.all([
           api.get("/api/property/owner/list"),
           api.get("/api/property/owner/stats"),
+          api.get("/api/property/featured-packages"),
+          api.get("/api/property/owner/featured-orders"),
         ]);
         setProperties(
           Array.isArray(listRes.data) ? listRes.data : listRes.data.data || [],
         );
         setOwnerStats(statsRes.data);
+        setFeaturedPackages(Array.isArray(packagesRes.data) ? packagesRes.data : []);
+        setFeaturedOrders(Array.isArray(ordersRes.data) ? ordersRes.data : []);
       } catch (err) {
         if (err.response?.status === 401) navigate("/login");
       } finally {
@@ -346,6 +435,63 @@ export default function OwnerDashboard() {
     } finally {
       setHistoryLoading(false);
     }
+  };
+
+  const openPaymentModal = (property) => {
+    setPaymentModal(property);
+    setSelectedPackageId(featuredPackages[0]?.id ? String(featuredPackages[0].id) : "");
+    setPaymentOrder(null);
+    setPaymentUrl("");
+  };
+
+  const closePaymentModal = () => {
+    setPaymentModal(null);
+    setSelectedPackageId("");
+    setPaymentOrder(null);
+    setPaymentUrl("");
+    setPaymentLoading(false);
+  };
+
+  const createFeaturedOrder = async () => {
+    if (!paymentModal || !selectedPackageId) {
+      showToast("Vui lòng chọn gói nổi bật", "error");
+      return;
+    }
+
+    setPaymentLoading(true);
+    try {
+      const res = await api.post(
+        `/api/property/${paymentModal.id}/featured-orders`,
+        {
+          package_id: Number(selectedPackageId),
+          payment_method: "vnpay",
+        },
+      );
+      setPaymentOrder(res.data.order);
+      setPaymentUrl(res.data.payment_url || "");
+      showToast("Đã tạo đơn thanh toán");
+    } catch (err) {
+      showToast(
+        err.response?.data?.message || "Không thể tạo đơn thanh toán",
+        "error",
+      );
+    } finally {
+      setPaymentLoading(false);
+    }
+  };
+
+  const payFeaturedOrder = async () => {
+    if (!paymentOrder || !paymentUrl) return;
+
+    const ok = await confirm({
+      title: "Mở VNPay Sandbox?",
+      message:
+        "Hệ thống sẽ chuyển sang cổng thanh toán VNPay Sandbox. Sau khi thanh toán, VNPay sẽ trả kết quả về hệ thống.",
+      confirmText: "Thanh toán VNPay",
+    });
+    if (!ok) return;
+
+    window.location.href = paymentUrl;
   };
 
   const total = properties.length;
@@ -697,6 +843,7 @@ export default function OwnerDashboard() {
                                 }}>
                                 {p.title}
                               </div>
+                              <FeaturedStatusBadge property={p} />
                               <div
                                 style={{
                                   fontSize: 11,
@@ -829,6 +976,10 @@ export default function OwnerDashboard() {
                             {(p.status === "active" ||
                               p.status === "approved") && (
                               <>
+                                <FeaturedActionButton
+                                  property={p}
+                                  onClick={openPaymentModal}
+                                />
                                 <button
                                   onClick={() => handleSold(p.id)}
                                   title="Đánh dấu đã bán"
@@ -1051,6 +1202,265 @@ export default function OwnerDashboard() {
             )}
           </div>
         </main>
+        {paymentModal && (
+          <div
+            onClick={closePaymentModal}
+            style={{
+              position: "fixed",
+              inset: 0,
+              background: "rgba(0,0,0,0.42)",
+              zIndex: 1000,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: 16,
+            }}>
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                background: "#fff",
+                borderRadius: 14,
+                width: "100%",
+                maxWidth: 560,
+                boxShadow: "0 8px 32px rgba(0,0,0,0.16)",
+                overflow: "hidden",
+                ...VN,
+              }}>
+              <div
+                style={{
+                  padding: "18px 20px",
+                  borderBottom: "0.5px solid #E8E8E8",
+                  display: "flex",
+                  alignItems: "flex-start",
+                  justifyContent: "space-between",
+                  gap: 12,
+                }}>
+                <div>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                      fontSize: 16,
+                      fontWeight: 700,
+                      color: "#1a1c1c",
+                    }}>
+                    {isFeaturedActive(paymentModal) ? (
+                      <FaRedo color="#0f6e56" />
+                    ) : (
+                      <FaStar color="#d99a00" />
+                    )}
+                    {isFeaturedActive(paymentModal)
+                      ? "Gia hạn gói nổi bật"
+                      : "Mua gói nổi bật"}
+                  </div>
+                  <div style={{ fontSize: 13, color: "#757575", marginTop: 4 }}>
+                    {paymentModal.title}
+                  </div>
+                </div>
+                <button
+                  onClick={closePaymentModal}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    fontSize: 18,
+                    color: "#5f5e5e",
+                    cursor: "pointer",
+                    lineHeight: 1,
+                  }}>
+                  ×
+                </button>
+              </div>
+
+              <div style={{ padding: 20 }}>
+                {isFeaturedActive(paymentModal) && (
+                  <div
+                    style={{
+                      padding: "10px 12px",
+                      borderRadius: 8,
+                      background: "#e8f1ff",
+                      border: "0.5px solid #b8cff7",
+                      color: "#2456a6",
+                      fontSize: 13,
+                      marginBottom: 14,
+                    }}>
+                    Tin đang có gói nổi bật đến {formatDateTime(paymentModal.featured_until)}.
+                    Chọn gói bên dưới để gia hạn thêm thời gian hiển thị.
+                  </div>
+                )}
+
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
+                    gap: 10,
+                    marginBottom: 16,
+                  }}>
+                  {featuredPackages.map((pkg) => {
+                    const selected = String(pkg.id) === selectedPackageId;
+                    return (
+                      <button
+                        key={pkg.id}
+                        onClick={() => {
+                          setSelectedPackageId(String(pkg.id));
+                          setPaymentOrder(null);
+                        }}
+                        style={{
+                          textAlign: "left",
+                          border: selected
+                            ? "1px solid #b51b17"
+                            : "0.5px solid #E8E8E8",
+                          background: selected ? "#fff5f5" : "#fff",
+                          borderRadius: 10,
+                          padding: 12,
+                          cursor: "pointer",
+                          minHeight: 112,
+                          ...VN,
+                        }}>
+                        <div
+                          style={{
+                            fontSize: 14,
+                            fontWeight: 700,
+                            color: "#1a1c1c",
+                            marginBottom: 6,
+                          }}>
+                          {pkg.name}
+                        </div>
+                        <div
+                          style={{
+                            fontSize: 12,
+                            color: "#757575",
+                            lineHeight: 1.45,
+                            minHeight: 34,
+                          }}>
+                          {pkg.description}
+                        </div>
+                        <div
+                          style={{
+                            marginTop: 10,
+                            fontSize: 15,
+                            fontWeight: 700,
+                            color: "#b51b17",
+                          }}>
+                          {formatCurrency(pkg.price)}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {!paymentOrder ? (
+                  <button
+                    disabled={paymentLoading}
+                    onClick={createFeaturedOrder}
+                    style={{
+                      width: "100%",
+                      height: 40,
+                      border: "none",
+                      borderRadius: 8,
+                      background: "#b51b17",
+                      color: "#fff",
+                      fontSize: 14,
+                      fontWeight: 700,
+                      cursor: paymentLoading ? "not-allowed" : "pointer",
+                      opacity: paymentLoading ? 0.7 : 1,
+                      ...VN,
+                    }}>
+                    {paymentLoading ? "Đang tạo đơn..." : "Tạo đơn thanh toán"}
+                  </button>
+                ) : (
+                  <div
+                    style={{
+                      border: "0.5px solid #E8E8E8",
+                      borderRadius: 10,
+                      padding: 14,
+                      background: "#fafafa",
+                    }}>
+                    <div
+                      style={{
+                        fontSize: 13,
+                        fontWeight: 700,
+                        color: "#1a1c1c",
+                        marginBottom: 8,
+                      }}>
+                      Thông tin thanh toán
+                    </div>
+                    <div style={{ fontSize: 13, color: "#5f5e5e", lineHeight: 1.8 }}>
+                      <div>Mã đơn: <strong>{paymentOrder.payment_code}</strong></div>
+                      <div>Gói: <strong>{paymentOrder.package_name}</strong></div>
+                      <div>Số tiền: <strong>{formatCurrency(paymentOrder.amount)}</strong></div>
+                      <div>Phương thức: VNPay Sandbox</div>
+                    </div>
+                    <button
+                      disabled={paymentLoading || !paymentUrl}
+                      onClick={payFeaturedOrder}
+                      style={{
+                        width: "100%",
+                        height: 40,
+                        border: "none",
+                        borderRadius: 8,
+                        background: "#0f6e56",
+                        color: "#fff",
+                        fontSize: 14,
+                        fontWeight: 700,
+                        cursor: paymentLoading ? "not-allowed" : "pointer",
+                        opacity: paymentLoading ? 0.7 : 1,
+                        marginTop: 12,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: 8,
+                        ...VN,
+                      }}>
+                        <FaCreditCard />
+                      {paymentLoading ? "Đang xử lý..." : "Thanh toán qua VNPay"}
+                    </button>
+                  </div>
+                )}
+
+                {featuredOrders.length > 0 && (
+                  <div style={{ marginTop: 18 }}>
+                    <div
+                      style={{
+                        fontSize: 13,
+                        fontWeight: 700,
+                        color: "#1a1c1c",
+                        marginBottom: 8,
+                      }}>
+                      Lịch sử mua gói gần đây
+                    </div>
+                    <div style={{ maxHeight: 150, overflowY: "auto" }}>
+                      {featuredOrders.slice(0, 5).map((order) => (
+                        <div
+                          key={order.id}
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            gap: 12,
+                            padding: "8px 0",
+                            borderTop: "0.5px solid #E8E8E8",
+                            fontSize: 12,
+                            color: "#5f5e5e",
+                          }}>
+                          <div>
+                            <div style={{ fontWeight: 600, color: "#1a1c1c" }}>
+                              {order.property_title}
+                            </div>
+                            <div>{order.package_name}</div>
+                          </div>
+                          <div style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                            <div>{formatCurrency(order.amount)}</div>
+                            <div>{order.status === "paid" ? "Đã thanh toán" : "Chờ thanh toán"}</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
         {rejectModal && (
           <div
             onClick={() => setRejectModal(null)}
