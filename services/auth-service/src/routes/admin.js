@@ -1,4 +1,4 @@
-const express = require("express");
+﻿const express = require("express");
 const pool = require("../db");
 const authMiddleware = require("../middleware/auth");
 const router = express.Router();
@@ -66,11 +66,9 @@ router.get("/stats", authMiddleware, async (req, res) => {
 `);
 
     const [topViewedProperties] = await pool.query(`
-  SELECT p.id, p.title, p.city, p.district, COUNT(pv.id) AS view_count
+  SELECT p.id, p.title, p.city, p.district, p.view_count
   FROM properties p
-  LEFT JOIN property_views pv ON pv.property_id = p.id
-  GROUP BY p.id
-  ORDER BY view_count DESC
+  ORDER BY p.view_count DESC
   LIMIT 5
 `);
 
@@ -202,3 +200,5 @@ router.get("/properties", authMiddleware, async (req, res) => {
 });
 
 module.exports = router;
+
+

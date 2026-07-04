@@ -1,15 +1,7 @@
-const express = require("express");
+﻿const express = require("express");
 const pool = require("../db");
 const authMiddleware = require("../middleware/auth");
 const router = express.Router();
-
-async function createNotification(userId, type, title, message, link) {
-  await pool.query(
-    `INSERT INTO notifications (user_id, type, title, message, link)
-     VALUES (?, ?, ?, ?, ?)`,
-    [userId, type, title, message || null, link || null],
-  );
-}
 
 // POST /api/contact — Buyer gửi yêu cầu liên hệ
 router.post("/", authMiddleware, async (req, res) => {
@@ -186,7 +178,7 @@ router.patch("/:id/reply", authMiddleware, async (req, res) => {
     // Kiểm tra contact thuộc về tin của owner này không
     const [rows] = await pool.query(
       `
-      SELECT c.id, c.buyer_id, p.title AS property_title FROM contacts c
+      SELECT c.id FROM contacts c
       JOIN properties p ON c.property_id = p.id
       WHERE c.id = ? AND p.owner_id = ?
     `,
@@ -199,14 +191,6 @@ router.patch("/:id/reply", authMiddleware, async (req, res) => {
     await pool.query(
       "UPDATE contacts SET owner_reply = ?, status = 'replied' WHERE id = ?",
       [owner_reply, req.params.id],
-    );
-
-    await createNotification(
-      rows[0].buyer_id,
-      "contact_replied",
-      "Owner đã phản hồi yêu cầu liên hệ",
-      `Yêu cầu liên hệ của bạn về tin "${rows[0].property_title}" đã có phản hồi.`,
-      "/profile?tab=contacts",
     );
 
     res.json({ message: "Phản hồi thành công" });
@@ -321,3 +305,4 @@ router.get("/saved", authMiddleware, async (req, res) => {
 });
 
 module.exports = router;
+

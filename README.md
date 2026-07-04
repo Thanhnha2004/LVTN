@@ -1,4 +1,4 @@
-# LVTN - Hệ thống quản lý bất động sản
+﻿# LVTN - Hệ thống quản lý bất động sản
 
 Đây là project luận văn tốt nghiệp xây dựng website quản lý bất động sản theo kiến trúc Microservices. Hệ thống hỗ trợ 3 vai trò chính: **Buyer**, **Owner** và **Admin**.
 
@@ -185,10 +185,8 @@ Một số bảng chính:
 - `otp_codes`
 - `properties`
 - `property_images`
-- `property_views`
 - `contacts`
 - `saved_properties`
-- `notifications`
 - `property_status_history`
 
 ## 9. API endpoints chính
@@ -205,15 +203,6 @@ POST   /api/auth/reset-password
 GET    /api/auth/me
 PUT    /api/auth/profile
 PUT    /api/auth/change-password
-```
-
-### Notifications
-
-```text
-GET    /api/notifications
-GET    /api/notifications/unread-count
-PATCH  /api/notifications/:id/read
-PATCH  /api/notifications/read-all
 ```
 
 ### Property Service
@@ -320,3 +309,5 @@ Vai trò chính:
 - Owner xem được lý do từ chối và có thể chỉnh sửa để gửi duyệt lại.
 - Các thao tác nguy hiểm như xóa/ẩn/duyệt/tắt tài khoản có popup xác nhận.
 - AI mô tả tin đăng hiện tại là chức năng hỗ trợ tạo nội dung dựa trên dữ liệu tin đăng đã nhập.
+
+

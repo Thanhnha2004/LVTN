@@ -9,10 +9,8 @@ SET CHARACTER SET utf8mb4;
 SET FOREIGN_KEY_CHECKS = 0;
 DROP TABLE IF EXISTS saved_properties;
 DROP TABLE IF EXISTS contacts;
-DROP TABLE IF EXISTS property_views;
 DROP TABLE IF EXISTS property_images;
 DROP TABLE IF EXISTS featured_orders;
-DROP TABLE IF EXISTS notifications;
 DROP TABLE IF EXISTS property_status_history;
 DROP TABLE IF EXISTS properties;
 DROP TABLE IF EXISTS featured_packages;
@@ -94,6 +92,7 @@ CREATE TABLE properties (
   sold_at          DATETIME DEFAULT NULL,
   is_featured      TINYINT(1)   NOT NULL DEFAULT 0,
   featured_until   DATETIME     DEFAULT NULL,
+  view_count       INT          NOT NULL DEFAULT 0,
   created_at       TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
 
   FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE CASCADE,
@@ -105,6 +104,7 @@ CREATE TABLE properties (
   INDEX idx_prop_area     (area),
   INDEX idx_prop_owner    (owner_id),
   INDEX idx_prop_created  (created_at),
+  INDEX idx_prop_views    (view_count),
   INDEX idx_prop_featured (is_featured, featured_until)
 );
 
@@ -123,23 +123,6 @@ CREATE TABLE property_status_history (
   FOREIGN KEY (actor_id) REFERENCES users(id) ON DELETE SET NULL,
   INDEX idx_history_property (property_id),
   INDEX idx_history_created  (created_at)
-);
-
--- =============================================
--- BẢNG notifications (thông báo trong hệ thống)
--- =============================================
-CREATE TABLE notifications (
-  id          INT AUTO_INCREMENT PRIMARY KEY,
-  user_id     INT NOT NULL,
-  type        VARCHAR(50) NOT NULL,
-  title       VARCHAR(200) NOT NULL,
-  message     VARCHAR(500) DEFAULT NULL,
-  link        VARCHAR(255) DEFAULT NULL,
-  is_read     TINYINT(1) NOT NULL DEFAULT 0,
-  created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-  INDEX idx_notification_user_read (user_id, is_read),
-  INDEX idx_notification_created   (created_at)
 );
 
 -- =============================================
@@ -191,19 +174,6 @@ CREATE TABLE property_images (
   `order`     INT          DEFAULT 0,
   FOREIGN KEY (property_id) REFERENCES properties(id) ON DELETE CASCADE,
   INDEX idx_img_property (property_id)
-);
-
--- =============================================
--- BẢNG property_views
--- =============================================
-CREATE TABLE property_views (
-  id          INT AUTO_INCREMENT PRIMARY KEY,
-  property_id INT         NOT NULL,
-  viewer_ip   VARCHAR(45) DEFAULT NULL,
-  viewed_at   TIMESTAMP   DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (property_id) REFERENCES properties(id) ON DELETE CASCADE,
-  INDEX idx_views_property (property_id),
-  INDEX idx_views_date     (viewed_at)
 );
 
 -- =============================================
@@ -397,29 +367,12 @@ INSERT INTO property_images (property_id, url, `order`) VALUES
 (9, 'https://images.unsplash.com/photo-1600566753190-17f0baa2a6c3?w=1000&q=80', 1),
 (10, 'https://images.unsplash.com/photo-1500382017468-9049fed747ef?w=1000&q=80', 1);
 
-INSERT INTO property_views (property_id, viewer_ip, viewed_at) VALUES
-(1, '127.0.0.1', DATE_SUB(NOW(), INTERVAL 6 DAY)),
-(1, '127.0.0.2', DATE_SUB(NOW(), INTERVAL 6 DAY)),
-(1, '127.0.0.3', DATE_SUB(NOW(), INTERVAL 5 DAY)),
-(1, '127.0.0.4', DATE_SUB(NOW(), INTERVAL 5 DAY)),
-(1, '127.0.0.5', DATE_SUB(NOW(), INTERVAL 4 DAY)),
-(1, '127.0.0.6', DATE_SUB(NOW(), INTERVAL 3 DAY)),
-(1, '127.0.0.7', DATE_SUB(NOW(), INTERVAL 2 DAY)),
-(1, '127.0.0.8', DATE_SUB(NOW(), INTERVAL 1 DAY)),
-(1, '127.0.0.9', NOW()),
-(2, '127.0.1.1', DATE_SUB(NOW(), INTERVAL 5 DAY)),
-(2, '127.0.1.2', DATE_SUB(NOW(), INTERVAL 4 DAY)),
-(2, '127.0.1.3', DATE_SUB(NOW(), INTERVAL 2 DAY)),
-(2, '127.0.1.4', NOW()),
-(3, '127.0.2.1', DATE_SUB(NOW(), INTERVAL 4 DAY)),
-(3, '127.0.2.2', DATE_SUB(NOW(), INTERVAL 3 DAY)),
-(3, '127.0.2.3', DATE_SUB(NOW(), INTERVAL 1 DAY)),
-(5, '127.0.3.1', DATE_SUB(NOW(), INTERVAL 3 DAY)),
-(5, '127.0.3.2', DATE_SUB(NOW(), INTERVAL 2 DAY)),
-(8, '127.0.4.1', DATE_SUB(NOW(), INTERVAL 2 DAY)),
-(8, '127.0.4.2', DATE_SUB(NOW(), INTERVAL 1 DAY)),
-(8, '127.0.4.3', NOW()),
-(9, '127.0.5.1', DATE_SUB(NOW(), INTERVAL 1 DAY));
+UPDATE properties SET view_count = 9 WHERE id = 1;
+UPDATE properties SET view_count = 4 WHERE id = 2;
+UPDATE properties SET view_count = 3 WHERE id = 3;
+UPDATE properties SET view_count = 2 WHERE id = 5;
+UPDATE properties SET view_count = 3 WHERE id = 8;
+UPDATE properties SET view_count = 1 WHERE id = 9;
 
 INSERT INTO contacts
   (property_id, buyer_id, message, phone_number, owner_reply, status, lead_status, owner_note)
@@ -438,9 +391,3 @@ INSERT INTO saved_properties (buyer_id, property_id) VALUES
 (5, 2),
 (5, 5),
 (5, 9);
-
-INSERT INTO notifications (user_id, type, title, message, link, is_read, created_at) VALUES
-(2, 'property_rejected', 'Tin đăng bị từ chối', 'Tin "Nhà hẻm Quận 10 cần bổ sung giấy tờ" bị từ chối. Lý do: Ảnh giấy tờ pháp lý chưa rõ, vui lòng bổ sung sổ hồng hoặc giấy tờ chứng minh quyền sở hữu.', '/owner/dashboard', 0, DATE_SUB(NOW(), INTERVAL 5 DAY)),
-(2, 'property_approved', 'Tin đăng đã được duyệt', 'Tin "Văn phòng cho thuê Quận 3 trung tâm" đã được admin duyệt và đang hiển thị công khai.', '/owner/dashboard', 1, DATE_SUB(NOW(), INTERVAL 12 DAY)),
-(3, 'contact_replied', 'Owner đã phản hồi yêu cầu liên hệ', 'Yêu cầu liên hệ của bạn về tin "Nhà phố Bình Thạnh 4 tầng hẻm xe hơi" đã có phản hồi.', '/profile?tab=contacts', 0, DATE_SUB(NOW(), INTERVAL 2 DAY)),
-(5, 'contact_replied', 'Owner đã phản hồi yêu cầu liên hệ', 'Yêu cầu liên hệ của bạn về tin "Văn phòng cho thuê Quận 3 trung tâm" đã có phản hồi.', '/profile?tab=contacts', 1, DATE_SUB(NOW(), INTERVAL 1 DAY));

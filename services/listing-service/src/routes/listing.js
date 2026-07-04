@@ -235,7 +235,7 @@ END AS active_featured,
 });
 
 // GET /api/listing/:id — chi tiết tin (public)
-// Tự động ghi nhận lượt xem vào bảng property_views
+// Tự động tăng view_count trực tiếp trên bảng properties
 router.get("/:id", async (req, res) => {
   try {
     const [rows] = await pool.query(
@@ -261,17 +261,10 @@ router.get("/:id", async (req, res) => {
     const property = rows[0];
     property.images = property.images ? property.images.split(",") : [];
 
-    // --- Ghi nhận lượt xem (fire-and-forget, không block response) ---
-    const ip =
-      req.headers["x-forwarded-for"]?.split(",")[0]?.trim() ||
-      req.socket.remoteAddress ||
-      null;
-
     pool
-      .query(
-        "INSERT INTO property_views (property_id, viewer_ip) VALUES (?, ?)",
-        [req.params.id, ip],
-      )
+      .query("UPDATE properties SET view_count = view_count + 1 WHERE id = ?", [
+        req.params.id,
+      ])
       .catch((err) => console.error("View tracking error:", err.message));
 
     res.json(property);

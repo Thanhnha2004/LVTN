@@ -29,14 +29,6 @@ async function addStatusHistory(propertyId, oldStatus, newStatus, actorId, note)
   );
 }
 
-async function createNotification(userId, type, title, message, link) {
-  await pool.query(
-    `INSERT INTO notifications (user_id, type, title, message, link)
-     VALUES (?, ?, ?, ?, ?)`,
-    [userId, type, title, message || null, link || null],
-  );
-}
-
 function generatePaymentCode() {
   return `VIP-${Date.now()}-${Math.floor(Math.random() * 10000)
     .toString()
@@ -322,32 +314,31 @@ router.get("/owner/stats", authMiddleware, async (req, res) => {
   try {
     const [[overview]] = await pool.query(
       `SELECT
-        COUNT(DISTINCT p.id)                                    AS total_properties,
+        COUNT(p.id)                                             AS total_properties,
         SUM(CASE WHEN p.status = 'approved' THEN 1 ELSE 0 END) AS active_count,
         SUM(CASE WHEN p.status = 'pending'  THEN 1 ELSE 0 END) AS pending_count,
         SUM(CASE WHEN p.status = 'rejected' THEN 1 ELSE 0 END) AS rejected_count,
         SUM(CASE WHEN p.status = 'sold'     THEN 1 ELSE 0 END) AS sold_count,
         SUM(CASE WHEN p.status = 'hidden'   THEN 1 ELSE 0 END) AS hidden_count,
-        COUNT(DISTINCT pv.id)                                   AS total_views,
-        COUNT(DISTINCT c.id)                                    AS total_contacts
+        COALESCE(SUM(p.view_count), 0)                           AS total_views,
+        (SELECT COUNT(*)
+         FROM contacts c
+         JOIN properties cp ON c.property_id = cp.id
+         WHERE cp.owner_id = ?)                                  AS total_contacts
       FROM properties p
-      LEFT JOIN property_views pv ON p.id = pv.property_id
-      LEFT JOIN contacts       c  ON p.id = c.property_id
       WHERE p.owner_id = ?`,
-      [req.user.id],
+      [req.user.id, req.user.id],
     );
 
     // Top 5 tin được xem nhiều nhất
     const [topProperties] = await pool.query(
       `SELECT
         p.id, p.title, p.status, p.price, p.city, p.district,
-        COUNT(pv.id) AS view_count,
+        p.view_count,
         (SELECT pi.url FROM property_images pi
          WHERE pi.property_id = p.id ORDER BY pi.\`order\` LIMIT 1) AS thumbnail
       FROM properties p
-      LEFT JOIN property_views pv ON p.id = pv.property_id
       WHERE p.owner_id = ?
-      GROUP BY p.id
       ORDER BY view_count DESC
       LIMIT 5`,
       [req.user.id],
@@ -368,19 +359,7 @@ router.get("/owner/stats", authMiddleware, async (req, res) => {
       [req.user.id],
     );
 
-    // Views 7 ngày gần nhất (tất cả tin của owner)
-    const [viewsByDay] = await pool.query(
-      `SELECT
-        DATE(pv.viewed_at)  AS date,
-        COUNT(*)            AS views
-      FROM property_views pv
-      JOIN properties p ON pv.property_id = p.id
-      WHERE p.owner_id = ?
-        AND pv.viewed_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
-      GROUP BY DATE(pv.viewed_at)
-      ORDER BY date ASC`,
-      [req.user.id],
-    );
+    const viewsByDay = [];
 
     // Contacts chưa reply
     const [[{ pending_contacts }]] = await pool.query(
@@ -431,7 +410,7 @@ router.get("/owner/stats/:id", authMiddleware, async (req, res) => {
   try {
     // Kiểm tra tin thuộc owner này không
     const [rows] = await pool.query(
-      "SELECT id, title, status, price, area, city, district, created_at FROM properties WHERE id = ? AND owner_id = ?",
+      "SELECT id, title, status, price, area, city, district, view_count, created_at FROM properties WHERE id = ? AND owner_id = ?",
       [req.params.id, req.user.id],
     );
     if (rows.length === 0)
@@ -441,24 +420,8 @@ router.get("/owner/stats/:id", authMiddleware, async (req, res) => {
 
     const property = rows[0];
 
-    // Views theo ngày 7 ngày gần nhất
-    const [viewsByDay] = await pool.query(
-      `SELECT
-        DATE(viewed_at) AS date,
-        COUNT(*)        AS views
-      FROM property_views
-      WHERE property_id = ?
-        AND viewed_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
-      GROUP BY DATE(viewed_at)
-      ORDER BY date ASC`,
-      [req.params.id],
-    );
-
-    // Tổng views + contacts
-    const [[{ total_views }]] = await pool.query(
-      "SELECT COUNT(*) AS total_views FROM property_views WHERE property_id = ?",
-      [req.params.id],
-    );
+    const viewsByDay = [];
+    const total_views = property.view_count || 0;
     const [[{ total_contacts, pending_contacts }]] = await pool.query(
       `SELECT
         COUNT(*) AS total_contacts,
@@ -769,15 +732,6 @@ router.post("/featured-orders/:orderId/pay", authMiddleware, async (req, res) =>
       [endDate, order.property_id],
     );
 
-    await connection.query(
-      `INSERT INTO notifications (user_id, type, title, message, link)
-       VALUES (?, 'featured_paid', 'Thanh toán gói nổi bật thành công', ?, '/owner/dashboard')`,
-      [
-        req.user.id,
-        `Tin "${order.property_title}" đã được kích hoạt gói ${order.package_name} đến ${endDate.toLocaleDateString("vi-VN")}.`,
-      ],
-    );
-
     await connection.commit();
 
     res.json({
@@ -889,15 +843,6 @@ router.get("/vnpay-return", async (req, res) => {
       [endDate, order.property_id],
     );
 
-    await connection.query(
-      `INSERT INTO notifications (user_id, type, title, message, link)
-       VALUES (?, 'featured_paid', 'Thanh toán VNPay thành công', ?, '/owner/dashboard')`,
-      [
-        order.owner_id,
-        `Tin "${order.property_title}" đã được kích hoạt gói ${order.package_name} đến ${endDate.toLocaleDateString("vi-VN")}.`,
-      ],
-    );
-
     await connection.commit();
 
     res.json({
@@ -990,15 +935,6 @@ router.get("/vnpay-ipn", async (req, res) => {
     await connection.query(
       `UPDATE properties SET is_featured = 1, featured_until = ? WHERE id = ?`,
       [endDate, order.property_id],
-    );
-
-    await connection.query(
-      `INSERT INTO notifications (user_id, type, title, message, link)
-       VALUES (?, 'featured_paid', 'Thanh toán VNPay thành công', ?, '/owner/dashboard')`,
-      [
-        order.owner_id,
-        `Tin "${order.property_title}" đã được kích hoạt gói ${order.package_name} đến ${endDate.toLocaleDateString("vi-VN")}.`,
-      ],
     );
 
     await connection.commit();
@@ -1202,36 +1138,6 @@ router.patch("/:id/status", authMiddleware, async (req, res) => {
           ? "Admin duyệt tin đăng"
           : "Admin ẩn tin đăng",
     );
-
-    if (status === "approved") {
-      await createNotification(
-        property.owner_id,
-        "property_approved",
-        "Tin đăng đã được duyệt",
-        `Tin "${property.title}" đã được admin duyệt và đang hiển thị công khai.`,
-        "/owner/dashboard",
-      );
-    }
-
-    if (status === "rejected") {
-      await createNotification(
-        property.owner_id,
-        "property_rejected",
-        "Tin đăng bị từ chối",
-        `Tin "${property.title}" bị từ chối. Lý do: ${reason}`,
-        "/owner/dashboard",
-      );
-    }
-
-    if (status === "hidden") {
-      await createNotification(
-        property.owner_id,
-        "property_hidden",
-        "Tin đăng đã bị ẩn",
-        `Tin "${property.title}" đã bị admin ẩn khỏi hệ thống.`,
-        "/owner/dashboard",
-      );
-    }
 
     res.json({ message: "Cập nhật trạng thái thành công" });
   } catch (err) {
