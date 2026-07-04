@@ -1,43 +1,44 @@
-﻿# LVTN - Hệ thống quản lý bất động sản
+﻿# LVTN - Real Estate Management System
 
-Đây là project luận văn tốt nghiệp xây dựng website quản lý bất động sản theo kiến trúc Microservices. Hệ thống hỗ trợ 3 vai trò chính: **Buyer**, **Owner** và **Admin**.
+This graduation thesis project builds a real estate management website using a microservices architecture. The system supports three main roles: **Buyer**, **Owner**, and **Admin**.
 
-## 1. Chức năng chính
+## 1. Main Features
 
 ### Buyer
 
-- Đăng ký, đăng nhập, xác minh email bằng OTP.
-- Tìm kiếm và lọc bất động sản theo loại hình, hình thức giao dịch, khu vực, giá, diện tích và từ khóa.
-- Xem chi tiết tin đăng, hình ảnh, vị trí bản đồ và thông tin Owner.
-- Gửi yêu cầu liên hệ đến Owner.
-- Xem phản hồi liên hệ từ Owner.
-- Lưu và bỏ lưu tin yêu thích.
-- Cập nhật hồ sơ cá nhân, đổi mật khẩu, quên mật khẩu.
+- Register, log in, verify email with OTP, and reset password.
+- Search and filter real estate listings by property type, transaction type, location, price range, area range, and keyword.
+- View property details, images, map location, and Owner contact information.
+- Send contact requests to Owner.
+- View Owner responses and additional contact phone number.
+- Save and unsave favorite properties.
+- Update personal profile and change password.
 
 ### Owner
 
-- Tạo tin bất động sản.
-- AI hỗ trợ gợi ý mô tả tin đăng.
-- Chỉnh sửa tin đăng và upload hình ảnh.
-- Quản lý trạng thái tin: ẩn tin, hiện lại tin, đánh dấu đã giao dịch, xóa tin.
-- Xem lý do từ chối và gửi duyệt lại.
-- Xem và phản hồi yêu cầu liên hệ từ Buyer.
-- Quản lý lead liên hệ.
-- Xem dashboard thống kê và lịch sử trạng thái tin đăng.
+- Create real estate listings.
+- Use AI support to generate listing descriptions from entered property information.
+- Edit listings and upload property images.
+- Manage listing status: hide listing, resubmit listing, mark as sold/rented, and delete listing.
+- View rejection reason and edit listing before resubmitting for approval.
+- View listing status history.
+- View and reply to Buyer contact requests.
+- Manage contact leads.
+- Buy or renew featured packages for each approved listing through VNPay Sandbox.
+- View Owner dashboard statistics.
 
 ### Admin
 
-- Đăng nhập với vai trò Admin.
-- Xem danh sách tin chờ duyệt.
-- Xem chi tiết tin đăng trước khi duyệt.
-- Duyệt, từ chối kèm lý do, ẩn tin vi phạm.
-- Bật/tắt tin nổi bật.
-- Quản lý tài khoản người dùng.
-- Xem dashboard thống kê tổng quan.
+- Log in with Admin role.
+- View and filter property listings.
+- View property details before approval.
+- Approve listings, reject listings with reason, and hide violating listings.
+- Manage user accounts: activate or disable accounts.
+- View dashboard statistics.
 
-## 2. Kiến trúc hệ thống
+## 2. System Architecture
 
-Hệ thống được chia thành các thành phần:
+The system is divided into the following components:
 
 ```text
 frontend
@@ -50,40 +51,48 @@ services
 mysql
 ```
 
-### Các service
+### Services
 
-| Service | Port | Chức năng |
+| Service | Port | Responsibility |
 |---|---:|---|
-| Frontend | 5173 | Giao diện React/Vite |
-| API Gateway | 3000 | Điều hướng request đến các service |
-| Auth Service | 3001 | Đăng ký, đăng nhập, OTP, quên mật khẩu, hồ sơ cá nhân, thông báo, quản lý user |
-| Property Service | 3002 | Quản lý tin đăng, upload ảnh, duyệt tin, lịch sử trạng thái, AI mô tả |
-| Listing Service | 3003 | API public tìm kiếm, lọc và xem chi tiết bất động sản |
-| Contact Service | 3004 | Liên hệ Buyer/Owner, phản hồi, lưu tin yêu thích, quản lý lead |
-| MySQL | 3307 | Cơ sở dữ liệu |
+| Frontend | 5173 | React/Vite user interface |
+| API Gateway | 3000 | Routes requests from frontend to backend services |
+| Auth Service | 3001 | Register, login, OTP verification, forgot password, profile, user management |
+| Property Service | 3002 | Property CRUD, image upload, approval workflow, status history, AI description, featured packages, VNPay payment |
+| Listing Service | 3003 | Public search, filter, listing detail, similar listings |
+| Contact Service | 3004 | Buyer/Owner contact flow, Owner reply, saved properties, lead management |
+| MySQL | 3307 | Relational database |
 
-API Gateway là điểm truy cập chính của frontend:
+API Gateway is the main backend entry point for the frontend:
 
 ```text
 http://localhost:3000
 ```
 
-## 3. Công nghệ sử dụng
+## 3. Technology Stack
 
 - Frontend: React, Vite, Axios, React Router, Leaflet.
 - Backend: Node.js, Express.js.
 - Database: MySQL 8.
 - Authentication: JWT, bcrypt.
 - Email: NodeMailer.
-- Upload hình ảnh: Cloudinary.
+- Image upload: Cloudinary.
+- Payment: VNPay Sandbox.
+- AI support: Rule-based AI description generation for property listings.
+- Testing: Jest, Supertest.
 - Container: Docker, Docker Compose.
+- CI/CD: GitHub Actions.
 - Source control: Git/GitHub.
 
-## 4. Cấu trúc thư mục
+## 4. Folder Structure
 
 ```text
 LVTN/
+  .github/
+    workflows/
+      ci.yml
   api-gateway/
+  docs/
   frontend/
   services/
     auth-service/
@@ -96,9 +105,9 @@ LVTN/
   README.md
 ```
 
-## 5. Biến môi trường
+## 5. Environment Variables
 
-Tạo file `.env` ở thư mục gốc project:
+Create a `.env` file in the project root:
 
 ```env
 DB_HOST=mysql
@@ -115,43 +124,50 @@ MAIL_PASS=your_app_password
 CLOUDINARY_CLOUD_NAME=your_cloud_name
 CLOUDINARY_API_KEY=your_api_key
 CLOUDINARY_API_SECRET=your_api_secret
+
+VNPAY_TMN_CODE=your_vnpay_tmn_code
+VNPAY_HASH_SECRET=your_vnpay_hash_secret
+VNPAY_PAYMENT_URL=https://sandbox.vnpayment.vn/paymentv2/vpcpay.html
+VNPAY_RETURN_URL=https://lvtn-bds.vercel.app/payment/vnpay-return
+VNPAY_IPN_URL=http://localhost:3000/api/property/vnpay-ipn
 ```
 
-Lưu ý:
+Notes:
 
-- `MAIL_PASS` nên là app password của email, không nên dùng mật khẩu đăng nhập trực tiếp.
-- Cloudinary dùng cho chức năng upload hình ảnh bất động sản.
+- `MAIL_PASS` should be an app password, not the normal email login password.
+- Cloudinary is used for property image upload.
+- VNPay variables are used for Sandbox payment testing.
 
-## 6. Chạy project bằng Docker
+## 6. Run With Docker
 
-Tại thư mục gốc project:
+At the project root:
 
 ```bash
 docker compose up -d --build
 ```
 
-Kiểm tra container:
+Check containers:
 
 ```bash
 docker compose ps
 ```
 
-Dừng project:
+Stop containers:
 
 ```bash
 docker compose down
 ```
 
-Reset lại database từ đầu:
+Reset the database from scratch:
 
 ```bash
 docker compose down -v
 docker compose up -d --build
 ```
 
-## 7. Chạy frontend
+## 7. Run Frontend
 
-Nếu backend đang chạy bằng Docker, có thể chạy frontend riêng:
+If backend services are running with Docker, frontend can be run separately:
 
 ```bash
 cd frontend
@@ -159,7 +175,7 @@ npm install
 npm run dev
 ```
 
-Frontend mặc định chạy tại:
+Frontend default URL:
 
 ```text
 http://localhost:5173
@@ -173,13 +189,13 @@ npm run build
 
 ## 8. Database
 
-File `init.sql` được dùng để:
+The `init.sql` file is used to:
 
-- Tạo các bảng chính.
-- Tạo khóa chính, khóa ngoại.
-- Tạo dữ liệu mẫu để demo.
+- Create database tables.
+- Create primary keys and foreign keys.
+- Insert sample data for demo.
 
-Một số bảng chính:
+Main tables:
 
 - `users`
 - `otp_codes`
@@ -188,20 +204,27 @@ Một số bảng chính:
 - `contacts`
 - `saved_properties`
 - `property_status_history`
+- `featured_packages`
+- `featured_orders`
 
-## 9. API endpoints chính
+Removed/simplified tables:
+
+- `property_views` was removed. Listing views are stored directly in `properties.view_count`.
+- `notifications` was removed. User messages are shown directly in the related UI flow.
+
+## 9. Main API Endpoints
 
 ### Auth Service
 
 ```text
 POST   /api/auth/register
 POST   /api/auth/login
+POST   /api/auth/send-otp
 POST   /api/auth/verify-email
-POST   /api/auth/resend-otp
 POST   /api/auth/forgot-password
 POST   /api/auth/reset-password
 GET    /api/auth/me
-PUT    /api/auth/profile
+PUT    /api/auth/me
 PUT    /api/auth/change-password
 ```
 
@@ -217,9 +240,14 @@ PATCH  /api/property/:id/status
 PATCH  /api/property/:id/hide
 PATCH  /api/property/:id/unhide
 PATCH  /api/property/:id/sold
-PATCH  /api/property/:id/featured
 GET    /api/property/:id/history
 POST   /api/property/ai-description
+GET    /api/property/featured-packages
+GET    /api/property/owner/featured-orders
+POST   /api/property/:id/featured-orders
+POST   /api/property/featured-orders/:orderId/pay
+GET    /api/property/vnpay-return
+GET    /api/property/vnpay-ipn
 ```
 
 ### Listing Service
@@ -227,6 +255,7 @@ POST   /api/property/ai-description
 ```text
 GET    /api/listing
 GET    /api/listing/:id
+GET    /api/listing/:id/similar
 ```
 
 ### Contact Service
@@ -236,9 +265,9 @@ POST   /api/contact
 GET    /api/contact/buyer
 GET    /api/contact/owner
 PATCH  /api/contact/:id/reply
-PATCH  /api/contact/:id/lead-status
-POST   /api/contact/save/:propertyId
-DELETE /api/contact/save/:propertyId
+PATCH  /api/contact/:id/lead
+POST   /api/contact/saved
+DELETE /api/contact/saved/:property_id
 GET    /api/contact/saved
 ```
 
@@ -250,64 +279,101 @@ PATCH  /api/admin/users/:id/status
 GET    /api/admin/dashboard
 ```
 
-## 10. Kiểm thử và kiểm tra
+## 10. Testing
 
-Kiểm tra frontend:
+Backend service tests use Jest and Supertest.
+
+### Test Coverage Scope
+
+| Service | Test Scope |
+|---|---|
+| Auth Service | Register, OTP, login, forgot password, reset password, change password |
+| Listing Service | Search/filter, listing detail, view count, similar listings |
+| Contact Service | Send contact request, Owner reply, Buyer contact history, saved properties, lead update |
+| Property Service | AI description, create property, approval workflow, status history, hide/sold/unhide, featured package order |
+
+### Run Backend Tests
+
+```bash
+cd services/auth-service && npm test
+cd ../listing-service && npm test
+cd ../contact-service && npm test
+cd ../property-service && npm test
+```
+
+### Run Backend Coverage
+
+```bash
+cd services/auth-service && npm run test:coverage
+cd ../listing-service && npm run test:coverage
+cd ../contact-service && npm run test:coverage
+cd ../property-service && npm run test:coverage
+```
+
+Current backend test result:
+
+| Service | Tests | Result |
+|---|---:|---|
+| Auth Service | 9 | Passed |
+| Listing Service | 7 | Passed |
+| Contact Service | 10 | Passed |
+| Property Service | 12 | Passed |
+| Total | 38 | Passed |
+
+Current line coverage:
+
+| Service | Line Coverage |
+|---|---:|
+| Auth Service | 64.67% |
+| Listing Service | 57.26% |
+| Contact Service | 79.00% |
+| Property Service | 42.15% |
+
+### Frontend Build Check
 
 ```bash
 cd frontend
 npm run build
 ```
 
-Kiểm tra cú pháp backend:
-
-```bash
-node --check api-gateway/index.js
-node --check services/auth-service/src/routes/auth.js
-node --check services/property-service/src/routes/property.js
-node --check services/contact-service/src/routes/contact.js
-```
-
-Trong báo cáo, các kịch bản kiểm thử chính được chia theo vai trò:
-
-- Người dùng chung: đăng ký, xác minh email, đăng nhập, quên mật khẩu.
-- Buyer: tìm kiếm, xem chi tiết, gửi liên hệ, lưu tin.
-- Owner: đăng tin, AI mô tả, chỉnh sửa tin, phản hồi liên hệ.
-- Admin: duyệt/từ chối tin, quản lý tài khoản, dashboard.
-
 ## 11. CI/CD
 
-Project đã có các nền tảng phục vụ CI/CD:
+The project includes GitHub Actions configuration in `.github/workflows/ci.yml`.
 
-- Quản lý mã nguồn bằng Git/GitHub.
-- Chạy hệ thống bằng Docker Compose.
-- Có API Gateway cho kiến trúc microservices.
-- Có lệnh build frontend.
-- Có thể kiểm tra cú pháp backend bằng `node --check`.
+The CI workflow is used to:
 
-Hướng phát triển tiếp theo:
+- Build/check frontend source.
+- Check backend service test commands where configured.
+- Support automatic verification when code is pushed to GitHub.
 
-- Thêm GitHub Actions để tự động build frontend.
-- Thêm GitHub Actions để kiểm tra backend.
-- Thêm test tự động bằng Playwright cho các luồng giao diện chính.
-- Triển khai lên cloud/VPS nếu cần demo online.
+Additional CI/CD documentation is available in:
 
-## 12. Tài khoản demo
+```text
+docs/CI_CD.md
+```
 
-Tài khoản demo được tạo trong `init.sql`. Có thể xem và điều chỉnh trực tiếp trong file này khi reset database.
+Planned improvements:
 
-Vai trò chính:
+- Add Playwright system tests for main UI workflows.
+- Add stress testing for high-traffic APIs.
+- Deploy backend services to a cloud/VPS environment.
+
+## 12. Demo Accounts
+
+Demo accounts are created in `init.sql`. They can be changed directly in `init.sql` before resetting the database.
+
+Main roles:
 
 - Buyer
 - Owner
 - Admin
 
-## 13. Ghi chú
+## 13. Notes
 
-- Tin mới tạo sẽ ở trạng thái `pending` và cần Admin duyệt.
-- Buyer chỉ xem được tin đã được duyệt.
-- Owner xem được lý do từ chối và có thể chỉnh sửa để gửi duyệt lại.
-- Các thao tác nguy hiểm như xóa/ẩn/duyệt/tắt tài khoản có popup xác nhận.
-- AI mô tả tin đăng hiện tại là chức năng hỗ trợ tạo nội dung dựa trên dữ liệu tin đăng đã nhập.
-
-
+- New property listings are created with `pending` status and require Admin approval.
+- Buyer can only view approved property listings.
+- Owner can view rejection reasons, edit listings, and resubmit them for approval.
+- Featured packages are purchased by Owner for each approved property listing.
+- VNPay integration is configured for Sandbox testing.
+- Important actions such as delete, hide, approve, reject, and account disable include confirmation dialogs in the UI.
+- AI description generation is currently a support feature based on the property information entered by Owner.
