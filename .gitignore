@@ -1,4 +1,4 @@
-# Environment — KHÔNG được commit file này
+﻿# Environment â€” KHÃ”NG Ä‘Æ°á»£c commit file nÃ y
 .env
 
 # Dependencies
@@ -12,3 +12,8 @@ npm-debug.log*
 # OS
 .DS_Store
 Thumbs.db
+
+# Test coverage
+coverage/
+**/coverage/
+
