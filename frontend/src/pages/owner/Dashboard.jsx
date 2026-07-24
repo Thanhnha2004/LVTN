@@ -41,7 +41,6 @@ function formatCurrency(value) {
 
 function isFeaturedActive(property) {
   return (
-    property?.is_featured === 1 &&
     property?.featured_until &&
     new Date(property.featured_until) > new Date()
   );
@@ -505,7 +504,6 @@ export default function OwnerDashboard() {
   const contacts =
     ownerStats?.overview?.total_contacts ??
     properties.reduce((s, p) => s + (p.contact_count || 0), 0);
-  const unread = properties.reduce((s, p) => s + (p.unread_contacts || 0), 0);
 
   const tabCount = (key) => {
     if (key === "all") return total;

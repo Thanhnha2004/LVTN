@@ -34,25 +34,21 @@ const CATEGORIES = [
   {
     value: "apartment",
     label: "Căn hộ",
-    count: "1,240 tin đăng",
     img: "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?w=600&q=80",
   },
   {
     value: "house",
     label: "Biệt thự",
-    count: "856 tin đăng",
     img: "https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=600&q=80",
   },
   {
     value: "office",
     label: "Văn phòng",
-    count: "520 tin đăng",
     img: "https://images.unsplash.com/photo-1497366216548-37526070297c?w=600&q=80",
   },
   {
     value: "land",
     label: "Đất nền",
-    count: "2,100 tin đăng",
     img: "https://images.unsplash.com/photo-1500382017468-9049fed747ef?w=600&q=80",
   },
 ];
@@ -63,9 +59,7 @@ function PropertyCard({ property }) {
   const [saved, setSaved] = useState(false);
   const isRent = property.transaction_type === "rent";
   const isFeatured =
-    property.is_featured &&
-    (!property.featured_until || new Date(property.featured_until) > new Date());
-
+    property.featured_until && new Date(property.featured_until) > new Date();
   return (
     <div
       style={{
@@ -226,6 +220,9 @@ export default function Home() {
   const [properties, setProperties] = useState([]);
   const [pagination, setPagination] = useState({});
   const [loading, setLoading] = useState(false);
+  const [featuredProperties, setFeaturedProperties] = useState([]);
+  const [featuredLoading, setFeaturedLoading] = useState(false);
+  const [categoryCounts, setCategoryCounts] = useState(null);
 
   const [activeTab, setActiveTab] = useState("sale");
   const [search, setSearch] = useState({
@@ -265,6 +262,11 @@ export default function Home() {
     fetchProperties(filter);
   }, [filter]);
 
+  useEffect(() => {
+    fetchFeaturedProperties();
+    fetchCategoryCounts();
+  }, []);
+
   const handleSearch = () => {
     let min_price = "";
     let max_price = "";
@@ -286,14 +288,54 @@ export default function Home() {
     navigate(`/search?${params.toString()}`);
   };
 
+  const fetchFeaturedProperties = async () => {
+    setFeaturedLoading(true);
+    try {
+      const res = await api.get(
+        "/api/listing?featured_only=1&sort=newest&limit=8",
+      );
+      setFeaturedProperties(res.data.data || []);
+    } catch {
+      setFeaturedProperties([]);
+    } finally {
+      setFeaturedLoading(false);
+    }
+  };
+
+  const fetchCategoryCounts = async () => {
+    try {
+      const res = await api.get("/api/listing/category-counts");
+      setCategoryCounts(res.data.data || {});
+    } catch {
+      try {
+        const entries = await Promise.all(
+          CATEGORIES.map(async (cat) => {
+            const res = await api.get(
+              `/api/listing?type=${cat.value}&page=1&limit=1`,
+            );
+            return [cat.value, res.data.pagination?.total || 0];
+          }),
+        );
+        setCategoryCounts(Object.fromEntries(entries));
+      } catch {
+        setCategoryCounts({});
+      }
+    }
+  };
+
   const handleTabChange = (val) => {
     setActiveTab(val);
     setFilter((f) => ({ ...f, transaction_type: val, page: 1 }));
   };
 
   const handleCategoryClick = (cat) => {
-    navigate(`/search?keyword=${encodeURIComponent(cat.label)}`);
+    navigate(`/search?type=${encodeURIComponent(cat.value)}`);
   };
+
+  const formatCategoryCount = (type) =>
+    categoryCounts
+      ? `${(categoryCounts[type] || 0).toLocaleString("vi-VN")} tin đăng`
+      : "Đang tải...";
 
   return (
     <div
@@ -617,7 +659,7 @@ export default function Home() {
                     {cat.label}
                   </p>
                   <p style={{ fontSize: 12, opacity: 0.8, margin: 0 }}>
-                    {cat.count}
+                    {formatCategoryCount(cat.value)}
                   </p>
                 </div>
               </div>
@@ -646,50 +688,9 @@ export default function Home() {
               }}>
               Tin đăng nổi bật
             </h2>
-            <div style={{ display: "flex", gap: 8 }}>
-              <button
-                onClick={() =>
-                  setFilter((f) => ({
-                    ...f,
-                    page: Math.max(1, (f.page || 1) - 1),
-                  }))
-                }
-                style={{
-                  width: 38,
-                  height: 38,
-                  borderRadius: "50%",
-                  border: "1px solid #E8E8E8",
-                  background: "#fff",
-                  cursor: "pointer",
-                  fontSize: 16,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}>
-                ‹
-              </button>
-              <button
-                onClick={() =>
-                  setFilter((f) => ({ ...f, page: (f.page || 1) + 1 }))
-                }
-                style={{
-                  width: 38,
-                  height: 38,
-                  borderRadius: "50%",
-                  border: "1px solid #E8E8E8",
-                  background: "#fff",
-                  cursor: "pointer",
-                  fontSize: 16,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}>
-                ›
-              </button>
-            </div>
           </div>
 
-          {loading ? (
+          {featuredLoading ? (
             <div style={{ textAlign: "center", padding: "60px 0" }}>
               <div
                 style={{
@@ -704,7 +705,7 @@ export default function Home() {
               />
               <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
             </div>
-          ) : properties.length === 0 ? (
+          ) : featuredProperties.length === 0 ? (
             <div style={{ textAlign: "center", padding: "60px 0" }}>
               <UiIcon name="home" size={56} color="#9a9a9a" />
               <h5 style={{ color: "#757575", marginTop: 12 }}>
@@ -721,7 +722,7 @@ export default function Home() {
                 gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))",
                 gap: 24,
               }}>
-              {properties.map((p) => (
+              {featuredProperties.map((p) => (
                 <PropertyCard key={p.id} property={p} />
               ))}
             </div>
@@ -1080,4 +1081,3 @@ export default function Home() {
     </div>
   );
 }
-

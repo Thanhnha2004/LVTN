@@ -45,7 +45,6 @@ export default function CreateProperty() {
   const fileRef = useRef();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
-  const [generatingDescription, setGeneratingDescription] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
   const [newPropertyId, setNewPropertyId] = useState(null);
@@ -75,60 +74,15 @@ export default function CreateProperty() {
   const set = (field) => (e) =>
     setForm((f) => ({ ...f, [field]: e.target.value }));
 
-  const handleGenerateDescription = async () => {
-    setError("");
-    setGeneratingDescription(true);
-    try {
-      const res = await api.post("/api/property/ai-description", form);
-      setForm((f) => ({ ...f, description: res.data.description || "" }));
-      showToast("Đã tạo gợi ý mô tả tin đăng.");
-    } catch (err) {
-      const message =
-        err.response?.data?.message || "Không thể tạo mô tả, vui lòng thử lại.";
-      setError(message);
-      showToast(message, "error");
-    } finally {
-      setGeneratingDescription(false);
-    }
-  };
 
   const focusStyle = (e) => (e.target.style.borderColor = "#b51b17");
   const blurStyle = (e) => (e.target.style.borderColor = "#E8E8E8");
 
   const renderDescriptionField = () => (
     <div style={{ marginBottom: 24 }}>
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          gap: 12,
-          marginBottom: 8,
-        }}>
-        <label style={{ ...labelStyle, marginBottom: 0 }}>
-          Mô tả chi tiết <span style={{ color: "#b51b17" }}>*</span>
-        </label>
-        <button
-          type="button"
-          onClick={handleGenerateDescription}
-          disabled={generatingDescription}
-          style={{
-            border: "1px solid #b51b17",
-            background: generatingDescription ? "#f7d6d2" : "#fff",
-            color: "#b51b17",
-            borderRadius: 8,
-            padding: "8px 12px",
-            fontSize: 12,
-            fontWeight: 700,
-            cursor: generatingDescription ? "not-allowed" : "pointer",
-            display: "flex",
-            alignItems: "center",
-            gap: 6,
-          }}>
-          <UiIcon name="edit" size={14} />
-          {generatingDescription ? "Đang tạo..." : "Gợi ý mô tả"}
-        </button>
-      </div>
+      <label style={labelStyle}>
+        Mô tả chi tiết <span style={{ color: "#b51b17" }}>*</span>
+      </label>
       <textarea
         rows={5}
         placeholder="Mô tả đặc điểm nổi bật, vị trí, tiện ích, pháp lý..."

@@ -1,0 +1,82 @@
+<mxfile host="app.diagrams.net">
+  <diagram name="Use case tong quat">
+    <mxGraphModel dx="1400" dy="850" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1300" pageHeight="900" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="system" value="Hệ thống quản lý bất động sản" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#111827;fontStyle=1;fontSize=16;" vertex="1" parent="1">
+          <mxGeometry x="110" y="30" width="1080" height="800" as="geometry"/>
+        </mxCell>
+        <mxCell id="buyer" value="Buyer" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;" vertex="1" parent="1">
+          <mxGeometry x="25" y="260" width="35" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="owner" value="Owner" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;" vertex="1" parent="1">
+          <mxGeometry x="1230" y="245" width="35" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="admin" value="Admin" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;" vertex="1" parent="1">
+          <mxGeometry x="25" y="610" width="35" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="vnpay" value="VNPay" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;" vertex="1" parent="1">
+          <mxGeometry x="1230" y="610" width="35" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="ucRegister" value="Đăng ký tài khoản" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#111827;" vertex="1" parent="1"><mxGeometry x="500" y="75" width="170" height="50" as="geometry"/></mxCell>
+        <mxCell id="ucLogin" value="Đăng nhập" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#111827;" vertex="1" parent="1"><mxGeometry x="500" y="170" width="170" height="50" as="geometry"/></mxCell>
+        <mxCell id="ucOtp" value="Xác minh email (OTP)" style="ellipse;whiteSpace=wrap;html=1;fillColor=#fff7ed;strokeColor=#f59e0b;" vertex="1" parent="1"><mxGeometry x="500" y="265" width="170" height="50" as="geometry"/></mxCell>
+        <mxCell id="ucForgot" value="Quên mật khẩu" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#111827;" vertex="1" parent="1"><mxGeometry x="500" y="360" width="170" height="50" as="geometry"/></mxCell>
+        <mxCell id="bSearch" value="Tìm kiếm và lọc BĐS" style="ellipse;whiteSpace=wrap;html=1;fillColor=#dbeafe;strokeColor=#2563eb;" vertex="1" parent="1"><mxGeometry x="170" y="80" width="190" height="50" as="geometry"/></mxCell>
+        <mxCell id="bDetail" value="Xem chi tiết BĐS" style="ellipse;whiteSpace=wrap;html=1;fillColor=#dbeafe;strokeColor=#2563eb;" vertex="1" parent="1"><mxGeometry x="170" y="155" width="190" height="50" as="geometry"/></mxCell>
+        <mxCell id="bMap" value="Xem vị trí trên bản đồ" style="ellipse;whiteSpace=wrap;html=1;fillColor=#dbeafe;strokeColor=#2563eb;" vertex="1" parent="1"><mxGeometry x="170" y="230" width="190" height="50" as="geometry"/></mxCell>
+        <mxCell id="bContact" value="Gửi yêu cầu liên hệ" style="ellipse;whiteSpace=wrap;html=1;fillColor=#dbeafe;strokeColor=#2563eb;" vertex="1" parent="1"><mxGeometry x="170" y="305" width="190" height="50" as="geometry"/></mxCell>
+        <mxCell id="bTrack" value="Theo dõi liên hệ đã gửi" style="ellipse;whiteSpace=wrap;html=1;fillColor=#dbeafe;strokeColor=#2563eb;" vertex="1" parent="1"><mxGeometry x="170" y="380" width="190" height="50" as="geometry"/></mxCell>
+        <mxCell id="bSave" value="Lưu / bỏ lưu tin yêu thích" style="ellipse;whiteSpace=wrap;html=1;fillColor=#dbeafe;strokeColor=#2563eb;" vertex="1" parent="1"><mxGeometry x="170" y="455" width="190" height="50" as="geometry"/></mxCell>
+        <mxCell id="oCreate" value="Đăng tin bất động sản" style="ellipse;whiteSpace=wrap;html=1;fillColor=#fef3c7;strokeColor=#d97706;" vertex="1" parent="1"><mxGeometry x="850" y="80" width="200" height="50" as="geometry"/></mxCell>
+        <mxCell id="oEdit" value="Chỉnh sửa tin đăng" style="ellipse;whiteSpace=wrap;html=1;fillColor=#fef3c7;strokeColor=#d97706;" vertex="1" parent="1"><mxGeometry x="850" y="155" width="200" height="50" as="geometry"/></mxCell>
+        <mxCell id="oToggle" value="Ẩn / hiện tin đăng" style="ellipse;whiteSpace=wrap;html=1;fillColor=#fef3c7;strokeColor=#d97706;" vertex="1" parent="1"><mxGeometry x="850" y="230" width="200" height="50" as="geometry"/></mxCell>
+        <mxCell id="oSold" value="Đánh dấu đã giao dịch" style="ellipse;whiteSpace=wrap;html=1;fillColor=#fef3c7;strokeColor=#d97706;" vertex="1" parent="1"><mxGeometry x="850" y="305" width="200" height="50" as="geometry"/></mxCell>
+        <mxCell id="oDelete" value="Xóa tin đăng" style="ellipse;whiteSpace=wrap;html=1;fillColor=#fef3c7;strokeColor=#d97706;" vertex="1" parent="1"><mxGeometry x="850" y="380" width="200" height="50" as="geometry"/></mxCell>
+        <mxCell id="oLead" value="Quản lý liên hệ / lead" style="ellipse;whiteSpace=wrap;html=1;fillColor=#fef3c7;strokeColor=#d97706;" vertex="1" parent="1"><mxGeometry x="850" y="455" width="200" height="50" as="geometry"/></mxCell>
+        <mxCell id="oReason" value="Xem lý do từ chối" style="ellipse;whiteSpace=wrap;html=1;fillColor=#fef3c7;strokeColor=#d97706;" vertex="1" parent="1"><mxGeometry x="850" y="530" width="200" height="50" as="geometry"/></mxCell>
+        <mxCell id="oHistory" value="Xem lịch sử trạng thái tin" style="ellipse;whiteSpace=wrap;html=1;fillColor=#fef3c7;strokeColor=#d97706;" vertex="1" parent="1"><mxGeometry x="850" y="605" width="200" height="50" as="geometry"/></mxCell>
+        <mxCell id="oFeatured" value="Mua / gia hạn gói nổi bật" style="ellipse;whiteSpace=wrap;html=1;fontStyle=1;fillColor=#fef3c7;strokeColor=#d97706;" vertex="1" parent="1"><mxGeometry x="850" y="680" width="200" height="50" as="geometry"/></mxCell>
+        <mxCell id="pay" value="Thanh toán VNPay" style="ellipse;whiteSpace=wrap;html=1;fontStyle=1;fillColor=#fff7ed;strokeColor=#f59e0b;" vertex="1" parent="1"><mxGeometry x="850" y="760" width="200" height="50" as="geometry"/></mxCell>
+        <mxCell id="aList" value="Xem / lọc danh sách tin đăng" style="ellipse;whiteSpace=wrap;html=1;fillColor=#fee2e2;strokeColor=#dc2626;" vertex="1" parent="1"><mxGeometry x="170" y="560" width="210" height="50" as="geometry"/></mxCell>
+        <mxCell id="aReview" value="Duyệt / từ chối tin đăng" style="ellipse;whiteSpace=wrap;html=1;fillColor=#fee2e2;strokeColor=#dc2626;" vertex="1" parent="1"><mxGeometry x="170" y="635" width="210" height="50" as="geometry"/></mxCell>
+        <mxCell id="aReject" value="Nhập lý do từ chối" style="ellipse;whiteSpace=wrap;html=1;fillColor=#fee2e2;strokeColor=#dc2626;" vertex="1" parent="1"><mxGeometry x="420" y="635" width="180" height="50" as="geometry"/></mxCell>
+        <mxCell id="aDash" value="Xem thống kê Dashboard" style="ellipse;whiteSpace=wrap;html=1;fillColor=#fee2e2;strokeColor=#dc2626;" vertex="1" parent="1"><mxGeometry x="170" y="710" width="210" height="50" as="geometry"/></mxCell>
+        <mxCell id="aUsers" value="Quản lý tài khoản người dùng" style="ellipse;whiteSpace=wrap;html=1;fillColor=#fee2e2;strokeColor=#dc2626;" vertex="1" parent="1"><mxGeometry x="420" y="710" width="220" height="50" as="geometry"/></mxCell>
+        <mxCell id="aToggle" value="Vô hiệu hóa / kích hoạt tài khoản" style="ellipse;whiteSpace=wrap;html=1;fillColor=#fee2e2;strokeColor=#dc2626;" vertex="1" parent="1"><mxGeometry x="420" y="775" width="220" height="50" as="geometry"/></mxCell>
+        <mxCell id="incOtp" value="&lt;&lt;include&gt;&gt;" style="endArrow=open;html=1;dashed=1;strokeColor=#374151;" edge="1" parent="1" source="ucRegister" target="ucOtp"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="incPay" value="&lt;&lt;include&gt;&gt;" style="endArrow=open;html=1;dashed=1;strokeColor=#374151;" edge="1" parent="1" source="oFeatured" target="pay"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="incReject" value="&lt;&lt;include&gt;&gt;" style="endArrow=open;html=1;dashed=1;strokeColor=#374151;" edge="1" parent="1" source="aReview" target="aReject"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="incToggleUser" value="&lt;&lt;include&gt;&gt;" style="endArrow=open;html=1;dashed=1;strokeColor=#374151;" edge="1" parent="1" source="aUsers" target="aToggle"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="buyerReg" style="endArrow=none;html=1;strokeColor=#374151;" edge="1" parent="1" source="buyer" target="ucRegister"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ownerReg" style="endArrow=none;html=1;strokeColor=#374151;" edge="1" parent="1" source="owner" target="ucRegister"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="buyerLogin" style="endArrow=none;html=1;strokeColor=#374151;" edge="1" parent="1" source="buyer" target="ucLogin"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ownerLogin" style="endArrow=none;html=1;strokeColor=#374151;" edge="1" parent="1" source="owner" target="ucLogin"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="adminLogin" style="endArrow=none;html=1;strokeColor=#374151;" edge="1" parent="1" source="admin" target="ucLogin"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="buyerForgot" style="endArrow=none;html=1;strokeColor=#374151;" edge="1" parent="1" source="buyer" target="ucForgot"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ownerForgot" style="endArrow=none;html=1;strokeColor=#374151;" edge="1" parent="1" source="owner" target="ucForgot"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="buyerSearch" style="endArrow=none;html=1;strokeColor=#374151;" edge="1" parent="1" source="buyer" target="bSearch"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="buyerDetail" style="endArrow=none;html=1;strokeColor=#374151;" edge="1" parent="1" source="buyer" target="bDetail"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="buyerMap" style="endArrow=none;html=1;strokeColor=#374151;" edge="1" parent="1" source="buyer" target="bMap"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="buyerContact" style="endArrow=none;html=1;strokeColor=#374151;" edge="1" parent="1" source="buyer" target="bContact"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="buyerTrack" style="endArrow=none;html=1;strokeColor=#374151;" edge="1" parent="1" source="buyer" target="bTrack"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="buyerSave" style="endArrow=none;html=1;strokeColor=#374151;" edge="1" parent="1" source="buyer" target="bSave"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ownerCreate" style="endArrow=none;html=1;strokeColor=#374151;" edge="1" parent="1" source="owner" target="oCreate"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ownerEdit" style="endArrow=none;html=1;strokeColor=#374151;" edge="1" parent="1" source="owner" target="oEdit"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ownerToggle" style="endArrow=none;html=1;strokeColor=#374151;" edge="1" parent="1" source="owner" target="oToggle"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ownerSold" style="endArrow=none;html=1;strokeColor=#374151;" edge="1" parent="1" source="owner" target="oSold"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ownerDelete" style="endArrow=none;html=1;strokeColor=#374151;" edge="1" parent="1" source="owner" target="oDelete"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ownerLead" style="endArrow=none;html=1;strokeColor=#374151;" edge="1" parent="1" source="owner" target="oLead"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ownerReason" style="endArrow=none;html=1;strokeColor=#374151;" edge="1" parent="1" source="owner" target="oReason"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ownerHistory" style="endArrow=none;html=1;strokeColor=#374151;" edge="1" parent="1" source="owner" target="oHistory"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ownerFeatured" style="endArrow=none;html=1;strokeColor=#374151;" edge="1" parent="1" source="owner" target="oFeatured"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="vnpayPay" style="endArrow=none;html=1;strokeColor=#374151;" edge="1" parent="1" source="vnpay" target="pay"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="adminList" style="endArrow=none;html=1;strokeColor=#374151;" edge="1" parent="1" source="admin" target="aList"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="adminReview" style="endArrow=none;html=1;strokeColor=#374151;" edge="1" parent="1" source="admin" target="aReview"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="adminDash" style="endArrow=none;html=1;strokeColor=#374151;" edge="1" parent="1" source="admin" target="aDash"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="adminUsers" style="endArrow=none;html=1;strokeColor=#374151;" edge="1" parent="1" source="admin" target="aUsers"><mxGeometry relative="1" as="geometry"/></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

@@ -14,6 +14,8 @@ function generateOtp() {
 
 // POST /api/auth/register
 // Tạo tài khoản với email_verified = 0, tự động gửi OTP
+// Public API: buyer/owner dang ky tai khoan, mat khau duoc hash bang bcrypt.
+// Sau khi tao user, he thong sinh OTP email_verify de bat buoc xac minh email.
 router.post("/register", async (req, res) => {
   const { full_name, email, password, role, phone_number } = req.body;
 
@@ -37,7 +39,9 @@ router.post("/register", async (req, res) => {
     if (existing.length > 0)
       return res.status(400).json({ message: "Email đã tồn tại" });
 
+    // Khong luu mat khau goc. bcrypt tao hash kem salt de bao ve mat khau trong database.
     const hash = await bcrypt.hash(password, 10);
+    // Client khong duoc tu y tao admin; chi chap nhan buyer/owner, role la thi fallback ve buyer.
     const validRole = ["buyer", "owner"].includes(role) ? role : "buyer";
 
     // Tạo tài khoản với email_verified = 0
@@ -56,6 +60,7 @@ router.post("/register", async (req, res) => {
     );
 
     // Gửi mail không đồng bộ không block response
+    // Gui mail bat dong bo: neu SMTP loi thi user van duoc tao, backend chi log loi gui mail.
     sendOtpEmail({ toEmail: email, toName: full_name, otp }).catch((err) =>
       console.error("Send OTP mail error:", err.message),
     );
@@ -72,6 +77,7 @@ router.post("/register", async (req, res) => {
 
 // POST /api/auth/send-otp
 // Gửi lại OTP (dùng khi user chưa xác minh hoặc OTP hết hạn)
+// Public API: tao OTP xac minh email moi, dong thoi vo hieu hoa cac OTP cu chua dung.
 router.post("/send-otp", async (req, res) => {
   const { email } = req.body;
   if (!email) return res.status(400).json({ message: "Thiếu email" });
@@ -89,6 +95,7 @@ router.post("/send-otp", async (req, res) => {
       return res.status(400).json({ message: "Email đã được xác minh" });
 
     // Đánh dấu OTP cũ là đã dùng
+    // Vo hieu hoa OTP cu de tai mot thoi diem user chi nen dung OTP moi nhat.
     await pool.query(
       "UPDATE otp_codes SET used = 1 WHERE user_id = ? AND type = 'email_verify' AND used = 0",
       [user.id],
@@ -115,6 +122,8 @@ router.post("/send-otp", async (req, res) => {
 
 // POST /api/auth/verify-email
 // Xác minh OTP — cập nhật email_verified = 1
+// Public API: kiem tra OTP dung ma, dung loai, chua dung va chua het han.
+// Neu hop le thi cap nhat users.email_verified = 1.
 router.post("/verify-email", async (req, res) => {
   const { email, otp } = req.body;
   if (!email || !otp)
@@ -135,6 +144,7 @@ router.post("/verify-email", async (req, res) => {
         .json({ message: "Email đã được xác minh trước đó" });
 
     // Tìm OTP hợp lệ: đúng mã, chưa dùng, chưa hết hạn
+    // OTP hop le phai dung user, dung code, dung muc dich, chua dung va con han.
     const [otpRows] = await pool.query(
       `SELECT id FROM otp_codes
        WHERE user_id = ?
@@ -168,6 +178,8 @@ router.post("/verify-email", async (req, res) => {
 
 // POST /api/auth/forgot-password
 // Gửi OTP đặt lại mật khẩu đến email tài khoản
+// Public API: tao OTP loai reset_password de nguoi dung dat lai mat khau.
+// Tai khoan banned khong duoc reset mat khau.
 router.post("/forgot-password", async (req, res) => {
   const { email } = req.body;
   if (!email) return res.status(400).json({ message: "Thiếu email" });
@@ -185,6 +197,7 @@ router.post("/forgot-password", async (req, res) => {
     if (user.status === "banned")
       return res.status(403).json({ message: "Tài khoản đang bị khóa" });
 
+    // Reset password dung type rieng de khong lan voi OTP xac minh email.
     await pool.query(
       "UPDATE otp_codes SET used = 1 WHERE user_id = ? AND type = 'reset_password' AND used = 0",
       [user.id],
@@ -202,7 +215,9 @@ router.post("/forgot-password", async (req, res) => {
       toEmail: user.email,
       toName: user.full_name,
       otp,
-    }).catch((err) => console.error("Send reset password OTP error:", err.message));
+    }).catch((err) =>
+      console.error("Send reset password OTP error:", err.message),
+    );
 
     res.json({ message: "Đã gửi mã OTP đặt lại mật khẩu về email" });
   } catch (err) {
@@ -212,11 +227,14 @@ router.post("/forgot-password", async (req, res) => {
 
 // POST /api/auth/reset-password
 // Kiểm tra OTP và cập nhật mật khẩu mới
+// Public API: xac thuc OTP reset_password, hash mat khau moi roi cap nhat password_hash.
 router.post("/reset-password", async (req, res) => {
   const { email, otp, new_password } = req.body;
 
   if (!email || !otp || !new_password)
-    return res.status(400).json({ message: "Thiếu email, OTP hoặc mật khẩu mới" });
+    return res
+      .status(400)
+      .json({ message: "Thiếu email, OTP hoặc mật khẩu mới" });
 
   if (new_password.length < 6)
     return res
@@ -236,6 +254,7 @@ router.post("/reset-password", async (req, res) => {
     if (user.status === "banned")
       return res.status(403).json({ message: "Tài khoản đang bị khóa" });
 
+    // Kiem tra OTP reset_password tuong tu email_verify, nhung type khac de dam bao dung muc dich.
     const [otpRows] = await pool.query(
       `SELECT id FROM otp_codes
        WHERE user_id = ?
@@ -253,6 +272,7 @@ router.post("/reset-password", async (req, res) => {
         .status(400)
         .json({ message: "Mã OTP không hợp lệ hoặc đã hết hạn" });
 
+    // Mat khau moi cung phai hash, khong bao gio update mat khau plain text vao users.
     const hash = await bcrypt.hash(new_password, 10);
     await pool.query("UPDATE users SET password_hash = ? WHERE id = ?", [
       hash,
@@ -270,6 +290,8 @@ router.post("/reset-password", async (req, res) => {
 
 // POST /api/auth/login
 // Thêm cảnh báo nếu email chưa xác minh (không chặn login)
+// Public API: kiem tra email, trang thai tai khoan, mat khau bcrypt va email_verified.
+// Neu hop le thi tra JWT gom id va role de frontend goi cac API can dang nhap.
 router.post("/login", async (req, res) => {
   const { email, password } = req.body;
   try {
@@ -284,6 +306,7 @@ router.post("/login", async (req, res) => {
     if (user.status === "banned")
       return res.status(403).json({ message: "Tài khoản bị khoá" });
 
+    // bcrypt.compare tu xu ly salt trong password_hash nen khong can giai ma mat khau.
     const match = await bcrypt.compare(password, user.password_hash);
     if (!match) return res.status(400).json({ message: "Sai mật khẩu" });
 
@@ -294,6 +317,8 @@ router.post("/login", async (req, res) => {
           "Tài khoản chưa được xác minh. Vui lòng nhập mã OTP đã gửi đến email trước khi đăng nhập.",
       });
 
+    // JWT chi chua thong tin can thiet cho phan quyen: id va role.
+    // expiresIn 7d giup token tu het han, giam rui ro neu token bi lo.
     const token = jwt.sign(
       { id: user.id, role: user.role },
       process.env.JWT_SECRET,
@@ -309,6 +334,7 @@ router.post("/login", async (req, res) => {
         email_verified: !!user.email_verified,
       },
       // Cảnh báo nhẹ — frontend hiển thị banner "Chưa xác minh email"
+      // Truong warning giu lai de frontend co the hien thi canh bao neu can.
       warning: user.email_verified
         ? null
         : "Email chưa được xác minh. Một số tính năng có thể bị hạn chế.",
@@ -319,6 +345,7 @@ router.post("/login", async (req, res) => {
 });
 
 // GET /api/auth/me
+// Protected API: lay thong tin user hien tai dua tren req.user.id trong JWT.
 router.get("/me", authMiddleware, async (req, res) => {
   try {
     const [rows] = await pool.query(
@@ -334,6 +361,7 @@ router.get("/me", authMiddleware, async (req, res) => {
 });
 
 // PUT /api/auth/me — cập nhật thông tin + avatar
+// Protected API: cap nhat ho so ca nhan. Neu co avatar thi upload qua Cloudinary va luu URL.
 router.put("/me", authMiddleware, upload.single("avatar"), async (req, res) => {
   const { full_name, phone_number } = req.body;
   if (!full_name) return res.status(400).json({ message: "Thiếu họ tên" });
@@ -343,6 +371,7 @@ router.put("/me", authMiddleware, upload.single("avatar"), async (req, res) => {
 
     if (req.file) {
       // Xoá avatar cũ trên Cloudinary nếu có
+      // Khi upload avatar moi, xoa avatar cu tren Cloudinary de tranh rac file.
       const [rows] = await pool.query(
         "SELECT avatar_url FROM users WHERE id = ?",
         [req.user.id],
@@ -381,6 +410,8 @@ router.put("/me", authMiddleware, upload.single("avatar"), async (req, res) => {
 });
 
 // PUT /api/auth/change-password — đổi mật khẩu
+// Protected API: doi mat khau bang cach so sanh old_password voi password_hash cu.
+// Mat khau moi tiep tuc duoc hash bang bcrypt truoc khi luu.
 router.put("/change-password", authMiddleware, async (req, res) => {
   const { old_password, new_password } = req.body;
   if (!old_password || !new_password)

@@ -2,6 +2,29 @@ const express = require("express");
 const pool = require("../db");
 const router = express.Router();
 
+// GET /api/listing/category-counts - số tin đã duyệt theo loại bất động sản
+// Public API: dem so tin approved theo type de trang chu hien thi so luong thuc te theo danh muc.
+router.get("/category-counts", async (req, res) => {
+  try {
+    const [rows] = await pool.query(
+      `SELECT type, COUNT(*) AS total
+       FROM properties
+       WHERE status = 'approved'
+       GROUP BY type`,
+    );
+
+    const counts = rows.reduce((acc, row) => {
+      acc[row.type] = Number(row.total) || 0;
+      return acc;
+    }, {});
+
+    res.json({ data: counts });
+  } catch (err) {
+    console.error("Listing category counts error:", err);
+    res.status(500).json({ message: "Lỗi server", error: err.message });
+  }
+});
+
 // GET /api/listing — tìm kiếm + lọc nâng cao + phân trang
 // Query params được hỗ trợ:
 //   Lọc cơ bản:   type, transaction_type, city, district, ward
@@ -27,6 +50,7 @@ router.get("/", async (req, res) => {
       bedrooms,
       direction,
       legal_status,
+      featured_only,
       keyword,
       bbox,
       sort = "newest",
@@ -34,6 +58,8 @@ router.get("/", async (req, res) => {
       limit = 10,
     } = req.query;
 
+    // Listing cong khai chi duoc hien thi tin da duoc admin duyet.
+    // Cac dieu kien loc ben duoi se duoc them dong vao mang conditions.
     let conditions = ["p.status = 'approved'"];
     let params = [];
 
@@ -42,6 +68,7 @@ router.get("/", async (req, res) => {
       const validTypes = ["apartment", "house", "land", "office"];
       if (!validTypes.includes(type))
         return res.status(400).json({ message: "Loại hình không hợp lệ" });
+      // Chi chap nhan type trong danh sach co dinh de tranh filter sai nghiep vu.
       conditions.push("p.type = ?");
       params.push(type);
     }
@@ -73,6 +100,7 @@ router.get("/", async (req, res) => {
       const v = parseFloat(min_price);
       if (isNaN(v) || v < 0)
         return res.status(400).json({ message: "min_price không hợp lệ" });
+      // Gia va dien tich duoc parse sang number truoc khi dua vao query de tranh gia tri khong hop le.
       conditions.push("p.price >= ?");
       params.push(v);
     }
@@ -131,9 +159,13 @@ router.get("/", async (req, res) => {
       conditions.push("p.legal_status = ?");
       params.push(legal_status);
     }
+    if (featured_only === "1") {
+      conditions.push("p.featured_until > NOW()");
+    }
 
     // --- Từ khoá (tìm trong title, description, address) ---
     if (keyword && keyword.trim()) {
+      // Keyword tim tren nhieu cot de nguoi dung co the tim theo tieu de, mo ta hoac vi tri.
       conditions.push(
         "(p.title LIKE ? OR p.description LIKE ? OR p.address LIKE ? OR p.district LIKE ? OR p.ward LIKE ?)",
       );
@@ -150,6 +182,7 @@ router.get("/", async (req, res) => {
           message:
             "bbox không hợp lệ. Định dạng: lat_min,lng_min,lat_max,lng_max",
         });
+      // bbox dung cho che do ban do: chi lay tin co toa do nam trong khung hien tai.
       const [latMin, lngMin, latMax, lngMax] = parts;
       conditions.push("p.latitude BETWEEN ? AND ?");
       conditions.push("p.longitude BETWEEN ? AND ?");
@@ -157,13 +190,16 @@ router.get("/", async (req, res) => {
     }
 
     // --- Sắp xếp ---
+    // Tin con han featured_until se duoc uu tien len dau danh sach.
+    const featuredOrder =
+      "CASE WHEN p.featured_until > NOW() THEN 1 ELSE 0 END DESC";
     const sortMap = {
-      newest: "active_featured DESC, p.created_at DESC",
-      oldest: "active_featured DESC, p.created_at ASC",
-      price_asc: "active_featured DESC, p.price ASC",
-      price_desc: "active_featured DESC, p.price DESC",
-      area_asc: "active_featured DESC, p.area ASC",
-      area_desc: "active_featured DESC, p.area DESC",
+      newest: `${featuredOrder}, p.created_at DESC`,
+      oldest: `${featuredOrder}, p.created_at ASC`,
+      price_asc: `${featuredOrder}, p.price ASC`,
+      price_desc: `${featuredOrder}, p.price DESC`,
+      area_asc: `${featuredOrder}, p.area ASC`,
+      area_desc: `${featuredOrder}, p.area DESC`,
     };
     const orderBy = sortMap[sort] || sortMap.newest;
 
@@ -172,9 +208,12 @@ router.get("/", async (req, res) => {
     const limitNum = Math.min(50, Math.max(1, parseInt(limit) || 10)); // tối đa 50
     const offset = (pageNum - 1) * limitNum;
 
+    // Noi cac dieu kien bang AND de tao menh de WHERE cuoi cung.
+    // Gia tri nguoi dung nam trong params, khong noi truc tiep vao SQL.
     const where = conditions.join(" AND ");
 
     // --- Query danh sách ---
+    // Query danh sach dung parameter binding (?) de tranh noi chuoi gia tri nguoi dung vao SQL.
     const [rows] = await pool.query(
       `SELECT
          p.id, p.title, p.type, p.transaction_type,
@@ -182,11 +221,9 @@ router.get("/", async (req, res) => {
          p.address, p.ward, p.district, p.city,
          p.latitude, p.longitude,
          p.direction, p.legal_status,
-         p.status, p.is_featured, p.featured_until, p.created_at,
-CASE
-  WHEN p.is_featured = 1 AND (p.featured_until IS NULL OR p.featured_until > NOW())
-  THEN 1 ELSE 0
-END AS active_featured,
+         p.status,
+         p.featured_until,
+         p.created_at,
          u.full_name AS owner_name,
          (SELECT pi.url
           FROM property_images pi
@@ -202,6 +239,7 @@ END AS active_featured,
     );
 
     // --- Query tổng số ---
+    // Query tong so record rieng de frontend tinh so trang phan trang.
     const [[{ total }]] = await pool.query(
       `SELECT COUNT(*) AS total FROM properties p WHERE ${where}`,
       params,
@@ -236,6 +274,7 @@ END AS active_featured,
 
 // GET /api/listing/:id — chi tiết tin (public)
 // Tự động tăng view_count trực tiếp trên bảng properties
+// Public API: xem chi tiet mot tin approved, gom anh thanh mang images va tang view_count.
 router.get("/:id", async (req, res) => {
   try {
     const [rows] = await pool.query(
@@ -259,8 +298,10 @@ router.get("/:id", async (req, res) => {
       return res.status(404).json({ message: "Không tìm thấy" });
 
     const property = rows[0];
+    // GROUP_CONCAT tra ve chuoi URL ngan cach bang dau phay, frontend can mang nen split lai.
     property.images = property.images ? property.images.split(",") : [];
 
+    // Tang view_count khong can chan response; neu tracking loi thi chi log, khong lam hong trang chi tiet.
     pool
       .query("UPDATE properties SET view_count = view_count + 1 WHERE id = ?", [
         req.params.id,
@@ -276,6 +317,7 @@ router.get("/:id", async (req, res) => {
 
 // GET /api/listing/:id/similar — gợi ý tin tương tự
 // Cùng type + transaction_type + city, loại trừ tin hiện tại
+// Public API: goi y toi da 6 tin tuong tu dua tren type, transaction_type, city va khoang gia +-50%.
 router.get("/:id/similar", async (req, res) => {
   try {
     // Lấy thông tin tin hiện tại
@@ -286,6 +328,7 @@ router.get("/:id/similar", async (req, res) => {
     if (base.length === 0)
       return res.status(404).json({ message: "Không tìm thấy" });
 
+    // Tin hien tai lam moc de lay cac tieu chi tim tin tuong tu.
     const { type, transaction_type, city, price } = base[0];
 
     // Tìm tin cùng loại, cùng thành phố, giá ±50%, tối đa 6 tin

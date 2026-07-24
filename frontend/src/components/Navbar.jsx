@@ -1,6 +1,21 @@
 ﻿import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+
+const navLinkStyle = ({ isActive }) => ({
+  fontSize: 14,
+  whiteSpace: "nowrap",
+  borderRadius: 8,
+  color: isActive ? "#8f1713" : "#1a1c1c",
+  background: isActive ? "rgba(181, 27, 23, 0.045)" : "transparent",
+  fontWeight: isActive ? 650 : 500,
+});
+
+const navButtonStyle = ({ isActive }) => ({
+  borderRadius: 6,
+  fontSize: 14,
+  opacity: isActive ? 0.92 : 1,
+});
 
 function UserDropdown({ user, onLogout }) {
   const [open, setOpen] = useState(false);
@@ -88,6 +103,7 @@ function UserDropdown({ user, onLogout }) {
 export default function Navbar() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const handleLogout = () => {
     logout();
@@ -130,32 +146,39 @@ export default function Navbar() {
             { label: "Văn phòng", type: "office" },
           ].map((item) => (
             <li key={item.label} className="nav-item">
-              <Link
-                className="nav-link text-dark fw-medium px-2"
-                style={{ fontSize: 14, whiteSpace: "nowrap" }}
+              <NavLink
+                className="nav-link fw-medium px-2"
+                style={() =>
+                  navLinkStyle({
+                    isActive:
+                      location.pathname === "/search" &&
+                      new URLSearchParams(location.search).get("type") ===
+                        item.type,
+                  })
+                }
                 to={`/search?type=${item.type}`}>
                 {item.label}
-              </Link>
+              </NavLink>
             </li>
           ))}
 
           {user?.role === "owner" && (
             <>
               <li className="nav-item">
-                <Link
-                  className="nav-link text-dark fw-medium px-2"
-                  style={{ fontSize: 14 }}
+                <NavLink
+                  className="nav-link fw-medium px-2"
+                  style={navLinkStyle}
                   to="/owner/dashboard">
                   Quản lý tin
-                </Link>
+                </NavLink>
               </li>
               <li className="nav-item">
-                <Link
-                  className="nav-link text-dark fw-medium px-2"
-                  style={{ fontSize: 14 }}
+                <NavLink
+                  className="nav-link fw-medium px-2"
+                  style={navLinkStyle}
                   to="/owner/contacts">
                   Liên hệ
-                </Link>
+                </NavLink>
               </li>
             </>
           )}
@@ -163,12 +186,12 @@ export default function Navbar() {
           {user?.role === "admin" && (
             <>
               <li className="nav-item">
-                <Link
-                  className="nav-link text-dark fw-medium px-2"
-                  style={{ fontSize: 14 }}
+                <NavLink
+                  className="nav-link fw-medium px-2"
+                  style={navLinkStyle}
                   to="/admin/dashboard">
                   Dashboard
-                </Link>
+                </NavLink>
               </li>
             </>
           )}
@@ -178,9 +201,17 @@ export default function Navbar() {
         <ul className="navbar-nav align-items-center gap-2">
           {user?.role === "buyer" && (
             <li className="nav-item">
-              <Link
-                className="nav-link text-dark px-2"
+              <NavLink
+                className="nav-link px-2"
                 to="/profile?tab=saved"
+                style={() =>
+                  navLinkStyle({
+                    isActive:
+                      location.pathname === "/profile" &&
+                      new URLSearchParams(location.search).get("tab") ===
+                        "saved",
+                  })
+                }
                 title="Tin đã lưu">
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -190,58 +221,65 @@ export default function Navbar() {
                   viewBox="0 0 16 16">
                   <path d="M8 1.314C12.438-3.248 23.534 4.735 8 15-7.534 4.736 3.562-3.248 8 1.314z" />
                 </svg>
-              </Link>
+              </NavLink>
             </li>
           )}
 
           {user?.role === "buyer" && (
             <li className="nav-item">
-              <Link
-                className="nav-link text-dark px-2"
+              <NavLink
+                className="nav-link px-2"
                 to="/profile?tab=contacts"
-                style={{ fontSize: 14 }}>
+                style={() =>
+                  navLinkStyle({
+                    isActive:
+                      location.pathname === "/profile" &&
+                      new URLSearchParams(location.search).get("tab") ===
+                        "contacts",
+                  })
+                }>
                 Liên hệ của tôi
-              </Link>
+              </NavLink>
             </li>
           )}
 
           {!user ? (
             <>
               <li className="nav-item">
-                <Link
-                  className="nav-link text-dark fw-medium px-2"
-                  style={{ fontSize: 14 }}
+                <NavLink
+                  className="nav-link fw-medium px-2"
+                  style={navLinkStyle}
                   to="/login">
                   Đăng nhập
-                </Link>
+                </NavLink>
               </li>
               <li className="nav-item">
-                <Link
-                  className="nav-link text-dark fw-medium px-2"
-                  style={{ fontSize: 14 }}
+                <NavLink
+                  className="nav-link fw-medium px-2"
+                  style={navLinkStyle}
                   to="/register">
                   Đăng ký
-                </Link>
+                </NavLink>
               </li>
               <li className="nav-item">
-                <Link
+                <NavLink
                   className="btn btn-danger btn-sm text-white px-3"
-                  style={{ borderRadius: 6, fontSize: 14 }}
+                  style={navButtonStyle}
                   to="/register">
                   Đăng tin
-                </Link>
+                </NavLink>
               </li>
             </>
           ) : (
             <>
               {user.role === "owner" && (
                 <li className="nav-item">
-                  <Link
+                  <NavLink
                     className="btn btn-danger btn-sm text-white px-3"
-                    style={{ borderRadius: 6, fontSize: 14 }}
+                    style={navButtonStyle}
                     to="/owner/create">
                     + Đăng tin
-                  </Link>
+                  </NavLink>
                 </li>
               )}
               <UserDropdown user={user} onLogout={handleLogout} />
@@ -252,4 +290,5 @@ export default function Navbar() {
     </nav>
   );
 }
+
 

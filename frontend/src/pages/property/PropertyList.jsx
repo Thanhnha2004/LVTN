@@ -389,9 +389,8 @@ export default function PropertyList() {
                           }}
                         />
 
-                        {item.is_featured &&
-                          (!item.featured_until ||
-                            new Date(item.featured_until) > new Date()) && (
+                        {item.featured_until &&
+                          new Date(item.featured_until) > new Date() && (
                             <span
                               className="badge"
                               style={{

@@ -4,11 +4,13 @@ const authMiddleware = require("../middleware/auth");
 const router = express.Router();
 
 // GET /api/admin/stats — thống kê tổng quan
+// Admin API: tong hop so lieu dashboard nhu user, tin dang, lien he, top owner va top tin xem nhieu.
 router.get("/stats", authMiddleware, async (req, res) => {
   if (req.user.role !== "admin")
     return res.status(403).json({ message: "Không có quyền" });
 
   try {
+    // Cac COUNT tach rieng giup code de doc va dashboard nhan duoc nhieu chi so tong quan.
     const [[{ total_users }]] = await pool.query(
       "SELECT COUNT(*) as total_users FROM users",
     );
@@ -35,6 +37,7 @@ router.get("/stats", authMiddleware, async (req, res) => {
     );
 
     // Tin mới theo tháng (6 tháng gần nhất)
+    // DATE_FORMAT gom tin theo thang de ve bieu do 6 thang gan nhat tren dashboard.
     const [monthly] = await pool.query(`
       SELECT DATE_FORMAT(created_at, '%Y-%m') as month, COUNT(*) as count
       FROM properties
@@ -44,33 +47,34 @@ router.get("/stats", authMiddleware, async (req, res) => {
     `);
 
     const [byTransactionType] = await pool.query(`
-  SELECT transaction_type, COUNT(*) AS count
-  FROM properties
-  GROUP BY transaction_type
-`);
+      SELECT transaction_type, COUNT(*) AS count
+      FROM properties
+      GROUP BY transaction_type
+    `);
 
     const [byPropertyType] = await pool.query(`
-  SELECT type, COUNT(*) AS count
-  FROM properties
-  GROUP BY type
-`);
+      SELECT type, COUNT(*) AS count
+      FROM properties
+      GROUP BY type
+    `);
 
+    // Top owner dua tren so luong property de admin nhan dien nguoi dang tin nhieu.
     const [topOwners] = await pool.query(`
-  SELECT u.id, u.full_name, u.email, COUNT(p.id) AS property_count
-  FROM users u
-  JOIN properties p ON p.owner_id = u.id
-  WHERE u.role = 'owner'
-  GROUP BY u.id
-  ORDER BY property_count DESC
-  LIMIT 5
-`);
+      SELECT u.id, u.full_name, u.email, COUNT(p.id) AS property_count
+      FROM users u
+      JOIN properties p ON p.owner_id = u.id
+      WHERE u.role = 'owner'
+      GROUP BY u.id
+      ORDER BY property_count DESC
+      LIMIT 5
+    `);
 
     const [topViewedProperties] = await pool.query(`
-  SELECT p.id, p.title, p.city, p.district, p.view_count
-  FROM properties p
-  ORDER BY p.view_count DESC
-  LIMIT 5
-`);
+      SELECT p.id, p.title, p.city, p.district, p.view_count
+      FROM properties p
+      ORDER BY p.view_count DESC
+      LIMIT 5
+    `);
 
     res.json({
       users: { total: total_users, buyers: total_buyers, owners: total_owners },
@@ -93,6 +97,7 @@ router.get("/stats", authMiddleware, async (req, res) => {
 });
 
 // GET /api/admin/users — danh sách tất cả user
+// Admin API: lay danh sach tai khoan co tim kiem theo ten/email va phan trang.
 router.get("/users", authMiddleware, async (req, res) => {
   if (req.user.role !== "admin")
     return res.status(403).json({ message: "Không có quyền" });
@@ -102,6 +107,7 @@ router.get("/users", authMiddleware, async (req, res) => {
 
   let where = "";
   let params = [];
+  // Search duoc dua vao params LIKE ? thay vi noi chuoi truc tiep de tranh SQL injection.
   if (search && search.trim()) {
     where = "WHERE full_name LIKE ? OR email LIKE ?";
     const kw = `%${search.trim()}%`;
@@ -132,6 +138,8 @@ router.get("/users", authMiddleware, async (req, res) => {
 });
 
 // PATCH /api/admin/users/:id/status — kích hoạt / vô hiệu hóa tài khoản
+// Admin API: khoa hoac kich hoat tai khoan bang status active/banned.
+// Tai khoan banned se bi chan o luong dang nhap.
 router.patch("/users/:id/status", authMiddleware, async (req, res) => {
   if (req.user.role !== "admin")
     return res.status(403).json({ message: "Không có quyền" });
@@ -152,6 +160,7 @@ router.patch("/users/:id/status", authMiddleware, async (req, res) => {
 });
 
 // GET /api/admin/properties — danh sách tất cả tin (có lọc theo status)
+// Admin API: xem tat ca tin dang cua he thong, ke ca pending/rejected/hidden de phuc vu kiem duyet.
 router.get("/properties", authMiddleware, async (req, res) => {
   if (req.user.role !== "admin")
     return res.status(403).json({ message: "Không có quyền" });
@@ -161,6 +170,7 @@ router.get("/properties", authMiddleware, async (req, res) => {
 
   let where = "";
   let params = [];
+  // Admin co the loc theo status de tap trung vao pending/rejected/approved khi kiem duyet.
   if (status) {
     where = "WHERE p.status = ?";
     params.push(status);
@@ -170,13 +180,13 @@ router.get("/properties", authMiddleware, async (req, res) => {
     const [rows] = await pool.query(
       `
       SELECT p.id, p.title, p.type, p.transaction_type, p.price, p.city,
-             p.status, p.reject_reason, p.is_featured, p.featured_until, p.created_at, u.full_name as owner_name, u.email as owner_email
+             p.status, p.reject_reason, p.featured_until, p.created_at, u.full_name as owner_name, u.email as owner_email
       FROM properties p
       JOIN users u ON p.owner_id = u.id
       ${where}
       ORDER BY p.created_at DESC
       LIMIT ? OFFSET ?
-    `,
+      `,
       [...params, parseInt(limit), offset],
     );
 
@@ -200,5 +210,3 @@ router.get("/properties", authMiddleware, async (req, res) => {
 });
 
 module.exports = router;
-
-

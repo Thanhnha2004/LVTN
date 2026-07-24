@@ -117,8 +117,7 @@ export default function Detail() {
 
   const images = Array.isArray(property.images) ? property.images : [];
   const isFeatured =
-    property.is_featured &&
-    (!property.featured_until || new Date(property.featured_until) > new Date());
+    property.featured_until && new Date(property.featured_until) > new Date();
 
   return (
     <div style={{ background: "#f9f9f9", minHeight: "100vh" }}>

@@ -24,7 +24,7 @@ describe('listing-service', () => {
 
   test('returns filtered listings with pagination', async () => {
     pool.query
-      .mockResolvedValueOnce([[{ id: 1, title: 'Can ho Quan 1', active_featured: 1 }]])
+      .mockResolvedValueOnce([[{ id: 1, title: 'Can ho Quan 1' }]])
       .mockResolvedValueOnce([[{ total: 1 }]]);
 
     const res = await request(app()).get('/api/listing?type=apartment&transaction_type=sale&city=HCM&min_price=1000000&page=1&limit=5');
@@ -83,4 +83,3 @@ test('rejects invalid bbox filter', async () => {
   });
 
 });
-

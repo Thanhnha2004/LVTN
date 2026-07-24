@@ -1,9 +1,15 @@
-﻿{
+{
   "name": "lvtn-real-estate-platform",
   "version": "1.0.0",
   "private": true,
   "scripts": {
     "test": "npm --prefix services/auth-service test && npm --prefix services/listing-service test && npm --prefix services/contact-service test && npm --prefix services/property-service test",
-    "test:coverage": "npm --prefix services/auth-service run test:coverage && npm --prefix services/listing-service run test:coverage && npm --prefix services/contact-service run test:coverage && npm --prefix services/property-service run test:coverage"
+    "test:coverage": "npm --prefix services/auth-service run test:coverage && npm --prefix services/listing-service run test:coverage && npm --prefix services/contact-service run test:coverage && npm --prefix services/property-service run test:coverage",
+    "test:system": "playwright test",
+    "test:system:ui": "playwright test --ui",
+    "test:all": "npm test && npm run test:system"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.61.1"
   }
 }

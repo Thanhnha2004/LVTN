@@ -17,7 +17,6 @@ This graduation thesis project builds a real estate management website using a m
 ### Owner
 
 - Create real estate listings.
-- Use AI support to generate listing descriptions from entered property information.
 - Edit listings and upload property images.
 - Manage listing status: hide listing, resubmit listing, mark as sold/rented, and delete listing.
 - View rejection reason and edit listing before resubmitting for approval.
@@ -58,7 +57,7 @@ mysql
 | Frontend | 5173 | React/Vite user interface |
 | API Gateway | 3000 | Routes requests from frontend to backend services |
 | Auth Service | 3001 | Register, login, OTP verification, forgot password, profile, user management |
-| Property Service | 3002 | Property CRUD, image upload, approval workflow, status history, AI description, featured packages, VNPay payment |
+| Property Service | 3002 | Property CRUD, image upload, approval workflow, status history, featured packages, VNPay payment |
 | Listing Service | 3003 | Public search, filter, listing detail, similar listings |
 | Contact Service | 3004 | Buyer/Owner contact flow, Owner reply, saved properties, lead management |
 | MySQL | 3307 | Relational database |
@@ -78,7 +77,6 @@ http://localhost:3000
 - Email: NodeMailer.
 - Image upload: Cloudinary.
 - Payment: VNPay Sandbox.
-- AI support: Rule-based AI description generation for property listings.
 - Testing: Jest, Supertest.
 - Container: Docker, Docker Compose.
 - CI/CD: GitHub Actions.
@@ -129,7 +127,6 @@ VNPAY_TMN_CODE=your_vnpay_tmn_code
 VNPAY_HASH_SECRET=your_vnpay_hash_secret
 VNPAY_PAYMENT_URL=https://sandbox.vnpayment.vn/paymentv2/vpcpay.html
 VNPAY_RETURN_URL=https://lvtn-bds.vercel.app/payment/vnpay-return
-VNPAY_IPN_URL=http://localhost:3000/api/property/vnpay-ipn
 ```
 
 Notes:
@@ -241,13 +238,10 @@ PATCH  /api/property/:id/hide
 PATCH  /api/property/:id/unhide
 PATCH  /api/property/:id/sold
 GET    /api/property/:id/history
-POST   /api/property/ai-description
 GET    /api/property/featured-packages
 GET    /api/property/owner/featured-orders
 POST   /api/property/:id/featured-orders
-POST   /api/property/featured-orders/:orderId/pay
 GET    /api/property/vnpay-return
-GET    /api/property/vnpay-ipn
 ```
 
 ### Listing Service
@@ -290,7 +284,7 @@ Backend service tests use Jest and Supertest.
 | Auth Service | Register, OTP, login, forgot password, reset password, change password |
 | Listing Service | Search/filter, listing detail, view count, similar listings |
 | Contact Service | Send contact request, Owner reply, Buyer contact history, saved properties, lead update |
-| Property Service | AI description, create property, approval workflow, status history, hide/sold/unhide, featured package order |
+| Property Service | Create property, approval workflow, status history, hide/sold/unhide, featured package order |
 
 ### Run Backend Tests
 
@@ -376,4 +370,3 @@ Main roles:
 - Featured packages are purchased by Owner for each approved property listing.
 - VNPay integration is configured for Sandbox testing.
 - Important actions such as delete, hide, approve, reject, and account disable include confirmation dialogs in the UI.
-- AI description generation is currently a support feature based on the property information entered by Owner.

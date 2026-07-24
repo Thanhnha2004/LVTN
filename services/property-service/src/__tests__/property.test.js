@@ -30,22 +30,10 @@ describe('property-service', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     global.mockUser = { id: 1, role: 'owner' };
-  });
-
-  test('owner can generate AI description from property information', async () => {
-    const res = await request(app()).post('/api/property/ai-description').send({
-      title: 'Can ho 2PN Quan 1',
-      type: 'apartment',
-      transaction_type: 'sale',
-      price: 3500000000,
-      area: 70,
-      city: 'TP.HCM',
-      address: 'Nguyen Hue',
-    });
-
-    expect(res.status).toBe(200);
-    expect(res.body.description).toContain('Can ho 2PN Quan 1');
-    expect(res.body.description).toContain('70');
+    process.env.VNPAY_TMN_CODE = 'TESTCODE';
+    process.env.VNPAY_HASH_SECRET = 'TESTSECRET';
+    process.env.VNPAY_PAYMENT_URL = 'https://sandbox.vnpayment.vn/paymentv2/vpcpay.html';
+    process.env.VNPAY_RETURN_URL = 'http://localhost:5173/payment/vnpay-return';
   });
 
   test('owner creates property in pending status and writes status history', async () => {
@@ -167,42 +155,12 @@ test('owner can list own properties by status', async () => {
       .mockResolvedValueOnce([[{ id: 2, name: 'Goi 7 ngay', price: 99000, duration_days: 7 }]])
       .mockResolvedValueOnce([{ insertId: 100 }]);
 
-    const res = await request(app()).post('/api/property/20/featured-orders').send({ package_id: 2, payment_method: 'bank_transfer' });
+    const res = await request(app()).post('/api/property/20/featured-orders').send({ package_id: 2, payment_method: 'vnpay' });
 
     expect(res.status).toBe(201);
     expect(res.body.order.id).toBe(100);
-    expect(res.body.payment_url).toBeNull();
-    expect(pool.query).toHaveBeenCalledWith(expect.stringContaining('INSERT INTO featured_orders'), [20, 1, 2, 99000, 'bank_transfer', expect.any(String)]);
-  });
-
-  test('demo payment activates featured package', async () => {
-    const connection = {
-      beginTransaction: jest.fn().mockResolvedValue(),
-      query: jest.fn(),
-      commit: jest.fn().mockResolvedValue(),
-      rollback: jest.fn().mockResolvedValue(),
-      release: jest.fn(),
-    };
-    pool.getConnection.mockResolvedValueOnce(connection);
-    connection.query
-      .mockResolvedValueOnce([[{
-        id: 100,
-        property_id: 20,
-        status: 'pending',
-        property_status: 'approved',
-        featured_until: null,
-        duration_days: 7,
-      }]])
-      .mockResolvedValueOnce([{}])
-      .mockResolvedValueOnce([{}]);
-
-    const res = await request(app()).post('/api/property/featured-orders/100/pay').send();
-
-    expect(res.status).toBe(200);
-    expect(connection.commit).toHaveBeenCalled();
-    expect(connection.query).toHaveBeenCalledWith(expect.stringContaining("SET status = 'paid'"), expect.any(Array));
-    expect(connection.query).toHaveBeenCalledWith(expect.stringContaining('SET is_featured = 1'), expect.any(Array));
+    expect(res.body.payment_url).toContain('https://sandbox.vnpayment.vn/paymentv2/vpcpay.html');
+    expect(pool.query).toHaveBeenCalledWith(expect.stringContaining('INSERT INTO featured_orders'), [20, 1, 2, 99000, 'vnpay', expect.any(String)]);
   });
 
 });
-

@@ -14,4 +14,3 @@ app.use("/api/admin", adminRoutes);
 app.listen(process.env.PORT || 3001, () =>
   console.log(`Auth service running on port ${process.env.PORT || 3001}`),
 );
-
