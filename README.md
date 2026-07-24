@@ -58,7 +58,7 @@ mysql
 | API Gateway | 3000 | Routes requests from frontend to backend services |
 | Auth Service | 3001 | Register, login, OTP verification, forgot password, profile, user management |
 | Property Service | 3002 | Property CRUD, image upload, approval workflow, status history, featured packages, VNPay payment |
-| Listing Service | 3003 | Public search, filter, listing detail, similar listings |
+| Listing Service | 3003 | Public search, category counts, filter, listing detail, similar listings |
 | Contact Service | 3004 | Buyer/Owner contact flow, Owner reply, saved properties, lead management |
 | MySQL | 3307 | Relational database |
 
@@ -228,6 +228,9 @@ PUT    /api/auth/change-password
 ### Property Service
 
 ```text
+GET    /api/property/owner/list
+GET    /api/property/owner/stats
+GET    /api/property/owner/stats/:id
 POST   /api/property
 GET    /api/property/:id
 PUT    /api/property/:id
@@ -247,6 +250,7 @@ GET    /api/property/vnpay-return
 ### Listing Service
 
 ```text
+GET    /api/listing/category-counts
 GET    /api/listing
 GET    /api/listing/:id
 GET    /api/listing/:id/similar
@@ -268,9 +272,10 @@ GET    /api/contact/saved
 ### Admin
 
 ```text
+GET    /api/admin/stats
 GET    /api/admin/users
 PATCH  /api/admin/users/:id/status
-GET    /api/admin/dashboard
+GET    /api/admin/properties
 ```
 
 ## 10. Testing
@@ -348,7 +353,6 @@ docs/CI_CD.md
 
 Planned improvements:
 
-- Add Playwright system tests for main UI workflows.
 - Add stress testing for high-traffic APIs.
 - Deploy backend services to a cloud/VPS environment.
 
