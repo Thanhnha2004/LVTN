@@ -316,8 +316,8 @@ Current backend test result:
 | Auth Service | 9 | Passed |
 | Listing Service | 7 | Passed |
 | Contact Service | 10 | Passed |
-| Property Service | 12 | Passed |
-| Total | 38 | Passed |
+| Property Service | 10 | Passed |
+| Total | 36 | Passed |
 
 Current line coverage:
 

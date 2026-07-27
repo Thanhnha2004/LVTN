@@ -425,6 +425,27 @@ router.post("/", authMiddleware, async (req, res) => {
 
   const validTypes = ["apartment", "house", "land", "office"];
   const validTx = ["sale", "rent"];
+  const validDirections = [
+    "north",
+    "south",
+    "east",
+    "west",
+    "northeast",
+    "northwest",
+    "southeast",
+    "southwest",
+  ];
+  const validLegalStatuses = ["sohong", "sokhongdo", "dangchoso", "other"];
+  const priceValue = Number(price);
+  const areaValue = Number(area);
+  const latitudeValue =
+    latitude === undefined || latitude === null || latitude === ""
+      ? null
+      : Number(latitude);
+  const longitudeValue =
+    longitude === undefined || longitude === null || longitude === ""
+      ? null
+      : Number(longitude);
 
   if (!title || title.trim().length < 5)
     return res.status(400).json({ message: "Tiêu đề phải có ít nhất 5 ký tự" });
@@ -434,14 +455,22 @@ router.post("/", authMiddleware, async (req, res) => {
     return res
       .status(400)
       .json({ message: "Loại giao dịch không hợp lệ (sale | rent)" });
-  if (!price || parseFloat(price) <= 0)
+  if (!Number.isFinite(priceValue) || priceValue <= 0)
     return res.status(400).json({ message: "Giá phải lớn hơn 0" });
-  if (!area || parseFloat(area) <= 0)
+  if (!Number.isFinite(areaValue) || areaValue <= 0)
     return res.status(400).json({ message: "Diện tích phải lớn hơn 0" });
   if (!address || !city)
     return res
       .status(400)
       .json({ message: "Địa chỉ và thành phố không được để trống" });
+  if (direction && !validDirections.includes(direction))
+    return res.status(400).json({ message: "Hướng nhà không hợp lệ" });
+  if (legal_status && !validLegalStatuses.includes(legal_status))
+    return res.status(400).json({ message: "Pháp lý không hợp lệ" });
+  if (latitudeValue !== null && !Number.isFinite(latitudeValue))
+    return res.status(400).json({ message: "Vĩ độ không hợp lệ" });
+  if (longitudeValue !== null && !Number.isFinite(longitudeValue))
+    return res.status(400).json({ message: "Kinh độ không hợp lệ" });
 
   try {
     // Insert property khong set approved ngay; default status trong DB la pending.
@@ -450,15 +479,15 @@ router.post("/", authMiddleware, async (req, res) => {
         (owner_id, title, description, type, transaction_type,
          price, area, address, ward, district, city,
          bedrooms, bathrooms, direction, legal_status, latitude, longitude)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         req.user.id,
         title,
         description || null,
         type,
         transaction_type,
-        parseFloat(price),
-        parseFloat(area),
+        priceValue,
+        areaValue,
         address,
         ward || null,
         district || null,
@@ -467,8 +496,8 @@ router.post("/", authMiddleware, async (req, res) => {
         bathrooms ? parseInt(bathrooms) : null,
         direction || null,
         legal_status || null,
-        latitude ? parseFloat(latitude) : null,
-        longitude ? parseFloat(longitude) : null,
+        latitudeValue,
+        longitudeValue,
       ],
     );
     await addStatusHistory(

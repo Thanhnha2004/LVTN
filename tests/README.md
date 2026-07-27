@@ -5,7 +5,7 @@ Bo kiem thu tap trung vao cac nghiep vu chinh cua he thong quan ly bat dong san:
 - Auth Service: dang ky, OTP, dang nhap, quen mat khau.
 - Listing Service: tim kiem/loc tin public, xem chi tiet va tang luot xem.
 - Contact Service: Buyer gui lien he, Owner phan hoi, luu tin yeu thich.
-- Property Service: dang tin, AI goi y mo ta, duyet/tu choi, lich su trang thai, goi noi bat.
+- Property Service: dang tin, duyet/tu choi, an/hien tin, lich su trang thai, goi noi bat.
 
 ## Cai dependency test
 

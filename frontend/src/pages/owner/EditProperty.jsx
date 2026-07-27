@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
 import api from "../../api/axios";
+import LocationPickerMap from "../../components/LocationPickerMap";
 import Navbar from "../../components/Navbar";
 import UiIcon from "../../components/UiIcon";
 import {
@@ -941,6 +942,16 @@ export default function EditProperty() {
                 />
               </div>
 
+              <div style={{ marginBottom: 18 }}>
+                <label style={labelStyle}>Vị trí trên bản đồ</label>
+                <LocationPickerMap
+                  latitude={form.latitude}
+                  longitude={form.longitude}
+                  onChange={({ latitude, longitude }) =>
+                    setForm((f) => ({ ...f, latitude, longitude }))
+                  }
+                />
+              </div>
               <div
                 style={{
                   display: "grid",

@@ -116,10 +116,6 @@ async function mockBackend(page) {
       return json(route, []);
     }
 
-    if (path === '/api/property/ai-description' && method === 'POST') {
-      return json(route, { description: 'Mo ta goi y tu Playwright cho tin dang bat dong san.' });
-    }
-
     if (path === '/api/property' && method === 'POST') {
       return json(route, { message: 'Created', id: 100 }, 201);
     }

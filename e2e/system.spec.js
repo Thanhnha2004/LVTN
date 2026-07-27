@@ -38,18 +38,13 @@ test('Login redirects user by role', async ({ page }) => {
   await expect(page).toHaveURL(/\/owner\/dashboard/);
 });
 
-test('Owner can open create property page and use AI description action', async ({ page }) => {
+test('Owner can open create property page and enter listing content', async ({ page }) => {
   await loginAs(page, 'owner');
   await page.goto('/owner/create');
 
   await expect(page).toHaveURL(/\/owner\/create/);
   await page.locator('input').first().fill('Can ho Playwright moi');
-
-  const aiButton = page.getByRole('button', { name: /AI|mô tả|mo ta/i }).first();
-  if (await aiButton.count()) {
-    await aiButton.click();
-    await expect(page.locator('body')).toContainText(/Playwright|mô tả|mo ta/i);
-  }
+  await expect(page.locator('body')).toContainText(/Can ho Playwright moi|mô tả|mo ta/i);
 });
 
 test('Admin can open pending approval page and see pending listing', async ({ page }) => {

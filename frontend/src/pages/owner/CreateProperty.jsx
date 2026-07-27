@@ -1,6 +1,7 @@
 import { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../../api/axios";
+import LocationPickerMap from "../../components/LocationPickerMap";
 import Navbar from "../../components/Navbar";
 import UiIcon from "../../components/UiIcon";
 import {
@@ -211,6 +212,7 @@ export default function CreateProperty() {
       setSuccess(true);
       showToast("Đăng tin thành công. Tin đang chờ admin duyệt.");
     } catch (err) {
+      console.error("Create property failed:", err.response?.data || err);
       const message =
         err.response?.data?.message || "Đăng tin thất bại, vui lòng thử lại.";
       setError(message);
@@ -792,28 +794,13 @@ export default function CreateProperty() {
                       (tuỳ chọn)
                     </span>
                   </label>
-                  <div
-                    style={{
-                      background: "#f3f3f3",
-                      border: "1.5px dashed #E8E8E8",
-                      borderRadius: 8,
-                      height: 180,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      flexDirection: "column",
-                      gap: 8,
-                      color: "#8f706b",
-                      cursor: "pointer",
-                    }}>
-                    <UiIcon name="map" size={32} />
-                    <span style={{ fontSize: 14, fontWeight: 500 }}>
-                      Nhấn để chọn vị trí trên bản đồ
-                    </span>
-                    <span style={{ fontSize: 12, color: "#aaa" }}>
-                      Giúp người mua tìm kiếm dễ hơn
-                    </span>
-                  </div>
+                  <LocationPickerMap
+                    latitude={form.latitude}
+                    longitude={form.longitude}
+                    onChange={({ latitude, longitude }) =>
+                      setForm((f) => ({ ...f, latitude, longitude }))
+                    }
+                  />
                 </div>
 
                 <div
