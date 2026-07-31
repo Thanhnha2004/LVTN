@@ -311,9 +311,12 @@ router.post("/reset-password", async (req, res) => {
 router.post("/login", async (req, res) => {
   const { email, password } = req.body;
   try {
-    const [rows] = await pool.query("SELECT * FROM users WHERE email = ?", [
-      email,
-    ]);
+    const [rows] = await pool.query(
+      `SELECT id, full_name, password_hash, avatar_url, role, status, email_verified
+       FROM users
+       WHERE email = ?`,
+      [email],
+    );
     if (rows.length === 0)
       return res.status(400).json({ message: "Email không tồn tại" });
 

@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { ToastProvider } from "./components/ToastProvider";
@@ -5,22 +6,36 @@ import { ConfirmProvider } from "./components/ConfirmProvider";
 import GlobalLoading from "./components/GlobalLoading";
 import "bootstrap/dist/css/bootstrap.min.css";
 
-import Login from "./pages/Login";
-import Register from "./pages/Register";
-import VerifyEmail from "./pages/VerifyEmail";
-import ForgotPassword from "./pages/ForgotPassword";
-import Home from "./pages/buyer/Home";
-import Detail from "./pages/buyer/Detail";
-import OwnerDashboard from "./pages/owner/Dashboard";
-import CreateProperty from "./pages/owner/CreateProperty";
-import EditProperty from "./pages/owner/EditProperty";
-import OwnerContacts from "./pages/owner/Contacts";
-import AdminDashboard from "./pages/admin/Dashboard";
-import Pending from "./pages/admin/Pending";
-import Users from "./pages/admin/Users";
-import Profile from "./pages/profile/Profile";
-import PropertyList from "./pages/property/PropertyList";
-import VnpayReturn from "./pages/payment/VnpayReturn";
+const Login = lazy(() => import("./pages/Login"));
+const Register = lazy(() => import("./pages/Register"));
+const VerifyEmail = lazy(() => import("./pages/VerifyEmail"));
+const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
+const Home = lazy(() => import("./pages/buyer/Home"));
+const Detail = lazy(() => import("./pages/buyer/Detail"));
+const OwnerDashboard = lazy(() => import("./pages/owner/Dashboard"));
+const CreateProperty = lazy(() => import("./pages/owner/CreateProperty"));
+const EditProperty = lazy(() => import("./pages/owner/EditProperty"));
+const OwnerContacts = lazy(() => import("./pages/owner/Contacts"));
+const AdminDashboard = lazy(() => import("./pages/admin/Dashboard"));
+const Pending = lazy(() => import("./pages/admin/Pending"));
+const Users = lazy(() => import("./pages/admin/Users"));
+const Profile = lazy(() => import("./pages/profile/Profile"));
+const PropertyList = lazy(() => import("./pages/property/PropertyList"));
+const VnpayReturn = lazy(() => import("./pages/payment/VnpayReturn"));
+
+function PageLoading() {
+  return (
+    <div
+      style={{
+        minHeight: "60vh",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+      }}>
+      <div className="spinner-border text-danger" />
+    </div>
+  );
+}
 
 function ProtectedRoute({ children, roles }) {
   const { user } = useAuth();
@@ -36,78 +51,80 @@ export default function App() {
         <ConfirmProvider>
           <BrowserRouter>
             <GlobalLoading />
-            <Routes>
-          {/* Public */}
-          <Route path="/" element={<Home />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
-          <Route path="/verify-email" element={<VerifyEmail />} />
-          <Route path="/forgot-password" element={<ForgotPassword />} />
-          <Route path="/property/:id" element={<Detail />} />
-          <Route path="/profile" element={<Profile />} />
-          <Route path="/search" element={<PropertyList />} />
-          <Route path="/payment/vnpay-return" element={<VnpayReturn />} />
+            <Suspense fallback={<PageLoading />}>
+              <Routes>
+                {/* Public */}
+                <Route path="/" element={<Home />} />
+                <Route path="/login" element={<Login />} />
+                <Route path="/register" element={<Register />} />
+                <Route path="/verify-email" element={<VerifyEmail />} />
+                <Route path="/forgot-password" element={<ForgotPassword />} />
+                <Route path="/property/:id" element={<Detail />} />
+                <Route path="/profile" element={<Profile />} />
+                <Route path="/search" element={<PropertyList />} />
+                <Route path="/payment/vnpay-return" element={<VnpayReturn />} />
 
-          {/* Owner */}
-          <Route
-            path="/owner/dashboard"
-            element={
-              <ProtectedRoute roles={["owner"]}>
-                <OwnerDashboard />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/owner/create"
-            element={
-              <ProtectedRoute roles={["owner"]}>
-                <CreateProperty />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/owner/edit/:id"
-            element={
-              <ProtectedRoute roles={["owner"]}>
-                <EditProperty />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/owner/contacts"
-            element={
-              <ProtectedRoute roles={["owner"]}>
-                <OwnerContacts />
-              </ProtectedRoute>
-            }
-          />
+                {/* Owner */}
+                <Route
+                  path="/owner/dashboard"
+                  element={
+                    <ProtectedRoute roles={["owner"]}>
+                      <OwnerDashboard />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/owner/create"
+                  element={
+                    <ProtectedRoute roles={["owner"]}>
+                      <CreateProperty />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/owner/edit/:id"
+                  element={
+                    <ProtectedRoute roles={["owner"]}>
+                      <EditProperty />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/owner/contacts"
+                  element={
+                    <ProtectedRoute roles={["owner"]}>
+                      <OwnerContacts />
+                    </ProtectedRoute>
+                  }
+                />
 
-          {/* Admin */}
-          <Route
-            path="/admin/dashboard"
-            element={
-              <ProtectedRoute roles={["admin"]}>
-                <AdminDashboard />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/admin/pending"
-            element={
-              <ProtectedRoute roles={["admin"]}>
-                <Pending />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/admin/users"
-            element={
-              <ProtectedRoute roles={["admin"]}>
-                <Users />
-              </ProtectedRoute>
-            }
-          />
-            </Routes>
+                {/* Admin */}
+                <Route
+                  path="/admin/dashboard"
+                  element={
+                    <ProtectedRoute roles={["admin"]}>
+                      <AdminDashboard />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/admin/pending"
+                  element={
+                    <ProtectedRoute roles={["admin"]}>
+                      <Pending />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/admin/users"
+                  element={
+                    <ProtectedRoute roles={["admin"]}>
+                      <Users />
+                    </ProtectedRoute>
+                  }
+                />
+              </Routes>
+            </Suspense>
           </BrowserRouter>
         </ConfirmProvider>
       </ToastProvider>

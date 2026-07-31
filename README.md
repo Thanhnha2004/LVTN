@@ -8,8 +8,11 @@ This graduation thesis project builds a real estate management website using a m
 
 - Register, log in, verify email with OTP, and reset password.
 - Search and filter real estate listings by property type, transaction type, location, price range, area range, and keyword.
+- Use dependent location selectors for city, district, and ward in search forms.
 - View property details, images, map location, and Owner contact information.
+- Open a full image gallery from the property detail page.
 - Send contact requests to Owner.
+- See contact status after a request has already been sent.
 - View Owner responses and additional contact phone number.
 - Save and unsave favorite properties.
 - Update personal profile and change password.
@@ -17,7 +20,10 @@ This graduation thesis project builds a real estate management website using a m
 ### Owner
 
 - Create real estate listings.
+- Validate listing input before submission, including price, area, address, rooms, and map coordinates.
+- Prevent creating duplicate active listings with the same core information.
 - Edit listings and upload property images.
+- Select city, district, and ward from dependent dropdowns when creating or editing listings.
 - Manage listing status: hide listing, resubmit listing, mark as sold/rented, and delete listing.
 - View rejection reason and edit listing before resubmitting for approval.
 - View listing status history.
@@ -34,6 +40,7 @@ This graduation thesis project builds a real estate management website using a m
 - Approve listings, reject listings with reason, and hide violating listings.
 - Manage user accounts: activate or disable accounts.
 - View dashboard statistics.
+- Use global loading indicators for long-running actions.
 
 ## 2. System Architecture
 
@@ -126,7 +133,7 @@ CLOUDINARY_API_SECRET=your_api_secret
 VNPAY_TMN_CODE=your_vnpay_tmn_code
 VNPAY_HASH_SECRET=your_vnpay_hash_secret
 VNPAY_PAYMENT_URL=https://sandbox.vnpayment.vn/paymentv2/vpcpay.html
-VNPAY_RETURN_URL=https://lvtn-bds.vercel.app/payment/vnpay-return
+VNPAY_RETURN_URL=http://localhost:5173/payment/vnpay-return
 ```
 
 Notes:
@@ -294,10 +301,28 @@ Backend service tests use Jest and Supertest.
 ### Run Backend Tests
 
 ```bash
+npm test
+```
+
+Or run each service separately:
+
+```bash
 cd services/auth-service && npm test
 cd ../listing-service && npm test
 cd ../contact-service && npm test
 cd ../property-service && npm test
+```
+
+### Run System Tests
+
+```bash
+npm run test:system
+```
+
+### Run All Tests
+
+```bash
+npm run test:all
 ```
 
 ### Run Backend Coverage
@@ -316,8 +341,8 @@ Current backend test result:
 | Auth Service | 9 | Passed |
 | Listing Service | 7 | Passed |
 | Contact Service | 10 | Passed |
-| Property Service | 10 | Passed |
-| Total | 36 | Passed |
+| Property Service | 12 | Passed |
+| Total | 38 | Passed |
 
 Current line coverage:
 
@@ -360,17 +385,28 @@ Planned improvements:
 
 Demo accounts are created in `init.sql`. They can be changed directly in `init.sql` before resetting the database.
 
-Main roles:
+Default password for seeded demo accounts:
 
-- Buyer
-- Owner
-- Admin
+```text
+123456
+```
+
+Main accounts:
+
+| Role | Email |
+|---|---|
+| Admin | admin@bds.com |
+| Owner | owner@bds.com |
+| Buyer | buyer@bds.com |
+| Owner | owner2@bds.com |
+| Buyer | buyer2@bds.com |
 
 ## 13. Notes
 
 - New property listings are created with `pending` status and require Admin approval.
 - Buyer can only view approved property listings.
 - Owner can view rejection reasons, edit listings, and resubmit them for approval.
+- Owner cannot create another active listing with the same title, address, property type, and transaction type.
 - Featured packages are purchased by Owner for each approved property listing.
 - VNPay integration is configured for Sandbox testing.
 - Important actions such as delete, hide, approve, reject, and account disable include confirmation dialogs in the UI.
