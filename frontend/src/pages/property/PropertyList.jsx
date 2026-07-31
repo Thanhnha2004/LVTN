@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import api from "../../api/axios";
 import Navbar from "../../components/Navbar";
@@ -6,24 +6,34 @@ import { locationData } from "../../data/locationData";
 import UiIcon from "../../components/UiIcon";
 import SiteFooter from "../../components/SiteFooter";
 
+const EMPTY_FILTERS = {
+  type: "",
+  transaction_type: "",
+  city: "",
+  district: "",
+  ward: "",
+  min_price: "",
+  max_price: "",
+  min_area: "",
+  max_area: "",
+  bedrooms: "",
+  direction: "",
+  legal_status: "",
+};
+
 export default function PropertyList() {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [properties, setProperties] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filters, setFilters] = useState({
-    type: "",
-    transaction_type: "",
-    city: "",
-    district: "",
-    ward: "",
-    min_price: "",
-    max_price: "",
-    min_area: "",
-    max_area: "",
-    bedrooms: "",
-    direction: "",
-    legal_status: "",
+  const [filters, setFilters] = useState(EMPTY_FILTERS);
+  const filterDebounceRef = useRef(null);
+  const [pagination, setPagination] = useState({
+    total: 0,
+    page: 1,
+    limit: 12,
+    total_pages: 1,
   });
+  const [sort, setSort] = useState("newest");
   const cities = Object.keys(locationData);
 
   const districts = filters.city
@@ -40,12 +50,37 @@ export default function PropertyList() {
       transaction_type: searchParams.get("transaction_type") || "",
       type: searchParams.get("type") || "",
       keyword: searchParams.get("keyword") || "",
+      city: searchParams.get("city") || "",
+      district: searchParams.get("district") || "",
+      ward: searchParams.get("ward") || "",
       min_price: searchParams.get("min_price") || "",
       max_price: searchParams.get("max_price") || "",
+      min_area: searchParams.get("min_area") || "",
+      max_area: searchParams.get("max_area") || "",
+      bedrooms: searchParams.get("bedrooms") || "",
+      direction: searchParams.get("direction") || "",
+      legal_status: searchParams.get("legal_status") || "",
+      sort: searchParams.get("sort") || "newest",
       page: searchParams.get("page") || 1,
       limit: 12,
     };
 
+    setSort(filter.sort);
+    setFilters((prev) => ({
+      ...prev,
+      transaction_type: filter.transaction_type,
+      type: filter.type,
+      city: filter.city,
+      district: filter.district,
+      ward: filter.ward,
+      min_price: filter.min_price,
+      max_price: filter.max_price,
+      min_area: filter.min_area,
+      max_area: filter.max_area,
+      bedrooms: filter.bedrooms,
+      direction: filter.direction,
+      legal_status: filter.legal_status,
+    }));
     fetchProperties(filter);
   }, [searchParams]);
 
@@ -58,6 +93,14 @@ export default function PropertyList() {
       });
 
       setProperties(res.data.data || []);
+      setPagination(
+        res.data.pagination || {
+          total: 0,
+          page: 1,
+          limit: 12,
+          total_pages: 1,
+        },
+      );
     } catch (err) {
       console.error(err);
     } finally {
@@ -65,8 +108,48 @@ export default function PropertyList() {
     }
   };
 
-  const handleApplyFilter = () => {
-    fetchProperties(filters);
+  const handleClearFilter = () => {
+    if (filterDebounceRef.current) {
+      clearTimeout(filterDebounceRef.current);
+    }
+    setFilters(EMPTY_FILTERS);
+    setSort("newest");
+    updateQuery({ ...EMPTY_FILTERS, sort: "newest", page: 1 });
+  };
+
+  const updateQuery = (nextParams) => {
+    const params = new URLSearchParams();
+    Object.entries(nextParams).forEach(([key, value]) => {
+      if (value !== "" && value !== undefined && value !== null) {
+        params.set(key, value);
+      }
+    });
+    setSearchParams(params);
+  };
+
+  const handleFilterChange = (nextFilters, { debounce = false } = {}) => {
+    setFilters(nextFilters);
+    if (filterDebounceRef.current) {
+      clearTimeout(filterDebounceRef.current);
+    }
+
+    const apply = () => updateQuery({ ...nextFilters, sort, page: 1 });
+    if (debounce) {
+      filterDebounceRef.current = setTimeout(apply, 450);
+      return;
+    }
+    apply();
+  };
+
+  const handleSortChange = (value) => {
+    setSort(value);
+    updateQuery({ ...filters, sort: value, page: 1 });
+  };
+
+  const handlePageChange = (page) => {
+    const nextPage = Math.min(Math.max(1, page), pagination.total_pages || 1);
+    updateQuery({ ...filters, sort, page: nextPage });
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   return (
@@ -87,7 +170,10 @@ export default function PropertyList() {
               <div className="d-flex justify-content-between mb-4">
                 <h5 className="fw-bold">Bộ lọc chi tiết</h5>
 
-                <button className="btn btn-link text-danger p-0">
+                <button
+                  type="button"
+                  className="btn btn-link text-danger p-0"
+                  onClick={handleClearFilter}>
                   Xóa lọc
                 </button>
               </div>
@@ -99,7 +185,7 @@ export default function PropertyList() {
                   className="form-select"
                   value={filters.transaction_type}
                   onChange={(e) =>
-                    setFilters({
+                    handleFilterChange({
                       ...filters,
                       transaction_type: e.target.value,
                     })
@@ -117,7 +203,7 @@ export default function PropertyList() {
                   className="form-select"
                   value={filters.type}
                   onChange={(e) =>
-                    setFilters({
+                    handleFilterChange({
                       ...filters,
                       type: e.target.value,
                     })
@@ -137,7 +223,7 @@ export default function PropertyList() {
                   className="form-select"
                   value={filters.city}
                   onChange={(e) =>
-                    setFilters({
+                    handleFilterChange({
                       ...filters,
                       city: e.target.value,
                       district: "",
@@ -161,7 +247,7 @@ export default function PropertyList() {
                   className="form-select"
                   value={filters.district}
                   onChange={(e) =>
-                    setFilters({
+                    handleFilterChange({
                       ...filters,
                       district: e.target.value,
                       ward: "",
@@ -184,7 +270,7 @@ export default function PropertyList() {
                   className="form-select"
                   value={filters.ward}
                   onChange={(e) =>
-                    setFilters({
+                    handleFilterChange({
                       ...filters,
                       ward: e.target.value,
                     })
@@ -206,10 +292,13 @@ export default function PropertyList() {
                     placeholder="Giá từ"
                     value={filters.min_price}
                     onChange={(e) =>
-                      setFilters({
-                        ...filters,
-                        min_price: e.target.value,
-                      })
+                      handleFilterChange(
+                        {
+                          ...filters,
+                          min_price: e.target.value,
+                        },
+                        { debounce: true },
+                      )
                     }
                   />
                 </div>
@@ -220,10 +309,13 @@ export default function PropertyList() {
                     placeholder="Giá đến"
                     value={filters.max_price}
                     onChange={(e) =>
-                      setFilters({
-                        ...filters,
-                        max_price: e.target.value,
-                      })
+                      handleFilterChange(
+                        {
+                          ...filters,
+                          max_price: e.target.value,
+                        },
+                        { debounce: true },
+                      )
                     }
                   />
                 </div>
@@ -236,10 +328,13 @@ export default function PropertyList() {
                     placeholder="DT từ"
                     value={filters.min_area}
                     onChange={(e) =>
-                      setFilters({
-                        ...filters,
-                        min_area: e.target.value,
-                      })
+                      handleFilterChange(
+                        {
+                          ...filters,
+                          min_area: e.target.value,
+                        },
+                        { debounce: true },
+                      )
                     }
                   />
                 </div>
@@ -250,10 +345,13 @@ export default function PropertyList() {
                     placeholder="DT đến"
                     value={filters.max_area}
                     onChange={(e) =>
-                      setFilters({
-                        ...filters,
-                        max_area: e.target.value,
-                      })
+                      handleFilterChange(
+                        {
+                          ...filters,
+                          max_area: e.target.value,
+                        },
+                        { debounce: true },
+                      )
                     }
                   />
                 </div>
@@ -273,9 +371,9 @@ export default function PropertyList() {
                           : "btn-outline-secondary"
                       }`}
                       onClick={() =>
-                        setFilters({
+                        handleFilterChange({
                           ...filters,
-                          bedrooms: num,
+                          bedrooms: filters.bedrooms == num ? "" : num,
                         })
                       }>
                       {num === 4 ? "4+" : num}
@@ -291,7 +389,7 @@ export default function PropertyList() {
                   className="form-select"
                   value={filters.direction}
                   onChange={(e) =>
-                    setFilters({
+                    handleFilterChange({
                       ...filters,
                       direction: e.target.value,
                     })
@@ -315,7 +413,7 @@ export default function PropertyList() {
                   className="form-select"
                   value={filters.legal_status}
                   onChange={(e) =>
-                    setFilters({
+                    handleFilterChange({
                       ...filters,
                       legal_status: e.target.value,
                     })
@@ -328,15 +426,6 @@ export default function PropertyList() {
                 </select>
               </div>
 
-              <button
-                className="btn text-white w-100"
-                style={{
-                  background: "#b51b17",
-                  height: 50,
-                }}
-                onClick={handleApplyFilter}>
-                Áp dụng bộ lọc
-              </button>
             </div>
           </div>
 
@@ -347,14 +436,18 @@ export default function PropertyList() {
                 <h3 className="fw-bold">Danh sách bất động sản</h3>
 
                 <p className="text-muted mb-0">
-                  Tìm thấy {properties.length} tin đăng
+                  Tìm thấy {pagination.total} tin đăng
                 </p>
               </div>
 
-              <select className="form-select" style={{ width: 220 }}>
-                <option>Mới nhất</option>
-                <option>Giá thấp đến cao</option>
-                <option>Giá cao đến thấp</option>
+              <select
+                className="form-select"
+                style={{ width: 220 }}
+                value={sort}
+                onChange={(e) => handleSortChange(e.target.value)}>
+                <option value="newest">Mới nhất</option>
+                <option value="price_asc">Giá thấp đến cao</option>
+                <option value="price_desc">Giá cao đến thấp</option>
               </select>
             </div>
 
@@ -457,31 +550,57 @@ export default function PropertyList() {
             )}
 
             {/* Pagination */}
+            {pagination.total_pages > 1 && (
             <div className="d-flex justify-content-center mt-5">
               <nav>
                 <ul className="pagination">
-                  <li className="page-item">
-                    <button className="page-link">«</button>
+                  <li
+                    className={`page-item ${
+                      pagination.page <= 1 ? "disabled" : ""
+                    }`}>
+                    <button
+                      type="button"
+                      className="page-link"
+                      onClick={() => handlePageChange(pagination.page - 1)}
+                      disabled={pagination.page <= 1}>
+                      «
+                    </button>
                   </li>
 
-                  <li className="page-item active">
-                    <button className="page-link">1</button>
-                  </li>
+                  {Array.from(
+                    { length: pagination.total_pages },
+                    (_, i) => i + 1,
+                  ).map((page) => (
+                    <li
+                      key={page}
+                      className={`page-item ${
+                        page === pagination.page ? "active" : ""
+                      }`}>
+                      <button
+                        type="button"
+                        className="page-link"
+                        onClick={() => handlePageChange(page)}>
+                        {page}
+                      </button>
+                    </li>
+                  ))}
 
-                  <li className="page-item">
-                    <button className="page-link">2</button>
-                  </li>
-
-                  <li className="page-item">
-                    <button className="page-link">3</button>
-                  </li>
-
-                  <li className="page-item">
-                    <button className="page-link">»</button>
+                  <li
+                    className={`page-item ${
+                      pagination.page >= pagination.total_pages ? "disabled" : ""
+                    }`}>
+                    <button
+                      type="button"
+                      className="page-link"
+                      onClick={() => handlePageChange(pagination.page + 1)}
+                      disabled={pagination.page >= pagination.total_pages}>
+                      »
+                    </button>
                   </li>
                 </ul>
               </nav>
             </div>
+            )}
           </div>
         </div>
       </div>

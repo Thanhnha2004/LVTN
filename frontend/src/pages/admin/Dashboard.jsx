@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import Navbar from "../../components/Navbar";
-import { C, font, getToken, apiFetch } from "./adminShared";
+import { C, font, getToken, apiFetch, paginationBtn } from "./adminShared";
 import UsersPage from "./Users";
 import PendingPage from "./Pending";
 import UiIcon from "../../components/UiIcon";
@@ -82,38 +82,6 @@ export function Sidebar({ page, setPage }) {
         })}
       </nav>
     </aside>
-  );
-}
-
-export function TopBar({ title, subtitle }) {
-  return (
-    <header
-      style={{
-        height: 52,
-        background: C.surfaceContainerLowest,
-        borderBottom: `1px solid ${C.borderSubtle}`,
-        display: "flex",
-        alignItems: "center",
-        padding: "0 24px",
-        position: "sticky",
-        top: 0,
-        zIndex: 40,
-      }}>
-      <div>
-        <div
-          style={{
-            fontFamily: font.headline,
-            fontWeight: 700,
-            fontSize: 18,
-            color: C.onSurface,
-          }}>
-          {title}
-        </div>
-        {subtitle && (
-          <div style={{ fontSize: 12, color: C.textMuted }}>{subtitle}</div>
-        )}
-      </div>
-    </header>
   );
 }
 
@@ -367,8 +335,6 @@ export function Pagination({ page, totalPages, setPage }) {
   ) {
     pages.push(i);
   }
-
-  const { paginationBtn } = require("./adminShared");
 
   return (
     <div
@@ -683,13 +649,13 @@ function DashboardPage() {
             <div
               style={{
                 display: "flex",
-                alignItems: "flex-end",
+                alignItems: "stretch",
                 gap: 12,
-                height: 120,
+                height: 160,
                 padding: "0 8px",
               }}>
               {monthly.map((m) => {
-                const pct = (m.count / maxCount) * 100;
+                const pct = Math.max((m.count / maxCount) * 100, 4);
                 return (
                   <div
                     key={m.month}
@@ -698,31 +664,46 @@ function DashboardPage() {
                       display: "flex",
                       flexDirection: "column",
                       alignItems: "center",
-                      gap: 6,
+                      justifyContent: "flex-end",
+                      minWidth: 0,
                     }}>
                     <div
                       style={{
-                        fontSize: 11,
-                        fontWeight: 700,
-                        color: C.primary,
-                      }}>
-                      {m.count}
-                    </div>
-                    <div
-                      style={{
                         width: "100%",
-                        height: `${Math.max(pct, 5)}%`,
-                        background: `linear-gradient(to top, ${C.primary}, ${C.primary}bb)`,
-                        borderRadius: "4px 4px 0 0",
-                        minHeight: 8,
-                        transition: "height 0.3s",
-                      }}
-                    />
+                        height: 120,
+                        display: "flex",
+                        alignItems: "flex-end",
+                        justifyContent: "center",
+                        position: "relative",
+                      }}>
+                      <div
+                        style={{
+                          position: "absolute",
+                          bottom: `calc(${pct}% + 6px)`,
+                          fontSize: 11,
+                          fontWeight: 700,
+                          color: C.primary,
+                          lineHeight: 1,
+                        }}>
+                        {m.count}
+                      </div>
+                      <div
+                        style={{
+                          width: "100%",
+                          height: `${pct}%`,
+                          background: `linear-gradient(to top, ${C.primary}, ${C.primary}bb)`,
+                          borderRadius: "4px 4px 0 0",
+                          minHeight: 6,
+                          transition: "height 0.3s",
+                        }}
+                      />
+                    </div>
                     <div
                       style={{
                         fontSize: 10,
                         color: C.textMuted,
                         textAlign: "center",
+                        marginTop: 8,
                       }}>
                       {m.month?.slice(5)}
                     </div>
@@ -766,6 +747,11 @@ function DashboardPage() {
               label: "Từ chối",
               value: stats?.properties?.rejected || 0,
               color: C.error,
+            },
+            {
+              label: "Đã ẩn",
+              value: stats?.properties?.hidden || 0,
+              color: C.secondary,
             },
           ].map((item) => {
             const total = stats?.properties?.total || 1;
@@ -865,21 +851,6 @@ export default function AdminPortal() {
     return <LoginPage onLogin={(u) => setUser(u)} />;
   }
 
-  const pageTitle = {
-    dashboard: {
-      title: "Tổng quan hệ thống",
-      subtitle: "Dữ liệu thời gian thực",
-    },
-    users: {
-      title: "Quản lý người dùng",
-      subtitle: "Xem xét và quản lý tài khoản",
-    },
-    pending: {
-      title: "Duyệt tin đăng",
-      subtitle: "Kiểm duyệt chất lượng bất động sản",
-    },
-  };
-
   return (
     <div>
       <Navbar />
@@ -901,10 +872,6 @@ export default function AdminPortal() {
             display: "flex",
             flexDirection: "column",
           }}>
-          <TopBar
-            title={pageTitle[page]?.title}
-            subtitle={pageTitle[page]?.subtitle}
-          />
           <main style={{ flex: 1 }}>
             {page === "dashboard" && <DashboardPage />}
             {page === "users" && <UsersPage showToast={showToast} />}

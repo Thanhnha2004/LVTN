@@ -32,6 +32,9 @@ router.get("/stats", authMiddleware, async (req, res) => {
     const [[{ total_rejected }]] = await pool.query(
       "SELECT COUNT(*) as total_rejected FROM properties WHERE status = 'rejected'",
     );
+    const [[{ total_hidden }]] = await pool.query(
+      "SELECT COUNT(*) as total_hidden FROM properties WHERE status = 'hidden'",
+    );
     const [[{ total_contacts }]] = await pool.query(
       "SELECT COUNT(*) as total_contacts FROM contacts",
     );
@@ -83,6 +86,7 @@ router.get("/stats", authMiddleware, async (req, res) => {
         pending: total_pending,
         approved: total_approved,
         rejected: total_rejected,
+        hidden: total_hidden,
       },
       contacts: { total: total_contacts },
       monthly_properties: monthly,
@@ -109,9 +113,14 @@ router.get("/users", authMiddleware, async (req, res) => {
   let params = [];
   // Search duoc dua vao params LIKE ? thay vi noi chuoi truc tiep de tranh SQL injection.
   if (search && search.trim()) {
-    where = "WHERE full_name LIKE ? OR email LIKE ?";
-    const kw = `%${search.trim()}%`;
-    params.push(kw, kw);
+    const clauses = [];
+    const tokens = search.trim().split(/\s+/).filter(Boolean).slice(0, 8);
+    tokens.forEach((token) => {
+      clauses.push("(full_name LIKE ? OR email LIKE ?)");
+      const kw = `%${token}%`;
+      params.push(kw, kw);
+    });
+    where = `WHERE ${clauses.join(" AND ")}`;
   }
 
   try {

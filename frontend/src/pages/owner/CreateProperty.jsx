@@ -5,13 +5,14 @@ import LocationPickerMap from "../../components/LocationPickerMap";
 import Navbar from "../../components/Navbar";
 import UiIcon from "../../components/UiIcon";
 import {
-  CITIES,
   DIRECTIONS,
   LEGAL_OPTIONS,
   PROPERTY_TYPES,
   formatInputPrice as formatPrice,
 } from "../../shared/property";
 import { inputStyle, labelStyle } from "../../shared/formStyles";
+import { validatePropertyForm } from "../../shared/propertyValidation";
+import { locationData } from "../../data/locationData";
 import { useToast } from "../../components/ToastProvider";
 
 const STEPS = [
@@ -71,6 +72,10 @@ export default function CreateProperty() {
 
   const [images, setImages] = useState([]);
   const [imagePreviews, setImagePreviews] = useState([]);
+  const cityOptions = Object.keys(locationData);
+  const districtOptions = form.city ? Object.keys(locationData[form.city] || {}) : [];
+  const wardOptions =
+    form.city && form.district ? locationData[form.city]?.[form.district] || [] : [];
 
   const set = (field) => (e) =>
     setForm((f) => ({ ...f, [field]: e.target.value }));
@@ -102,45 +107,13 @@ export default function CreateProperty() {
 
   const validateStep = () => {
     setError("");
-    if (step === 1) {
-      if (!form.title || form.title.trim().length < 5)
-        return (
-          setError("Tiêu đề phải có ít nhất 5 ký tự") ||
-          showToast("Tiêu đề phải có ít nhất 5 ký tự", "error") ||
-          false
-        );
-      if (!form.type)
-        return (
-          setError("Vui lòng chọn loại hình bất động sản") ||
-          showToast("Vui lòng chọn loại hình bất động sản", "error") ||
-          false
-        );
-      if (!form.price || parseFloat(form.price) <= 0)
-        return (
-          setError("Vui lòng nhập giá hợp lệ") ||
-          showToast("Vui lòng nhập giá hợp lệ", "error") ||
-          false
-        );
-      if (!form.area || parseFloat(form.area) <= 0)
-        return (
-          setError("Vui lòng nhập diện tích hợp lệ") ||
-          showToast("Vui lòng nhập diện tích hợp lệ", "error") ||
-          false
-        );
-    }
-    if (step === 2) {
-      if (!form.address.trim())
-        return (
-          setError("Vui lòng nhập địa chỉ") ||
-          showToast("Vui lòng nhập địa chỉ", "error") ||
-          false
-        );
-      if (!form.city)
-        return (
-          setError("Vui lòng chọn tỉnh/thành phố") ||
-          showToast("Vui lòng chọn tỉnh/thành phố", "error") ||
-          false
-        );
+    if (step <= 3) {
+      const validation = validatePropertyForm(form, { step });
+      if (!validation.ok) {
+        setError(validation.message);
+        showToast(validation.message, "error");
+        return false;
+      }
     }
     return true;
   };
@@ -170,31 +143,33 @@ export default function CreateProperty() {
 
   const handleSubmit = async () => {
     setError("");
-    if (!form.description || form.description.trim().length < 20) {
-      setError("Mô tả phải có ít nhất 20 ký tự");
-      showToast("Mô tả phải có ít nhất 20 ký tự", "error");
+    const validation = validatePropertyForm(form);
+    if (!validation.ok) {
+      setError(validation.message);
+      showToast(validation.message, "error");
       return;
     }
+    const values = validation.values;
     setLoading(true);
     try {
       // 1. Create property
       const res = await api.post("/api/property", {
-        title: form.title,
-        description: form.description,
-        type: form.type,
-        transaction_type: form.transaction_type,
-        price: parseFloat(form.price),
-        area: parseFloat(form.area),
-        address: form.address,
-        city: form.city,
-        district: form.district || undefined,
-        ward: form.ward || undefined,
-        bedrooms: form.bedrooms ? parseInt(form.bedrooms) : undefined,
-        bathrooms: form.bathrooms ? parseInt(form.bathrooms) : undefined,
-        direction: form.direction || undefined,
-        legal_status: form.legal_status || undefined,
-        latitude: form.latitude ? parseFloat(form.latitude) : undefined,
-        longitude: form.longitude ? parseFloat(form.longitude) : undefined,
+        title: values.title,
+        description: values.description,
+        type: values.type,
+        transaction_type: values.transaction_type,
+        price: values.price,
+        area: values.area,
+        address: values.address,
+        city: values.city,
+        district: values.district || undefined,
+        ward: values.ward || undefined,
+        bedrooms: values.bedrooms ?? undefined,
+        bathrooms: values.bathrooms ?? undefined,
+        direction: values.direction || undefined,
+        legal_status: values.legal_status || undefined,
+        latitude: values.latitude ?? undefined,
+        longitude: values.longitude ?? undefined,
       });
 
       const propId = res.data.id;
@@ -610,7 +585,7 @@ export default function CreateProperty() {
                     onBlur={blurStyle}
                   />
                   <p style={{ fontSize: 12, color: "#757575", marginTop: 4 }}>
-                    Tối thiểu 5 ký tự.
+                    Tối thiểu 10 ký tự.
                   </p>
                 </div>
 
@@ -720,12 +695,19 @@ export default function CreateProperty() {
                   </label>
                   <select
                     value={form.city}
-                    onChange={set("city")}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        city: e.target.value,
+                        district: "",
+                        ward: "",
+                      }))
+                    }
                     style={{ ...inputStyle, cursor: "pointer" }}
                     onFocus={focusStyle}
                     onBlur={blurStyle}>
                     <option value="">-- Chọn tỉnh/thành phố --</option>
-                    {CITIES.map((c) => (
+                    {cityOptions.map((c) => (
                       <option key={c} value={c}>
                         {c}
                       </option>
@@ -741,28 +723,62 @@ export default function CreateProperty() {
                     marginBottom: 20,
                   }}>
                   <div>
-                    <label style={labelStyle}>Quận / Huyện</label>
-                    <input
-                      type="text"
-                      placeholder="VD: Bình Thạnh"
+                    <label style={labelStyle}>
+                      Quận / Huyện <span style={{ color: "#b51b17" }}>*</span>
+                    </label>
+                    <select
                       value={form.district}
-                      onChange={set("district")}
-                      style={inputStyle}
+                      onChange={(e) =>
+                        setForm((f) => ({
+                          ...f,
+                          district: e.target.value,
+                          ward: "",
+                        }))
+                      }
+                      disabled={!form.city}
+                      style={{
+                        ...inputStyle,
+                        cursor: form.city ? "pointer" : "not-allowed",
+                        background: form.city ? "#fff" : "#f3f3f3",
+                      }}
                       onFocus={focusStyle}
-                      onBlur={blurStyle}
-                    />
+                      onBlur={blurStyle}>
+                      <option value="">
+                        {form.city
+                          ? "-- Chọn quận/huyện --"
+                          : "-- Chọn tỉnh/thành trước --"}
+                      </option>
+                      {districtOptions.map((d) => (
+                        <option key={d} value={d}>
+                          {d}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                   <div>
                     <label style={labelStyle}>Phường / Xã</label>
-                    <input
-                      type="text"
-                      placeholder="VD: Phường 22"
+                    <select
                       value={form.ward}
                       onChange={set("ward")}
-                      style={inputStyle}
+                      disabled={!form.district}
+                      style={{
+                        ...inputStyle,
+                        cursor: form.district ? "pointer" : "not-allowed",
+                        background: form.district ? "#fff" : "#f3f3f3",
+                      }}
                       onFocus={focusStyle}
-                      onBlur={blurStyle}
-                    />
+                      onBlur={blurStyle}>
+                      <option value="">
+                        {form.district
+                          ? "-- Chọn phường/xã --"
+                          : "-- Chọn quận/huyện trước --"}
+                      </option>
+                      {wardOptions.map((w) => (
+                        <option key={w} value={w}>
+                          {w}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                 </div>
 
@@ -1046,7 +1062,7 @@ export default function CreateProperty() {
                   }}>
                   Ảnh chất lượng cao giúp tăng{" "}
                   <strong style={{ color: "#b51b17" }}>300%</strong> lượt click
-                  so với ảnh mờ hoặc ảnh phối cảnh. Tối đa 8 ảnh định dạng JPG,
+                  so với ảnh mờ hoặc ảnh phối cảnh. Tối đa 5 ảnh định dạng JPG,
                   PNG, WEBP.
                 </p>
 
@@ -1085,7 +1101,7 @@ export default function CreateProperty() {
                     Kéo ảnh vào đây hoặc nhấn để chọn
                   </p>
                   <p style={{ fontSize: 13, color: "#8f706b" }}>
-                    JPG, PNG, WEBP — Tối đa 8 ảnh
+                    JPG, PNG, WEBP — Tối đa 5 ảnh
                   </p>
                   <input
                     ref={fileRef}

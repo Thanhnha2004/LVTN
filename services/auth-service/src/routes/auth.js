@@ -18,9 +18,26 @@ function generateOtp() {
 // Sau khi tao user, he thong sinh OTP email_verify de bat buoc xac minh email.
 router.post("/register", async (req, res) => {
   const { full_name, email, password, role, phone_number } = req.body;
+  const normalizedName = String(full_name || "").trim().replace(/\s+/g, " ");
+  const normalizedPhone = String(phone_number || "").trim();
+  const nameParts = normalizedName.split(" ").filter(Boolean);
+  const nameRegex = /^[A-Za-zÀ-ỹ\s'.-]+$/;
+  const phoneRegex = /^0\d{9}$/;
 
-  if (!full_name || full_name.trim().length < 2)
-    return res.status(400).json({ message: "Họ tên phải có ít nhất 2 ký tự" });
+  if (normalizedName.length < 4 || nameParts.length < 2)
+    return res
+      .status(400)
+      .json({ message: "Họ tên phải có ít nhất 2 từ và tối thiểu 4 ký tự" });
+
+  if (!nameRegex.test(normalizedName))
+    return res.status(400).json({
+      message: "Họ tên không được chứa số hoặc ký tự đặc biệt không hợp lệ",
+    });
+
+  if (!phoneRegex.test(normalizedPhone))
+    return res.status(400).json({
+      message: "Số điện thoại phải gồm 10 chữ số và bắt đầu bằng số 0",
+    });
 
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   if (!emailRegex.test(email))
@@ -47,7 +64,7 @@ router.post("/register", async (req, res) => {
     // Tạo tài khoản với email_verified = 0
     const [result] = await pool.query(
       "INSERT INTO users (full_name, email, password_hash, role, phone_number, email_verified) VALUES (?, ?, ?, ?, ?, 0)",
-      [full_name, email, hash, validRole, phone_number || null],
+      [normalizedName, email, hash, validRole, normalizedPhone],
     );
 
     // Gửi OTP ngay sau khi đăng ký
@@ -61,7 +78,7 @@ router.post("/register", async (req, res) => {
 
     // Gửi mail không đồng bộ không block response
     // Gui mail bat dong bo: neu SMTP loi thi user van duoc tao, backend chi log loi gui mail.
-    sendOtpEmail({ toEmail: email, toName: full_name, otp }).catch((err) =>
+    sendOtpEmail({ toEmail: email, toName: normalizedName, otp }).catch((err) =>
       console.error("Send OTP mail error:", err.message),
     );
 
@@ -74,7 +91,6 @@ router.post("/register", async (req, res) => {
     res.status(500).json({ message: "Lỗi server", error: err.message });
   }
 });
-
 // POST /api/auth/send-otp
 // Gửi lại OTP (dùng khi user chưa xác minh hoặc OTP hết hạn)
 // Public API: tao OTP xac minh email moi, dong thoi vo hieu hoa cac OTP cu chua dung.
@@ -330,6 +346,7 @@ router.post("/login", async (req, res) => {
       user: {
         id: user.id,
         full_name: user.full_name,
+        avatar_url: user.avatar_url,
         role: user.role,
         email_verified: !!user.email_verified,
       },
@@ -364,7 +381,26 @@ router.get("/me", authMiddleware, async (req, res) => {
 // Protected API: cap nhat ho so ca nhan. Neu co avatar thi upload qua Cloudinary va luu URL.
 router.put("/me", authMiddleware, upload.single("avatar"), async (req, res) => {
   const { full_name, phone_number } = req.body;
-  if (!full_name) return res.status(400).json({ message: "Thiếu họ tên" });
+  const normalizedName = String(full_name || "").trim().replace(/\s+/g, " ");
+  const normalizedPhone = String(phone_number || "").trim();
+  const nameParts = normalizedName.split(" ").filter(Boolean);
+  const nameRegex = /^[A-Za-zÀ-ỹ\s'.-]+$/;
+  const phoneRegex = /^0\d{9}$/;
+
+  if (normalizedName.length < 4 || nameParts.length < 2)
+    return res
+      .status(400)
+      .json({ message: "Họ tên phải có ít nhất 2 từ và tối thiểu 4 ký tự" });
+
+  if (!nameRegex.test(normalizedName))
+    return res.status(400).json({
+      message: "Họ tên không được chứa số hoặc ký tự đặc biệt không hợp lệ",
+    });
+
+  if (!phoneRegex.test(normalizedPhone))
+    return res.status(400).json({
+      message: "Số điện thoại phải gồm 10 chữ số và bắt đầu bằng số 0",
+    });
 
   try {
     let avatar_url = undefined;
@@ -394,12 +430,12 @@ router.put("/me", authMiddleware, upload.single("avatar"), async (req, res) => {
     if (avatar_url !== undefined) {
       await pool.query(
         "UPDATE users SET full_name = ?, phone_number = ?, avatar_url = ? WHERE id = ?",
-        [full_name, phone_number || null, avatar_url, req.user.id],
+        [normalizedName, normalizedPhone, avatar_url, req.user.id],
       );
     } else {
       await pool.query(
         "UPDATE users SET full_name = ?, phone_number = ? WHERE id = ?",
-        [full_name, phone_number || null, req.user.id],
+        [normalizedName, normalizedPhone, req.user.id],
       );
     }
 
@@ -408,7 +444,6 @@ router.put("/me", authMiddleware, upload.single("avatar"), async (req, res) => {
     res.status(500).json({ message: "Lỗi server", error: err.message });
   }
 });
-
 // PUT /api/auth/change-password — đổi mật khẩu
 // Protected API: doi mat khau bang cach so sanh old_password voi password_hash cu.
 // Mat khau moi tiep tuc duoc hash bang bcrypt truoc khi luu.

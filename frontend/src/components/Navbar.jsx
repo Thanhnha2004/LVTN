@@ -19,6 +19,7 @@ const navButtonStyle = ({ isActive }) => ({
 
 function UserDropdown({ user, onLogout }) {
   const [open, setOpen] = useState(false);
+  const initial = user.full_name?.charAt(0).toUpperCase() || "?";
 
   return (
     <li className="nav-item" style={{ position: "relative" }}>
@@ -26,17 +27,31 @@ function UserDropdown({ user, onLogout }) {
         className="nav-link d-flex align-items-center gap-2 border-0 bg-transparent"
         style={{ fontSize: 14, cursor: "pointer" }}
         onClick={() => setOpen(!open)}>
-        <div
-          className="rounded-circle d-flex align-items-center justify-content-center text-white"
-          style={{
-            width: 30,
-            height: 30,
-            background: "#2c5364",
-            fontSize: 13,
-            fontWeight: "bold",
-          }}>
-          {user.full_name?.charAt(0).toUpperCase()}
-        </div>
+        {user.avatar_url ? (
+          <img
+            src={user.avatar_url}
+            alt={user.full_name || "avatar"}
+            className="rounded-circle"
+            style={{
+              width: 30,
+              height: 30,
+              objectFit: "cover",
+              border: "1px solid #e5e7eb",
+            }}
+          />
+        ) : (
+          <div
+            className="rounded-circle d-flex align-items-center justify-content-center text-white"
+            style={{
+              width: 30,
+              height: 30,
+              background: "#2c5364",
+              fontSize: 13,
+              fontWeight: "bold",
+            }}>
+            {initial}
+          </div>
+        )}
         <span className="d-none d-md-inline">{user.full_name}</span>
       </button>
 

@@ -509,3 +509,347 @@ INSERT IGNORE INTO saved_properties (buyer_id, property_id) VALUES
 (10, 17), (10, 21), (10, 34),
 (11, 13), (11, 23), (11, 27),
 (12, 14), (12, 28), (12, 34);
+
+-- =============================================
+-- SEED MO RONG LAN 2: du lieu co dau, da vung mien de demo loc nang cao
+-- Mat khau tat ca tai khoan: 123456
+-- =============================================
+
+INSERT INTO users (full_name, email, password_hash, phone_number, role, status, email_verified) VALUES
+('Công ty BĐS An Gia', 'owner5@bds.com', '$2b$10$nvgzofSTXqsU4CssCm..8eCx4WAN.biG8CFnpbfyQULMwF.Wq9l8y', '0903000001', 'owner', 'active', 1),
+('Sàn giao dịch Nhà Xanh', 'owner6@bds.com', '$2b$10$nvgzofSTXqsU4CssCm..8eCx4WAN.biG8CFnpbfyQULMwF.Wq9l8y', '0903000002', 'owner', 'active', 1),
+('Khách demo miền Bắc', 'buyer7@bds.com', '$2b$10$nvgzofSTXqsU4CssCm..8eCx4WAN.biG8CFnpbfyQULMwF.Wq9l8y', '0903000003', 'buyer', 'active', 1),
+('Khách demo miền Trung', 'buyer8@bds.com', '$2b$10$nvgzofSTXqsU4CssCm..8eCx4WAN.biG8CFnpbfyQULMwF.Wq9l8y', '0903000004', 'buyer', 'active', 1);
+
+INSERT INTO properties
+  (owner_id, title, description, type, transaction_type, price, area,
+   bedrooms, bathrooms, address, ward, district, city,
+   latitude, longitude, direction, legal_status, status, reject_reason,
+   approved_at, rejected_at, hidden_at, sold_at, featured_until, view_count, created_at)
+VALUES
+(13, 'Căn hộ Cầu Giấy 2PN gần công viên', 'Căn hộ sáng thoáng, ban công rộng, khu dân cư văn minh, gần trường học và công viên Cầu Giấy.', 'apartment', 'sale', 3850000000, 72, 2, 2, '68 Duy Tân', 'Dịch Vọng', 'Cầu Giấy', 'Hà Nội', 21.03020000, 105.78470000, 'east', 'sohong', 'approved', NULL, DATE_SUB(NOW(), INTERVAL 18 DAY), NULL, NULL, NULL, DATE_ADD(NOW(), INTERVAL 22 DAY), 46, DATE_SUB(NOW(), INTERVAL 19 DAY)),
+(13, 'Cho thuê căn hộ Mỹ Đình full nội thất', 'Căn hộ 1 phòng ngủ, đầy đủ nội thất, phù hợp chuyên gia hoặc nhân viên văn phòng làm việc tại Mỹ Đình.', 'apartment', 'rent', 10500000, 45, 1, 1, '12 Hàm Nghi', 'Mỹ Đình 1', 'Nam Từ Liêm', 'Hà Nội', 21.02870000, 105.76920000, 'south', 'sohong', 'approved', NULL, DATE_SUB(NOW(), INTERVAL 16 DAY), NULL, NULL, NULL, NULL, 29, DATE_SUB(NOW(), INTERVAL 17 DAY)),
+(13, 'Nhà phố Thanh Xuân 5 tầng ô tô đỗ cửa', 'Nhà xây kiên cố, ngõ thông, gần Nguyễn Trãi, thuận tiện ở kết hợp cho thuê.', 'house', 'sale', 8250000000, 64, 4, 4, '35 Nguyễn Trãi', 'Nhân Chính', 'Thanh Xuân', 'Hà Nội', 21.00230000, 105.80750000, 'west', 'sohong', 'approved', NULL, DATE_SUB(NOW(), INTERVAL 14 DAY), NULL, NULL, NULL, DATE_ADD(NOW(), INTERVAL 18 DAY), 52, DATE_SUB(NOW(), INTERVAL 15 DAY)),
+(13, 'Văn phòng Hoàn Kiếm gần phố đi bộ', 'Sàn văn phòng trung tâm, có thang máy, lễ tân, phù hợp công ty dịch vụ hoặc đại diện thương mại.', 'office', 'rent', 48000000, 110, NULL, 2, '22 Tràng Tiền', 'Tràng Tiền', 'Hoàn Kiếm', 'Hà Nội', 21.02410000, 105.85640000, 'north', 'other', 'approved', NULL, DATE_SUB(NOW(), INTERVAL 12 DAY), NULL, NULL, NULL, NULL, 21, DATE_SUB(NOW(), INTERVAL 13 DAY)),
+(13, 'Căn hộ Vĩnh Tuy đang chờ duyệt', 'Tin mới đăng của chủ nhà, đang chờ admin kiểm duyệt hình ảnh và pháp lý.', 'apartment', 'sale', 2650000000, 58, 2, 1, '99 Minh Khai', 'Vĩnh Tuy', 'Hai Bà Trưng', 'Hà Nội', 20.99990000, 105.86880000, 'southeast', 'dangchoso', 'pending', NULL, NULL, NULL, NULL, NULL, NULL, 3, DATE_SUB(NOW(), INTERVAL 2 DAY)),
+(13, 'Căn hộ Sơn Trà view biển Mỹ Khê', 'Căn hộ nghỉ dưỡng view biển, nội thất đẹp, phù hợp ở hoặc khai thác cho thuê ngắn hạn.', 'apartment', 'sale', 5200000000, 86, 2, 2, 'Võ Nguyên Giáp', 'Phước Mỹ', 'Sơn Trà', 'Đà Nẵng', 16.06710000, 108.24560000, 'east', 'sohong', 'approved', NULL, DATE_SUB(NOW(), INTERVAL 11 DAY), NULL, NULL, NULL, DATE_ADD(NOW(), INTERVAL 28 DAY), 61, DATE_SUB(NOW(), INTERVAL 12 DAY)),
+(13, 'Nhà phố Hải Châu gần sông Hàn', 'Nhà phố vị trí trung tâm, khu dân cư sầm uất, thích hợp mở văn phòng hoặc homestay.', 'house', 'sale', 6900000000, 78, 3, 3, '48 Bạch Đằng', 'Hải Châu 1', 'Hải Châu', 'Đà Nẵng', 16.06800000, 108.22310000, 'north', 'sohong', 'approved', NULL, DATE_SUB(NOW(), INTERVAL 10 DAY), NULL, NULL, NULL, NULL, 33, DATE_SUB(NOW(), INTERVAL 11 DAY)),
+(13, 'Văn phòng Ngũ Hành Sơn cho thuê', 'Văn phòng nhỏ gần khu du lịch, mặt tiền sáng, phù hợp agency du lịch hoặc startup.', 'office', 'rent', 18500000, 62, NULL, 1, 'Ngũ Hành Sơn', 'Mỹ An', 'Ngũ Hành Sơn', 'Đà Nẵng', 16.04830000, 108.24420000, 'south', 'other', 'approved', NULL, DATE_SUB(NOW(), INTERVAL 8 DAY), NULL, NULL, NULL, NULL, 17, DATE_SUB(NOW(), INTERVAL 9 DAY)),
+(13, 'Đất nền Hòa Hải gần khu resort', 'Đất nền đường rộng, gần biển và khu nghỉ dưỡng, phù hợp đầu tư dài hạn.', 'land', 'sale', 3100000000, 150, NULL, NULL, 'Đường Trường Sa', 'Hòa Hải', 'Ngũ Hành Sơn', 'Đà Nẵng', 15.99230000, 108.26920000, NULL, 'sohong', 'approved', NULL, DATE_SUB(NOW(), INTERVAL 7 DAY), NULL, NULL, NULL, NULL, 24, DATE_SUB(NOW(), INTERVAL 8 DAY)),
+(13, 'Nhà phố Thủ Dầu Một gần trung tâm hành chính', 'Nhà phố 1 trệt 2 lầu, khu dân cư đông, gần trung tâm hành chính Bình Dương.', 'house', 'sale', 4200000000, 96, 3, 3, 'Đại lộ Bình Dương', 'Phú Hòa', 'Thủ Dầu Một', 'Bình Dương', 10.98040000, 106.67490000, 'east', 'sohong', 'approved', NULL, DATE_SUB(NOW(), INTERVAL 15 DAY), NULL, NULL, NULL, DATE_ADD(NOW(), INTERVAL 16 DAY), 38, DATE_SUB(NOW(), INTERVAL 16 DAY)),
+(14, 'Căn hộ Dĩ An cho thuê gần làng đại học', 'Căn hộ mới, có hồ bơi, gym, di chuyển thuận tiện sang Thủ Đức.', 'apartment', 'rent', 8500000, 50, 2, 1, 'Quốc lộ 1K', 'Dĩ An', 'Dĩ An', 'Bình Dương', 10.90620000, 106.76900000, 'south', 'sohong', 'approved', NULL, DATE_SUB(NOW(), INTERVAL 13 DAY), NULL, NULL, NULL, NULL, 19, DATE_SUB(NOW(), INTERVAL 14 DAY)),
+(14, 'Đất nền Mỹ Phước Bến Cát sổ riêng', 'Lô đất vuông vức, đường nhựa 12m, gần khu công nghiệp và tiện ích dân sinh.', 'land', 'sale', 1450000000, 125, NULL, NULL, 'Khu đô thị Mỹ Phước', 'Mỹ Phước', 'Bến Cát', 'Bình Dương', 11.15160000, 106.60760000, NULL, 'sohong', 'approved', NULL, DATE_SUB(NOW(), INTERVAL 9 DAY), NULL, NULL, NULL, NULL, 26, DATE_SUB(NOW(), INTERVAL 10 DAY)),
+(14, 'Nhà Thuận An đã giao dịch', 'Tin mẫu trạng thái đã bán để minh họa quy trình quản lý tin sau giao dịch.', 'house', 'sale', 3300000000, 74, 3, 2, 'Đường 22 tháng 12', 'An Phú', 'Thuận An', 'Bình Dương', 10.93320000, 106.71110000, 'west', 'sohong', 'sold', NULL, DATE_SUB(NOW(), INTERVAL 25 DAY), NULL, NULL, DATE_SUB(NOW(), INTERVAL 4 DAY), NULL, 12, DATE_SUB(NOW(), INTERVAL 26 DAY)),
+(14, 'Biệt thự Biên Hòa ven sông', 'Biệt thự sân vườn rộng, không gian yên tĩnh, phù hợp gia đình cần nghỉ dưỡng cuối tuần.', 'house', 'sale', 7800000000, 240, 4, 4, 'Đường ven sông Đồng Nai', 'Thống Nhất', 'Biên Hòa', 'Đồng Nai', 10.95060000, 106.82340000, 'northeast', 'sohong', 'approved', NULL, DATE_SUB(NOW(), INTERVAL 20 DAY), NULL, NULL, NULL, DATE_ADD(NOW(), INTERVAL 40 DAY), 49, DATE_SUB(NOW(), INTERVAL 21 DAY)),
+(14, 'Đất Nhơn Trạch gần khu đô thị mới', 'Đất nền đầu tư, gần cầu Cát Lái tương lai, khu vực có tiềm năng phát triển.', 'land', 'sale', 1180000000, 100, NULL, NULL, 'Đường Nguyễn Hữu Cảnh', 'Phú Hội', 'Nhơn Trạch', 'Đồng Nai', 10.71970000, 106.89050000, NULL, 'dangchoso', 'pending', NULL, NULL, NULL, NULL, NULL, NULL, 4, DATE_SUB(NOW(), INTERVAL 3 DAY)),
+(14, 'Căn hộ Vũng Tàu view biển cho thuê', 'Căn hộ nghỉ dưỡng gần bãi Sau, nội thất đầy đủ, có thể thuê ngắn hạn hoặc dài hạn.', 'apartment', 'rent', 16000000, 65, 2, 2, 'Thùy Vân', 'Phường 2', 'Vũng Tàu', 'Bà Rịa - Vũng Tàu', 10.33680000, 107.08790000, 'east', 'sohong', 'approved', NULL, DATE_SUB(NOW(), INTERVAL 18 DAY), NULL, NULL, NULL, NULL, 37, DATE_SUB(NOW(), INTERVAL 19 DAY)),
+(14, 'Đất Phú Mỹ gần cụm cảng', 'Lô đất gần khu công nghiệp và cụm cảng, phù hợp đầu tư hoặc xây kho nhỏ.', 'land', 'sale', 2050000000, 180, NULL, NULL, 'Đường Mỹ Xuân', 'Phú Mỹ', 'Phú Mỹ', 'Bà Rịa - Vũng Tàu', 10.59020000, 107.04310000, NULL, 'sohong', 'approved', NULL, DATE_SUB(NOW(), INTERVAL 16 DAY), NULL, NULL, NULL, NULL, 20, DATE_SUB(NOW(), INTERVAL 17 DAY)),
+(14, 'Nhà phố Bến Lức gần cao tốc', 'Nhà phố khu dân cư mới, kết nối nhanh TP.HCM qua cao tốc, phù hợp gia đình trẻ.', 'house', 'sale', 2450000000, 80, 3, 2, 'Đường Nguyễn Văn Tuôi', 'Bến Lức', 'Bến Lức', 'Long An', 10.64230000, 106.48910000, 'south', 'sohong', 'approved', NULL, DATE_SUB(NOW(), INTERVAL 12 DAY), NULL, NULL, NULL, NULL, 18, DATE_SUB(NOW(), INTERVAL 13 DAY)),
+(14, 'Căn hộ Ninh Kiều trung tâm Cần Thơ', 'Căn hộ trung tâm, gần bến Ninh Kiều, tiện cho thuê hoặc ở lâu dài.', 'apartment', 'sale', 2350000000, 68, 2, 2, 'Đường 30 tháng 4', 'Xuân Khánh', 'Ninh Kiều', 'Cần Thơ', 10.03420000, 105.78110000, 'west', 'sohong', 'approved', NULL, DATE_SUB(NOW(), INTERVAL 10 DAY), NULL, NULL, NULL, DATE_ADD(NOW(), INTERVAL 21 DAY), 34, DATE_SUB(NOW(), INTERVAL 11 DAY)),
+(14, 'Nhà Hải Phòng gần Lạch Tray', 'Nhà phố 4 tầng, gần khu thương mại, trường học, giao thông thuận tiện.', 'house', 'sale', 5100000000, 70, 4, 3, 'Lạch Tray', 'Lạch Tray', 'Ngô Quyền', 'Hải Phòng', 20.84830000, 106.68810000, 'north', 'sohong', 'approved', NULL, DATE_SUB(NOW(), INTERVAL 9 DAY), NULL, NULL, NULL, NULL, 23, DATE_SUB(NOW(), INTERVAL 10 DAY)),
+(14, 'Căn hộ Nha Trang gần biển Lộc Thọ', 'Căn hộ dịch vụ gần biển, khai thác cho thuê tốt, nội thất hiện đại.', 'apartment', 'sale', 3600000000, 62, 2, 1, 'Trần Phú', 'Lộc Thọ', 'Nha Trang', 'Khánh Hòa', 12.23960000, 109.19670000, 'east', 'sohong', 'approved', NULL, DATE_SUB(NOW(), INTERVAL 8 DAY), NULL, NULL, NULL, DATE_ADD(NOW(), INTERVAL 19 DAY), 44, DATE_SUB(NOW(), INTERVAL 9 DAY)),
+(14, 'Đất Đà Lạt view đồi thông', 'Đất nghỉ dưỡng view thoáng, phù hợp xây homestay hoặc biệt thự vườn.', 'land', 'sale', 1900000000, 320, NULL, NULL, 'Đường Hoàng Hoa Thám', 'Phường 10', 'Đà Lạt', 'Lâm Đồng', 11.95040000, 108.46760000, NULL, 'dangchoso', 'approved', NULL, DATE_SUB(NOW(), INTERVAL 6 DAY), NULL, NULL, NULL, NULL, 30, DATE_SUB(NOW(), INTERVAL 7 DAY)),
+(14, 'Căn hộ Hạ Long view vịnh', 'Căn hộ du lịch view vịnh, gần Bãi Cháy, tiện khai thác lưu trú.', 'apartment', 'sale', 4300000000, 75, 2, 2, 'Đường Hạ Long', 'Bãi Cháy', 'Hạ Long', 'Quảng Ninh', 20.95060000, 107.05100000, 'east', 'sohong', 'approved', NULL, DATE_SUB(NOW(), INTERVAL 5 DAY), NULL, NULL, NULL, NULL, 36, DATE_SUB(NOW(), INTERVAL 6 DAY)),
+(14, 'Nhà phố Từ Sơn gần khu công nghiệp', 'Nhà phố khu dân cư hiện hữu, nhu cầu thuê cao, phù hợp đầu tư dòng tiền.', 'house', 'sale', 3150000000, 72, 3, 3, 'Đường Lý Thường Kiệt', 'Đình Bảng', 'Từ Sơn', 'Bắc Ninh', 21.11820000, 105.96090000, 'south', 'sohong', 'approved', NULL, DATE_SUB(NOW(), INTERVAL 4 DAY), NULL, NULL, NULL, NULL, 15, DATE_SUB(NOW(), INTERVAL 5 DAY)),
+(14, 'Đất Văn Giang gần Ecopark bị từ chối', 'Tin mẫu bị từ chối do thiếu thông tin pháp lý chi tiết.', 'land', 'sale', 2700000000, 95, NULL, NULL, 'Đường liên xã', 'Xuân Quan', 'Văn Giang', 'Hưng Yên', 20.96290000, 105.93070000, NULL, 'dangchoso', 'rejected', 'Vui lòng bổ sung giấy tờ pháp lý và ảnh mặt bằng rõ hơn.', NULL, DATE_SUB(NOW(), INTERVAL 2 DAY), NULL, NULL, NULL, 6, DATE_SUB(NOW(), INTERVAL 4 DAY)),
+(14, 'Văn phòng Sầm Sơn gần biển', 'Mặt bằng văn phòng kết hợp kinh doanh dịch vụ du lịch, vị trí gần trục chính ra biển.', 'office', 'rent', 15000000, 58, NULL, 1, 'Đường Hồ Xuân Hương', 'Trường Sơn', 'Sầm Sơn', 'Thanh Hóa', 19.74300000, 105.90200000, 'east', 'other', 'approved', NULL, DATE_SUB(NOW(), INTERVAL 3 DAY), NULL, NULL, NULL, NULL, 9, DATE_SUB(NOW(), INTERVAL 4 DAY)),
+(14, 'Nhà phố Huế gần Vỹ Dạ đang ẩn', 'Tin đã duyệt nhưng chủ nhà tạm ẩn để cập nhật giá bán và hình ảnh.', 'house', 'sale', 2900000000, 66, 3, 2, 'Đường Nguyễn Sinh Cung', 'Vỹ Dạ', 'Huế', 'Thừa Thiên Huế', 16.46470000, 107.60740000, 'northwest', 'sohong', 'hidden', NULL, DATE_SUB(NOW(), INTERVAL 7 DAY), NULL, DATE_SUB(NOW(), INTERVAL 1 DAY), NULL, NULL, 8, DATE_SUB(NOW(), INTERVAL 8 DAY));
+
+INSERT INTO property_status_history (property_id, old_status, new_status, actor_id, note, created_at)
+SELECT id, NULL, 'pending', owner_id, 'Owner tạo tin đăng', DATE_SUB(created_at, INTERVAL 1 HOUR)
+FROM properties
+WHERE id BETWEEN 35 AND 60;
+
+INSERT INTO property_status_history (property_id, old_status, new_status, actor_id, note, created_at)
+SELECT id, 'pending', status, 1,
+       CASE
+         WHEN status = 'approved' THEN 'Admin duyệt tin đăng'
+         WHEN status = 'rejected' THEN reject_reason
+         WHEN status = 'hidden' THEN 'Owner tạm ẩn tin đăng'
+         WHEN status = 'sold' THEN 'Owner đánh dấu đã giao dịch'
+         ELSE 'Tin đăng chờ duyệt'
+       END,
+       COALESCE(approved_at, rejected_at, hidden_at, sold_at, created_at)
+FROM properties
+WHERE id BETWEEN 35 AND 60
+  AND status <> 'pending';
+
+INSERT INTO featured_orders
+  (property_id, owner_id, package_id, amount, payment_method, status, payment_code,
+   paid_at, featured_start_at, featured_end_at, created_at)
+VALUES
+(35, 13, 2, 179000, 'vnpay', 'paid', 'VIP-SEED-0035', DATE_SUB(NOW(), INTERVAL 2 DAY), DATE_SUB(NOW(), INTERVAL 2 DAY), DATE_ADD(NOW(), INTERVAL 22 DAY), DATE_SUB(NOW(), INTERVAL 2 DAY)),
+(37, 13, 1, 99000, 'vnpay', 'paid', 'VIP-SEED-0037', DATE_SUB(NOW(), INTERVAL 3 DAY), DATE_SUB(NOW(), INTERVAL 3 DAY), DATE_ADD(NOW(), INTERVAL 18 DAY), DATE_SUB(NOW(), INTERVAL 3 DAY)),
+(40, 13, 3, 299000, 'vnpay', 'paid', 'VIP-SEED-0040', DATE_SUB(NOW(), INTERVAL 1 DAY), DATE_SUB(NOW(), INTERVAL 1 DAY), DATE_ADD(NOW(), INTERVAL 28 DAY), DATE_SUB(NOW(), INTERVAL 1 DAY)),
+(44, 13, 1, 99000, 'vnpay', 'paid', 'VIP-SEED-0044', DATE_SUB(NOW(), INTERVAL 4 DAY), DATE_SUB(NOW(), INTERVAL 4 DAY), DATE_ADD(NOW(), INTERVAL 16 DAY), DATE_SUB(NOW(), INTERVAL 4 DAY)),
+(48, 14, 3, 299000, 'vnpay', 'paid', 'VIP-SEED-0048', DATE_SUB(NOW(), INTERVAL 5 DAY), DATE_SUB(NOW(), INTERVAL 5 DAY), DATE_ADD(NOW(), INTERVAL 40 DAY), DATE_SUB(NOW(), INTERVAL 5 DAY)),
+(53, 14, 2, 179000, 'vnpay', 'paid', 'VIP-SEED-0053', DATE_SUB(NOW(), INTERVAL 2 DAY), DATE_SUB(NOW(), INTERVAL 2 DAY), DATE_ADD(NOW(), INTERVAL 21 DAY), DATE_SUB(NOW(), INTERVAL 2 DAY)),
+(55, 14, 2, 179000, 'vnpay', 'paid', 'VIP-SEED-0055', DATE_SUB(NOW(), INTERVAL 3 DAY), DATE_SUB(NOW(), INTERVAL 3 DAY), DATE_ADD(NOW(), INTERVAL 19 DAY), DATE_SUB(NOW(), INTERVAL 3 DAY));
+
+INSERT INTO property_images (property_id, url, `order`) VALUES
+(35, 'https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=1000&q=80', 1),
+(35, 'https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=1000&q=80', 2),
+(36, 'https://images.unsplash.com/photo-1493809842364-78817add7ffb?w=1000&q=80', 1),
+(37, 'https://images.unsplash.com/photo-1600585154526-990dced4db0d?w=1000&q=80', 1),
+(38, 'https://images.unsplash.com/photo-1497366811353-6870744d04b2?w=1000&q=80', 1),
+(39, 'https://images.unsplash.com/photo-1560448204-603b3fc33ddc?w=1000&q=80', 1),
+(40, 'https://images.unsplash.com/photo-1560185007-c5ca9d2c014d?w=1000&q=80', 1),
+(41, 'https://images.unsplash.com/photo-1600566753190-17f0baa2a6c3?w=1000&q=80', 1),
+(42, 'https://images.unsplash.com/photo-1497366754035-f200968a6e72?w=1000&q=80', 1),
+(43, 'https://images.unsplash.com/photo-1500382017468-9049fed747ef?w=1000&q=80', 1),
+(44, 'https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?w=1000&q=80', 1),
+(45, 'https://images.unsplash.com/photo-1493809842364-78817add7ffb?w=1000&q=80', 1),
+(46, 'https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?w=1000&q=80', 1),
+(47, 'https://images.unsplash.com/photo-1570129477492-45c003edd2be?w=1000&q=80', 1),
+(48, 'https://images.unsplash.com/photo-1600607687920-4e2a09cf159d?w=1000&q=80', 1),
+(49, 'https://images.unsplash.com/photo-1500382017468-9049fed747ef?w=1000&q=80', 1),
+(50, 'https://images.unsplash.com/photo-1493809842364-78817add7ffb?w=1000&q=80', 1),
+(51, 'https://images.unsplash.com/photo-1500382017468-9049fed747ef?w=1000&q=80', 1),
+(52, 'https://images.unsplash.com/photo-1570129477492-45c003edd2be?w=1000&q=80', 1),
+(53, 'https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=1000&q=80', 1),
+(54, 'https://images.unsplash.com/photo-1600566753086-00f18fb6b3ea?w=1000&q=80', 1),
+(55, 'https://images.unsplash.com/photo-1560185007-c5ca9d2c014d?w=1000&q=80', 1),
+(56, 'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?w=1000&q=80', 1),
+(57, 'https://images.unsplash.com/photo-1600566752355-35792bedcfea?w=1000&q=80', 1),
+(58, 'https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?w=1000&q=80', 1),
+(59, 'https://images.unsplash.com/photo-1497366412874-3415097a27e7?w=1000&q=80', 1),
+(60, 'https://images.unsplash.com/photo-1513584684374-8bab748fbf90?w=1000&q=80', 1);
+
+INSERT INTO contacts
+  (property_id, buyer_id, message, phone_number, owner_reply, status, lead_status, owner_note)
+VALUES
+(35, 15, 'Tôi muốn xem căn hộ Cầu Giấy vào cuối tuần này.', '0903000003', 'Bên em còn lịch chiều thứ bảy, anh/chị xác nhận giúp em.', 'replied', 'scheduled', 'Khách quan tâm vị trí gần công viên.'),
+(37, 16, 'Nhà Thanh Xuân có thương lượng được thêm không?', '0903000004', NULL, 'pending', 'new', NULL),
+(40, 15, 'Căn hộ Sơn Trà có khai thác cho thuê theo ngày được không?', '0903000003', 'Khu này cho thuê ngắn hạn tốt, em sẽ gửi thêm bảng dòng tiền tham khảo.', 'replied', 'contacted', 'Khách hỏi về đầu tư nghỉ dưỡng.'),
+(44, 16, 'Nhà Thủ Dầu Một có hỗ trợ vay ngân hàng không?', '0903000004', NULL, 'pending', 'new', NULL),
+(48, 15, 'Biệt thự Biên Hòa có sân đậu xe mấy chiếc?', '0903000003', 'Sân có thể đậu 2 ô tô và vài xe máy.', 'replied', 'scheduled', 'Đã hẹn xem nhà sáng chủ nhật.'),
+(53, 16, 'Căn hộ Ninh Kiều có cho thuê lại được không?', '0903000004', NULL, 'pending', 'contacted', 'Khách cần tính dòng tiền.'),
+(55, 15, 'Căn hộ Nha Trang có phí quản lý bao nhiêu?', '0903000003', 'Phí quản lý khoảng 12.000đ/m2/tháng.', 'replied', 'closed', 'Khách muốn giữ chỗ.'),
+(60, 16, 'Nhà Huế đang ẩn thì khi nào xem được?', '0903000004', NULL, 'pending', 'new', NULL);
+
+INSERT IGNORE INTO saved_properties (buyer_id, property_id) VALUES
+(15, 35), (15, 40), (15, 48), (15, 55),
+(16, 37), (16, 44), (16, 53), (16, 60),
+(3, 35), (3, 48), (5, 40), (5, 55);
+
+-- =============================================
+-- CHUAN HOA DU LIEU DEMO CU: doi cac tin khong dau sang co dau
+-- de hien thi dep va loc khop voi select dia diem tren giao dien.
+-- =============================================
+
+UPDATE properties SET
+  title = 'Căn hộ 1PN Thủ Thiêm view sông',
+  description = 'Căn hộ mới bàn giao, view sông, nội thất cơ bản, phù hợp người đi làm tại trung tâm.',
+  address = '12 Trần Bạch Đằng',
+  ward = 'Thủ Thiêm',
+  district = 'TP Thủ Đức',
+  city = 'Hồ Chí Minh'
+WHERE id = 11;
+
+UPDATE properties SET
+  title = 'Căn hộ 3PN Tân Phú gần Aeon Mall',
+  description = 'Căn hộ rộng, 3 phòng ngủ, khu dân cư an ninh, gần trung tâm thương mại và trường học.',
+  address = '30 Bờ Bao Tân Thắng',
+  ward = 'Sơn Kỳ',
+  district = 'Tân Phú',
+  city = 'Hồ Chí Minh'
+WHERE id = 12;
+
+UPDATE properties SET
+  title = 'Nhà phố Phú Nhuận hẻm 6m',
+  description = 'Nhà phố 1 trệt 3 lầu, hẻm xe hơi, khu y tế văn phòng, thích hợp ở kết hợp kinh doanh.',
+  address = '15 Hoa Lan',
+  ward = 'Phường 2',
+  district = 'Phú Nhuận',
+  city = 'Hồ Chí Minh'
+WHERE id = 13;
+
+UPDATE properties SET
+  title = 'Văn phòng Quận 1 tòa nhà hạng B',
+  description = 'Sàn văn phòng đã hoàn thiện trần sàn, có lễ tân, bảo vệ, phù hợp công ty nhỏ.',
+  address = '20 Lê Thánh Tôn',
+  ward = 'Bến Nghé',
+  district = 'Quận 1',
+  city = 'Hồ Chí Minh'
+WHERE id = 14;
+
+UPDATE properties SET
+  title = 'Đất nền Củ Chi 120m2 đường 10m',
+  description = 'Đất nền khu dân cư hiện hữu, đường rộng, pháp lý rõ ràng, gần chợ và trường học.',
+  address = 'Đường Nguyễn Thị Rành',
+  ward = 'Tân Thông Hội',
+  district = 'Củ Chi',
+  city = 'Hồ Chí Minh'
+WHERE id = 15;
+
+UPDATE properties SET
+  title = 'Căn hộ dịch vụ Bình Thạnh full nội thất',
+  description = 'Căn hộ dịch vụ có thang máy, bảo vệ, dọn vào ở ngay, gần Hàng Xanh.',
+  address = '90 Xô Viết Nghệ Tĩnh',
+  ward = 'Phường 21',
+  district = 'Bình Thạnh',
+  city = 'Hồ Chí Minh'
+WHERE id = 16;
+
+UPDATE properties SET
+  title = 'Biệt thự song lập Nhà Bè sân vườn',
+  description = 'Biệt thự song lập có sân vườn, gara ô tô, khu biệt lập yên tĩnh, an ninh 24/7.',
+  address = 'KDC Phước Kiển',
+  ward = 'Phước Kiển',
+  district = 'Nhà Bè',
+  city = 'Hồ Chí Minh'
+WHERE id = 17;
+
+UPDATE properties SET
+  title = 'Nhà cho thuê Thủ Đức gần Vincom',
+  description = 'Nhà nguyên căn mới sơn sửa, 2 mặt tiền hẻm, phù hợp gia đình hoặc văn phòng nhỏ.',
+  address = '45 Võ Văn Ngân',
+  ward = 'Linh Chiểu',
+  district = 'TP Thủ Đức',
+  city = 'Hồ Chí Minh'
+WHERE id = 18;
+
+UPDATE properties SET
+  title = 'Đất nền Long Thành gần sân bay',
+  description = 'Lô đất đầu tư dài hạn, gần trục đường lớn, khu vực phát triển quanh sân bay Long Thành.',
+  address = 'Đường ĐT769',
+  ward = 'Long Đức',
+  district = 'Long Thành',
+  city = 'Đồng Nai'
+WHERE id = 19;
+
+UPDATE properties SET
+  title = 'Văn phòng chia sẻ Gò Vấp 45m2',
+  description = 'Mặt bằng văn phòng nhỏ, có sân để xe, phù hợp startup hoặc nhóm kinh doanh online.',
+  address = '100 Phan Văn Trị',
+  ward = 'Phường 10',
+  district = 'Gò Vấp',
+  city = 'Hồ Chí Minh'
+WHERE id = 20;
+
+UPDATE properties SET
+  title = 'Căn hộ cao cấp Quận 7 2PN',
+  description = 'Căn hộ view nội khu, nội thất đẹp, tiện ích đầy đủ, gần Crescent Mall.',
+  address = 'Nguyễn Lương Bằng',
+  ward = 'Tân Phú',
+  district = 'Quận 7',
+  city = 'Hồ Chí Minh'
+WHERE id = 21;
+
+UPDATE properties SET
+  title = 'Officetel Quận 4 view kênh',
+  description = 'Officetel vừa ở vừa làm việc, gần trung tâm Quận 1, bảo vệ và thang máy 24/7.',
+  address = 'Bến Vân Đồn',
+  ward = 'Phường 6',
+  district = 'Quận 4',
+  city = 'Hồ Chí Minh'
+WHERE id = 22;
+
+UPDATE properties SET
+  title = 'Nhà mặt tiền Tân Bình kinh doanh',
+  description = 'Nhà mặt tiền đường lớn, hiện đang cho thuê, dòng tiền ổn định hằng tháng.',
+  address = 'Cộng Hòa',
+  ward = 'Phường 13',
+  district = 'Tân Bình',
+  city = 'Hồ Chí Minh'
+WHERE id = 23;
+
+UPDATE properties SET
+  title = 'Đất vườn Bảo Lộc nghỉ dưỡng',
+  description = 'Đất vườn khí hậu mát mẻ, có đường xe hơi, phù hợp làm homestay nghỉ dưỡng.',
+  address = 'Xã Lộc Thành',
+  ward = 'Lộc Thành',
+  district = 'Bảo Lộc',
+  city = 'Lâm Đồng'
+WHERE id = 24;
+
+UPDATE properties SET
+  title = 'Căn hộ bị từ chối do thiếu hình ảnh',
+  description = 'Tin mẫu đang bị từ chối vì hình ảnh chưa đạt yêu cầu.',
+  address = 'Đường Lũy Bán Bích',
+  ward = 'Tân Thới Hòa',
+  district = 'Tân Phú',
+  city = 'Hồ Chí Minh',
+  reject_reason = 'Hình ảnh nội thất bị mờ, vui lòng cập nhật lại ảnh rõ hơn.'
+WHERE id = 25;
+
+UPDATE properties SET
+  title = 'Căn hộ cho thuê Quận 5 gần bệnh viện',
+  description = 'Căn hộ sạch sẽ, gần bệnh viện và trường đại học, phù hợp sinh viên hoặc gia đình nhỏ.',
+  address = 'Trần Hưng Đạo',
+  ward = 'Phường 2',
+  district = 'Quận 5',
+  city = 'Hồ Chí Minh'
+WHERE id = 26;
+
+UPDATE properties SET
+  title = 'Nhà phố Quận 8 giá tốt',
+  description = 'Nhà phố khu dân cư đông đúc, gần cầu Nguyễn Văn Cừ, thích hợp mua ở lâu dài.',
+  address = 'Tạ Quang Bửu',
+  ward = 'Phường 5',
+  district = 'Quận 8',
+  city = 'Hồ Chí Minh'
+WHERE id = 27;
+
+UPDATE properties SET
+  title = 'Văn phòng Bình Thạnh 120m2',
+  description = 'Sàn văn phòng rộng, có phòng họp riêng, gần khu công ty công nghệ.',
+  address = 'Điện Biên Phủ',
+  ward = 'Phường 25',
+  district = 'Bình Thạnh',
+  city = 'Hồ Chí Minh'
+WHERE id = 28;
+
+UPDATE properties SET
+  title = 'Đất nền Dĩ An gần khu công nghiệp',
+  description = 'Đất nền pháp lý rõ, gần khu công nghiệp, tiềm năng cho thuê phòng trọ.',
+  address = 'Đường Nguyễn An Ninh',
+  ward = 'Dĩ An',
+  district = 'Dĩ An',
+  city = 'Bình Dương'
+WHERE id = 29;
+
+UPDATE properties SET
+  title = 'Nhà đã bán tại Hóc Môn',
+  description = 'Tin mẫu đã giao dịch thành công để hiển thị trạng thái sold.',
+  address = 'Quốc lộ 22',
+  ward = 'Bà Điểm',
+  district = 'Hóc Môn',
+  city = 'Hồ Chí Minh'
+WHERE id = 30;
+
+UPDATE properties SET
+  title = 'Căn hộ đang chờ duyệt Bình Tân',
+  description = 'Tin mới đang chờ admin kiểm duyệt nội dung và hình ảnh.',
+  address = 'Tên Lửa',
+  ward = 'Bình Trị Đông B',
+  district = 'Bình Tân',
+  city = 'Hồ Chí Minh'
+WHERE id = 31;
+
+UPDATE properties SET
+  title = 'Đất nền đang chờ duyệt Nhơn Trạch',
+  description = 'Tin mới của owner đang đợi xét duyệt.',
+  address = 'Đường Hùng Vương',
+  ward = 'Phú Hội',
+  district = 'Nhơn Trạch',
+  city = 'Đồng Nai'
+WHERE id = 32;
+
+UPDATE properties SET
+  title = 'Nhà phố đang ẩn Quận 6',
+  description = 'Tin đã duyệt nhưng owner đang tạm ẩn để cập nhật giá.',
+  address = 'Hậu Giang',
+  ward = 'Phường 11',
+  district = 'Quận 6',
+  city = 'Hồ Chí Minh'
+WHERE id = 33;
+
+UPDATE properties SET
+  title = 'Văn phòng cho thuê Đà Nẵng',
+  description = 'Văn phòng trung tâm thành phố, gần sông Hàn, phù hợp chi nhánh công ty.',
+  address = 'Bạch Đằng',
+  ward = 'Hải Châu 1',
+  district = 'Hải Châu',
+  city = 'Đà Nẵng'
+WHERE id = 34;

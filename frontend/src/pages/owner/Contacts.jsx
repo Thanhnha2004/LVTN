@@ -5,6 +5,7 @@ import Navbar from "../../components/Navbar";
 import UiIcon from "../../components/UiIcon";
 import SiteFooter from "../../components/SiteFooter";
 import { useToast } from "../../components/ToastProvider";
+import { fuzzyMatches } from "../../shared/search";
 
 const VN = { fontFamily: "'Be Vietnam Pro', Inter, sans-serif" };
 
@@ -549,10 +550,18 @@ export default function OwnerContacts() {
     })
     .filter(
       (c) =>
-        search === "" ||
-        c.buyer_name?.toLowerCase().includes(search.toLowerCase()) ||
-        c.property_title?.toLowerCase().includes(search.toLowerCase()) ||
-        c.message?.toLowerCase().includes(search.toLowerCase()),
+        fuzzyMatches(
+          [
+            c.buyer_name,
+            c.property_title,
+            c.message,
+            c.owner_reply,
+            c.owner_note,
+            c.lead_status,
+            c.status,
+          ],
+          search,
+        ),
     )
     .sort((a, b) =>
       sort === "newest"

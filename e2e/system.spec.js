@@ -17,7 +17,8 @@ test('Buyer searches, views listing list, and opens listing detail', async ({ pa
   await page.goto('/');
 
   await expect(page.locator('body')).toContainText('Tìm kiếm');
-  await page.locator('input[placeholder*="Thành phố"]').fill('Quận 1');
+  await page.locator('.home-search-grid select').nth(0).selectOption('Hồ Chí Minh');
+  await page.locator('.home-search-grid select').nth(1).selectOption('Quận 1');
   await page.getByRole('button', { name: /Tìm kiếm/i }).last().click();
 
   await expect(page).toHaveURL(/\/search/);

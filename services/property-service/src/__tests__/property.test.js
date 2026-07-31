@@ -38,24 +38,79 @@ describe('property-service', () => {
 
   test('owner creates property in pending status and writes status history', async () => {
     pool.query
+      .mockResolvedValueOnce([[]])
       .mockResolvedValueOnce([{ insertId: 20 }])
       .mockResolvedValueOnce([{}]);
 
     const res = await request(app()).post('/api/property').send({
       title: 'Can ho cao cap Quan 1',
-      description: 'Mo ta tin dang',
+      description: 'Can ho cao cap day du noi that, vi tri trung tam Quan 1',
       type: 'apartment',
       transaction_type: 'sale',
       price: 3000000000,
       area: 70,
       address: 'Nguyen Hue',
+      district: 'Quan 1',
       city: 'TP.HCM',
+      bedrooms: 2,
+      bathrooms: 2,
     });
 
     expect(res.status).toBe(201);
     expect(res.body.id).toBe(20);
     expect(pool.query).toHaveBeenCalledWith(expect.stringContaining('INSERT INTO properties'), expect.any(Array));
     expect(pool.query).toHaveBeenCalledWith(expect.stringContaining('INSERT INTO property_status_history'), [20, null, 'pending', 1, expect.any(String)]);
+  });
+
+  test('owner cannot create a duplicate active property', async () => {
+    pool.query.mockResolvedValueOnce([[{ id: 20, status: 'pending' }]]);
+
+    const res = await request(app()).post('/api/property').send({
+      title: 'Can ho cao cap Quan 1',
+      description: 'Can ho cao cap day du noi that, vi tri trung tam Quan 1',
+      type: 'apartment',
+      transaction_type: 'sale',
+      price: 3000000000,
+      area: 70,
+      address: 'Nguyen Hue',
+      district: 'Quan 1',
+      city: 'TP.HCM',
+      bedrooms: 2,
+      bathrooms: 2,
+    });
+
+    expect(res.status).toBe(409);
+    expect(res.body.existing_id).toBe(20);
+    expect(pool.query).toHaveBeenCalledTimes(1);
+  });
+
+  test('duplicate check ignores location encoding differences', async () => {
+    pool.query.mockResolvedValueOnce([[{ id: 21, status: 'pending' }]]);
+
+    const res = await request(app()).post('/api/property').send({
+      title: 'Can ho cao cap Quan 1',
+      description: 'Can ho cao cap day du noi that, vi tri trung tam Quan 1',
+      type: 'apartment',
+      transaction_type: 'sale',
+      price: 3200000000,
+      area: 72,
+      address: 'Nguyen Hue',
+      ward: 'Ben Nghe',
+      district: 'Quan Mot',
+      city: 'Ho Chi Minh',
+      bedrooms: 2,
+      bathrooms: 2,
+    });
+
+    expect(res.status).toBe(409);
+    expect(res.body.existing_id).toBe(21);
+    expect(pool.query.mock.calls[0][1]).toEqual([
+      1,
+      'Can ho cao cap Quan 1',
+      'Nguyen Hue',
+      'apartment',
+      'sale',
+    ]);
   });
 
   test('admin must provide rejection reason when rejecting property', async () => {

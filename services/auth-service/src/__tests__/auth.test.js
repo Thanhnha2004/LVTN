@@ -35,7 +35,7 @@ describe('auth-service', () => {
   test('register rejects invalid email', async () => {
     const res = await request(app())
       .post('/api/auth/register')
-      .send({ full_name: 'Nguyen Van A', email: 'bad-email', password: '123456', role: 'buyer' });
+      .send({ full_name: 'Nguyen Van A', email: 'bad-email', phone_number: '0901234567', password: '123456', role: 'buyer' });
 
     expect(res.status).toBe(400);
     expect(pool.query).not.toHaveBeenCalled();
@@ -49,7 +49,7 @@ describe('auth-service', () => {
 
     const res = await request(app())
       .post('/api/auth/register')
-      .send({ full_name: 'Nguyen Van A', email: 'buyer@test.com', password: '123456', role: 'buyer' });
+      .send({ full_name: 'Nguyen Van A', email: 'buyer@test.com', phone_number: '0901234567', password: '123456', role: 'buyer' });
 
     expect(res.status).toBe(201);
     expect(res.body.email_verified).toBe(false);
@@ -148,4 +148,3 @@ test('send-otp invalidates old OTP and creates new OTP', async () => {
   });
 
 });
-

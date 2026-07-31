@@ -1,4 +1,6 @@
 // ─── CONFIG ────────────────────────────────────────────────
+import { getApiErrorMessage } from "../../api/errorMessage";
+
 export const API = "http://localhost:3000";
 
 // ─── DESIGN TOKENS ─────────────────────────────────────────
@@ -37,22 +39,58 @@ export function getToken() {
   return localStorage.getItem("token");
 }
 
+function getPendingCount() {
+  if (typeof window === "undefined") return;
+  window.__appPendingRequests = window.__appPendingRequests || 0;
+  return window.__appPendingRequests;
+}
+
+function notifyLoading() {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(
+    new CustomEvent("app:loading", { detail: { count: getPendingCount() } }),
+  );
+}
+
+function startLoading() {
+  if (typeof window === "undefined") return;
+  window.__appPendingRequests = getPendingCount() + 1;
+  notifyLoading();
+}
+
+function stopLoading() {
+  if (typeof window === "undefined") return;
+  window.__appPendingRequests = Math.max(0, getPendingCount() - 1);
+  notifyLoading();
+}
+
 export async function apiFetch(path, opts = {}) {
   const token = getToken();
-  const res = await fetch(`${API}${path}`, {
-    ...opts,
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(opts.headers || {}),
-    },
-    body: opts.body ? JSON.stringify(opts.body) : undefined,
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ message: res.statusText }));
-    throw new Error(err.message || "Request failed");
+  startLoading();
+  try {
+    const res = await fetch(`${API}${path}`, {
+      ...opts,
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(opts.headers || {}),
+      },
+      body: opts.body ? JSON.stringify(opts.body) : undefined,
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({ message: res.statusText }));
+      throw new Error(
+        getApiErrorMessage({
+          response: { data, status: res.status },
+          config: { url: path, method: opts.method || "GET" },
+          message: res.statusText,
+        }),
+      );
+    }
+    return res.json();
+  } finally {
+    stopLoading();
   }
-  return res.json();
 }
 
 export function formatPrice(p) {

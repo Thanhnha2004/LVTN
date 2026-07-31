@@ -5,6 +5,7 @@ import Navbar from "../../components/Navbar";
 import UiIcon from "../../components/UiIcon";
 import SiteFooter from "../../components/SiteFooter";
 import PropertyMeta from "../../components/PropertyMeta";
+import { locationData } from "../../data/locationData";
 import { formatPrice, timeAgo } from "../../shared/property";
 
 // ─── Constants ────────────────────────────────────────────────
@@ -61,8 +62,10 @@ function PropertyCard({ property }) {
   const isFeatured =
     property.featured_until && new Date(property.featured_until) > new Date();
   return (
-    <div
+    <Link
+      to={`/property/${property.id}`}
       style={{
+        display: "block",
         background: "#fff",
         borderRadius: 12,
         overflow: "hidden",
@@ -70,6 +73,8 @@ function PropertyCard({ property }) {
         boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
         transition: "transform 0.3s, box-shadow 0.3s",
         cursor: "pointer",
+        textDecoration: "none",
+        color: "inherit",
       }}
       onMouseEnter={(e) => {
         e.currentTarget.style.transform = "translateY(-4px)";
@@ -130,14 +135,7 @@ function PropertyCard({ property }) {
       </div>
 
       {/* Content */}
-      <Link
-        to={`/property/${property.id}`}
-        style={{
-          display: "block",
-          padding: 16,
-          textDecoration: "none",
-          color: "inherit",
-        }}>
+      <div style={{ padding: 16 }}>
         <p
           style={{
             color: "#b51b17",
@@ -207,8 +205,8 @@ function PropertyCard({ property }) {
             {timeAgo(property.created_at)}
           </span>
         </div>
-      </Link>
-    </div>
+      </div>
+    </Link>
   );
 }
 
@@ -227,9 +225,20 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState("sale");
   const [search, setSearch] = useState({
     keyword: "",
+    city: "",
+    district: "",
+    ward: "",
     type: "",
     price: "",
   });
+  const cities = Object.keys(locationData);
+  const districts = search.city
+    ? Object.keys(locationData[search.city] || {})
+    : [];
+  const wards =
+    search.city && search.district
+      ? locationData[search.city]?.[search.district] || []
+      : [];
 
   const [filter, setFilter] = useState({
     transaction_type: "sale",
@@ -277,12 +286,18 @@ export default function Home() {
       max_price = max || "";
     }
 
-    const params = new URLSearchParams({
+    const params = new URLSearchParams();
+    Object.entries({
       transaction_type: activeTab,
       keyword: search.keyword,
+      city: search.city,
+      district: search.district,
+      ward: search.ward,
       type: search.type,
       min_price,
       max_price,
+    }).forEach(([key, value]) => {
+      if (value !== "" && value !== undefined) params.set(key, value);
     });
 
     navigate(`/search?${params.toString()}`);
@@ -353,6 +368,13 @@ export default function Home() {
         select { outline: none; }
         input:focus { outline: none; box-shadow: none; }
         .bar-anim { animation: growUp 0.8s ease forwards; }
+        @media (max-width: 992px) {
+          .home-search-grid { grid-template-columns: 1fr 1fr !important; }
+          .home-search-button { min-height: 48px; justify-content: center; }
+        }
+        @media (max-width: 576px) {
+          .home-search-grid { grid-template-columns: 1fr !important; }
+        }
         @keyframes growUp { from { height: 0; } to { height: var(--h); } }
       `}</style>
 
@@ -388,7 +410,7 @@ export default function Home() {
             position: "relative",
             zIndex: 10,
             width: "100%",
-            maxWidth: 860,
+            maxWidth: 1120,
             margin: "0 auto",
             padding: "0 16px",
           }}>
@@ -451,12 +473,13 @@ export default function Home() {
 
             {/* Inputs Row */}
             <div
+              className="home-search-grid"
               style={{
                 display: "grid",
-                gridTemplateColumns: "1fr 1fr 1fr auto",
+                gridTemplateColumns: "1.1fr 1fr 1fr 1fr 1fr auto",
                 gap: 8,
               }}>
-              {/* Keyword */}
+              {/* City */}
               <div
                 style={{
                   display: "flex",
@@ -465,23 +488,102 @@ export default function Home() {
                   borderRight: "1px solid #E8E8E8",
                   gap: 8,
                 }}>
-                <input
-                  type="text"
-                  placeholder="Thành phố, Quận, Phường..."
-                  value={search.keyword}
+                <select
+                  value={search.city}
                   onChange={(e) =>
-                    setSearch({ ...search, keyword: e.target.value })
+                    setSearch({
+                      ...search,
+                      city: e.target.value,
+                      district: "",
+                      ward: "",
+                    })
                   }
-                  onKeyDown={(e) => e.key === "Enter" && handleSearch()}
                   style={{
                     border: "none",
                     width: "100%",
                     fontSize: 15,
                     padding: "12px 0",
                     background: "transparent",
-                    color: "#1a1c1c",
-                  }}
-                />
+                    cursor: "pointer",
+                    color: search.city ? "#1a1c1c" : "#757575",
+                  }}>
+                  <option value="">Tỉnh / Thành phố</option>
+                  {cities.map((city) => (
+                    <option key={city} value={city}>
+                      {city}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* District */}
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  padding: "0 14px",
+                  borderRight: "1px solid #E8E8E8",
+                  gap: 8,
+                }}>
+                <select
+                  value={search.district}
+                  disabled={!search.city}
+                  onChange={(e) =>
+                    setSearch({
+                      ...search,
+                      district: e.target.value,
+                      ward: "",
+                    })
+                  }
+                  style={{
+                    border: "none",
+                    width: "100%",
+                    fontSize: 15,
+                    padding: "12px 0",
+                    background: "transparent",
+                    cursor: search.city ? "pointer" : "not-allowed",
+                    color: search.district ? "#1a1c1c" : "#757575",
+                  }}>
+                  <option value="">Quận / Huyện</option>
+                  {districts.map((district) => (
+                    <option key={district} value={district}>
+                      {district}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Ward */}
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  padding: "0 14px",
+                  borderRight: "1px solid #E8E8E8",
+                  gap: 8,
+                }}>
+                <select
+                  value={search.ward}
+                  disabled={!search.district}
+                  onChange={(e) =>
+                    setSearch({ ...search, ward: e.target.value })
+                  }
+                  style={{
+                    border: "none",
+                    width: "100%",
+                    fontSize: 15,
+                    padding: "12px 0",
+                    background: "transparent",
+                    cursor: search.district ? "pointer" : "not-allowed",
+                    color: search.ward ? "#1a1c1c" : "#757575",
+                  }}>
+                  <option value="">Phường / Xã</option>
+                  {wards.map((ward) => (
+                    <option key={ward} value={ward}>
+                      {ward}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               {/* Type */}
@@ -547,6 +649,7 @@ export default function Home() {
 
               {/* CTA */}
               <button
+                className="home-search-button"
                 onClick={handleSearch}
                 style={{
                   background: "#b51b17",

@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { ToastProvider } from "./components/ToastProvider";
 import { ConfirmProvider } from "./components/ConfirmProvider";
+import GlobalLoading from "./components/GlobalLoading";
 import "bootstrap/dist/css/bootstrap.min.css";
 
 import Login from "./pages/Login";
@@ -34,6 +35,7 @@ export default function App() {
       <ToastProvider>
         <ConfirmProvider>
           <BrowserRouter>
+            <GlobalLoading />
             <Routes>
           {/* Public */}
           <Route path="/" element={<Home />} />

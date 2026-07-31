@@ -28,6 +28,7 @@ export default function Detail() {
   const [showAllImages, setShowAllImages] = useState(false);
   const [contact, setContact] = useState({ name: "", email: "", message: "" });
   const [contactSent, setContactSent] = useState(false);
+  const [existingContact, setExistingContact] = useState(null);
   const [contactLoading, setContactLoading] = useState(false);
   const [contactError, setContactError] = useState("");
   const [similar, setSimilar] = useState([]);
@@ -35,7 +36,16 @@ export default function Detail() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const res = await api.get(`/api/listing/${id}`);
+        let res;
+        if (["owner", "admin"].includes(user?.role)) {
+          try {
+            res = await api.get(`/api/property/${id}`);
+          } catch {
+            res = await api.get(`/api/listing/${id}`);
+          }
+        } else {
+          res = await api.get(`/api/listing/${id}`);
+        }
         const imgs = res.data.images;
         if (typeof imgs === "string") {
           res.data.images = imgs ? imgs.split(",") : [];
@@ -43,14 +53,24 @@ export default function Detail() {
         setProperty(res.data);
 
         if (user?.role === "buyer") {
-          const savedRes = await api.get("/api/contact/saved");
+          const [savedRes, contactsRes] = await Promise.all([
+            api.get("/api/contact/saved"),
+            api.get("/api/contact/buyer", { params: { limit: 100 } }),
+          ]);
           setSaved(savedRes.data.some((p) => p.id === parseInt(id)));
+          const sentContact = (contactsRes.data.data || []).find(
+            (item) => Number(item.property_id) === Number(id),
+          );
+          setExistingContact(sentContact || null);
+          setContactSent(!!sentContact);
         }
 
-        try {
-          const simRes = await api.get(`/api/listing/${id}/similar`);
-          setSimilar(simRes.data.data || []);
-        } catch {}
+        if (res.data.status === "approved") {
+          try {
+            const simRes = await api.get(`/api/listing/${id}/similar`);
+            setSimilar(simRes.data.data || []);
+          } catch {}
+        }
       } catch {
         navigate("/");
       } finally {
@@ -58,7 +78,7 @@ export default function Detail() {
       }
     };
     fetchData();
-  }, [id]);
+  }, [id, user?.role]);
 
   const handleSave = async () => {
     if (!user) return navigate("/login");
@@ -84,6 +104,13 @@ export default function Detail() {
       await api.post("/api/contact", {
         property_id: id,
         message: contact.message,
+      });
+      setExistingContact({
+        property_id: Number(id),
+        message: contact.message,
+        status: "pending",
+        lead_status: "new",
+        created_at: new Date().toISOString(),
       });
       setContactSent(true);
       showToast("Đã gửi yêu cầu liên hệ. Owner sẽ phản hồi trong hệ thống.");
@@ -118,6 +145,19 @@ export default function Detail() {
   const images = Array.isArray(property.images) ? property.images : [];
   const isFeatured =
     property.featured_until && new Date(property.featured_until) > new Date();
+  const canInteractAsBuyer = !user || user.role === "buyer";
+  const canManageProperty =
+    user?.role === "admin" ||
+    (user?.role === "owner" && Number(property.owner_id) === Number(user.id));
+  const openImageViewer = (index = 0) => {
+    if (images.length === 0) return;
+    setActiveImg(Math.max(0, Math.min(index, images.length - 1)));
+    setShowAllImages(true);
+  };
+  const showPrevImage = () =>
+    setActiveImg((current) => (current - 1 + images.length) % images.length);
+  const showNextImage = () =>
+    setActiveImg((current) => (current + 1) % images.length);
 
   return (
     <div style={{ background: "#f9f9f9", minHeight: "100vh" }}>
@@ -174,7 +214,7 @@ export default function Detail() {
                 height: 480,
                 cursor: "pointer",
               }}
-              onClick={() => setActiveImg(0)}>
+              onClick={() => openImageViewer(0)}>
               {images[0] ? (
                 <img
                   src={images[0]}
@@ -243,7 +283,7 @@ export default function Detail() {
                     flex: 1,
                     cursor: images[i] ? "pointer" : "default",
                   }}
-                  onClick={() => images[i] && setActiveImg(i)}>
+                  onClick={() => openImageViewer(i)}>
                   {images[i] ? (
                     <img
                       src={images[i]}
@@ -269,7 +309,7 @@ export default function Detail() {
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        setShowAllImages(true);
+                        openImageViewer(0);
                       }}
                       style={{
                         position: "absolute",
@@ -302,6 +342,171 @@ export default function Detail() {
         </div>
       </div>
 
+      {showAllImages && images.length > 0 && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Danh sách hình ảnh bất động sản"
+          onClick={() => setShowAllImages(false)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 2000,
+            background: "rgba(0,0,0,0.88)",
+            display: "flex",
+            flexDirection: "column",
+            color: "#fff",
+          }}>
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              height: 64,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              padding: "0 24px",
+              borderBottom: "1px solid rgba(255,255,255,0.16)",
+              fontFamily: "Inter, sans-serif",
+            }}>
+            <strong style={{ fontSize: 15 }}>
+              Ảnh {activeImg + 1}/{images.length}
+            </strong>
+            <button
+              type="button"
+              onClick={() => setShowAllImages(false)}
+              aria-label="Đóng thư viện ảnh"
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: 20,
+                border: "1px solid rgba(255,255,255,0.32)",
+                background: "rgba(255,255,255,0.1)",
+                color: "#fff",
+                cursor: "pointer",
+                fontSize: 22,
+                lineHeight: 1,
+              }}>
+              ×
+            </button>
+          </div>
+
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              flex: 1,
+              minHeight: 0,
+              display: "grid",
+              gridTemplateColumns: images.length > 1 ? "72px 1fr 72px" : "1fr",
+              alignItems: "center",
+              gap: 16,
+              padding: "24px",
+            }}>
+            {images.length > 1 && (
+              <button
+                type="button"
+                onClick={showPrevImage}
+                aria-label="Ảnh trước"
+                style={{
+                  width: 52,
+                  height: 52,
+                  borderRadius: 26,
+                  border: "1px solid rgba(255,255,255,0.3)",
+                  background: "rgba(255,255,255,0.12)",
+                  color: "#fff",
+                  cursor: "pointer",
+                  fontSize: 30,
+                  justifySelf: "center",
+                }}>
+                ‹
+              </button>
+            )}
+            <div
+              style={{
+                minHeight: 0,
+                height: "100%",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}>
+              <img
+                src={images[activeImg]}
+                alt={`Ảnh bất động sản ${activeImg + 1}`}
+                style={{
+                  maxWidth: "100%",
+                  maxHeight: "100%",
+                  objectFit: "contain",
+                  borderRadius: 8,
+                  boxShadow: "0 16px 48px rgba(0,0,0,0.35)",
+                }}
+              />
+            </div>
+            {images.length > 1 && (
+              <button
+                type="button"
+                onClick={showNextImage}
+                aria-label="Ảnh tiếp theo"
+                style={{
+                  width: 52,
+                  height: 52,
+                  borderRadius: 26,
+                  border: "1px solid rgba(255,255,255,0.3)",
+                  background: "rgba(255,255,255,0.12)",
+                  color: "#fff",
+                  cursor: "pointer",
+                  fontSize: 30,
+                  justifySelf: "center",
+                }}>
+                ›
+              </button>
+            )}
+          </div>
+
+          {images.length > 1 && (
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                display: "flex",
+                gap: 10,
+                overflowX: "auto",
+                padding: "14px 24px 20px",
+                borderTop: "1px solid rgba(255,255,255,0.16)",
+              }}>
+              {images.map((src, index) => (
+                <button
+                  key={`${src}-${index}`}
+                  type="button"
+                  onClick={() => setActiveImg(index)}
+                  aria-label={`Xem ảnh ${index + 1}`}
+                  style={{
+                    flex: "0 0 92px",
+                    height: 68,
+                    borderRadius: 6,
+                    border:
+                      activeImg === index
+                        ? "3px solid #fff"
+                        : "1px solid rgba(255,255,255,0.28)",
+                    padding: 0,
+                    overflow: "hidden",
+                    cursor: "pointer",
+                    background: "transparent",
+                  }}>
+                  <img
+                    src={src}
+                    alt=""
+                    style={{
+                      width: "100%",
+                      height: "100%",
+                      objectFit: "cover",
+                      display: "block",
+                    }}
+                  />
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* ── MAIN CONTENT ── */}
       <div style={{ maxWidth: 1200, margin: "0 auto", padding: "32px 40px" }}>
         <div
@@ -333,27 +538,29 @@ export default function Detail() {
                 }}>
                 {property.title}
               </h1>
-              <button
-                onClick={handleSave}
-                style={{
-                  flexShrink: 0,
-                  background: saved ? "#fff0ef" : "#fff",
-                  border: `1.5px solid ${saved ? "#b51b17" : "#E8E8E8"}`,
-                  borderRadius: 8,
-                  padding: "8px 16px",
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6,
-                  fontFamily: "Inter, sans-serif",
-                  fontSize: 13,
-                  fontWeight: 600,
-                  color: saved ? "#b51b17" : "#5f5e5e",
-                  transition: "all 0.15s",
-                }}>
-                <UiIcon name="heart" size={17} fill={saved ? "#b51b17" : "none"} />
-                {saved ? "Đã lưu" : "Lưu tin"}
-              </button>
+              {canInteractAsBuyer && (
+                <button
+                  onClick={handleSave}
+                  style={{
+                    flexShrink: 0,
+                    background: saved ? "#fff0ef" : "#fff",
+                    border: `1.5px solid ${saved ? "#b51b17" : "#E8E8E8"}`,
+                    borderRadius: 8,
+                    padding: "8px 16px",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                    fontFamily: "Inter, sans-serif",
+                    fontSize: 13,
+                    fontWeight: 600,
+                    color: saved ? "#b51b17" : "#5f5e5e",
+                    transition: "all 0.15s",
+                  }}>
+                  <UiIcon name="heart" size={17} fill={saved ? "#b51b17" : "none"} />
+                  {saved ? "Đã lưu" : "Lưu tin"}
+                </button>
+              )}
             </div>
 
             {/* Location */}
@@ -725,7 +932,78 @@ export default function Detail() {
           {/* RIGHT COLUMN — STICKY SIDEBAR */}
           <div style={{ position: "sticky", top: 80 }}>
             {/* Contact form */}
-            <div
+            {canManageProperty ? (
+              <div
+                style={{
+                  background: "#fff",
+                  border: "1px solid #E8E8E8",
+                  borderRadius: 12,
+                  padding: "20px 24px",
+                  marginBottom: 16,
+                }}>
+                <h3
+                  style={{
+                    fontFamily: "Manrope, sans-serif",
+                    fontSize: 16,
+                    fontWeight: 700,
+                    color: "#1a1c1c",
+                    marginTop: 0,
+                    marginBottom: 10,
+                  }}>
+                  Chế độ quản lý
+                </h3>
+                <p
+                  style={{
+                    fontFamily: "Inter, sans-serif",
+                    fontSize: 14,
+                    color: "#757575",
+                    lineHeight: 1.6,
+                    marginBottom: 16,
+                  }}>
+                  Bạn đang xem chi tiết tin đăng bằng quyền quản lý.
+                </p>
+                {user?.role === "owner" && (
+                  <div style={{ display: "grid", gap: 10 }}>
+                    <Link
+                      to="/owner/dashboard"
+                      style={{
+                        display: "block",
+                        textAlign: "center",
+                        background: "#b51b17",
+                        color: "#fff",
+                        padding: "12px 0",
+                        borderRadius: 8,
+                        fontFamily: "Inter, sans-serif",
+                        fontSize: 14,
+                        fontWeight: 600,
+                        textDecoration: "none",
+                      }}>
+                      Quay lại quản lý tin
+                    </Link>
+                    {property.status !== "sold" && (
+                      <Link
+                        to={`/owner/edit/${property.id}`}
+                        style={{
+                          display: "block",
+                          textAlign: "center",
+                          background: "#fff",
+                          color: "#b51b17",
+                          padding: "10px 0",
+                          borderRadius: 8,
+                          border: "1px solid #b51b17",
+                          fontFamily: "Inter, sans-serif",
+                          fontSize: 13,
+                          fontWeight: 600,
+                          textDecoration: "none",
+                        }}>
+                        Chỉnh sửa tin đăng
+                      </Link>
+                    )}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div
               style={{
                 background: "#fff",
                 border: "1px solid #E8E8E8",
@@ -746,27 +1024,129 @@ export default function Detail() {
               </h3>
 
               {contactSent ? (
-                <div style={{ textAlign: "center", padding: "20px 0" }}>
-                  <div style={{ marginBottom: 8, color: "#18753c" }}><UiIcon name="success" size={40} /></div>
-                  <p
+                <div style={{ padding: "6px 0 2px" }}>
+                  <div
                     style={{
+                      display: "flex",
+                      gap: 12,
+                      alignItems: "flex-start",
+                      padding: "14px 16px",
+                      borderRadius: 10,
+                      background: "#e6f9f0",
+                      border: "1px solid #b9dfd3",
+                      marginBottom: 14,
+                    }}>
+                    <UiIcon name="success" size={30} color="#0f6e56" />
+                    <div>
+                      <p
+                        style={{
+                          fontFamily: "Inter, sans-serif",
+                          fontSize: 14,
+                          fontWeight: 700,
+                          color: "#0f6e56",
+                          margin: "0 0 4px",
+                        }}>
+                        Bạn đã gửi yêu cầu liên hệ
+                      </p>
+                      <p
+                        style={{
+                          fontFamily: "Inter, sans-serif",
+                          fontSize: 13,
+                          color: "#3f5f55",
+                          margin: 0,
+                          lineHeight: 1.55,
+                        }}>
+                        Người bán đã nhận được thông tin. Bạn có thể theo dõi
+                        phản hồi trong mục yêu cầu liên hệ.
+                      </p>
+                    </div>
+                  </div>
+
+                  {existingContact?.message && (
+                    <div
+                      style={{
+                        background: "#f9f9f9",
+                        borderLeft: "4px solid #E8E8E8",
+                        borderRadius: "0 8px 8px 0",
+                        padding: "12px 14px",
+                        marginBottom: 12,
+                      }}>
+                      <div
+                        style={{
+                          fontFamily: "Inter, sans-serif",
+                          fontSize: 11,
+                          fontWeight: 700,
+                          color: "#757575",
+                          textTransform: "uppercase",
+                          letterSpacing: ".04em",
+                          marginBottom: 6,
+                        }}>
+                        Nội dung đã gửi
+                      </div>
+                      <p
+                        style={{
+                          fontFamily: "Inter, sans-serif",
+                          fontSize: 14,
+                          color: "#5f5e5e",
+                          fontStyle: "italic",
+                          margin: 0,
+                          lineHeight: 1.6,
+                        }}>
+                        "{existingContact.message}"
+                      </p>
+                    </div>
+                  )}
+
+                  {existingContact?.owner_reply && (
+                    <div
+                      style={{
+                        background: "#fff0ef",
+                        border: "1px solid #ffb4aa",
+                        borderRadius: 10,
+                        padding: "12px 14px",
+                        marginBottom: 12,
+                      }}>
+                      <div
+                        style={{
+                          fontFamily: "Inter, sans-serif",
+                          fontSize: 11,
+                          fontWeight: 700,
+                          color: "#b51b17",
+                          textTransform: "uppercase",
+                          letterSpacing: ".04em",
+                          marginBottom: 6,
+                        }}>
+                        Phản hồi từ người bán
+                      </div>
+                      <p
+                        style={{
+                          fontFamily: "Inter, sans-serif",
+                          fontSize: 14,
+                          color: "#1a1c1c",
+                          margin: 0,
+                          lineHeight: 1.6,
+                        }}>
+                        {existingContact.owner_reply}
+                      </p>
+                    </div>
+                  )}
+
+                  <Link
+                    to="/profile?tab=contacts"
+                    style={{
+                      display: "block",
+                      textAlign: "center",
+                      background: "#1a1c1c",
+                      color: "#fff",
+                      padding: "11px 0",
+                      borderRadius: 8,
                       fontFamily: "Inter, sans-serif",
                       fontSize: 14,
                       fontWeight: 600,
-                      color: "#1a1c1c",
-                      margin: "0 0 4px",
+                      textDecoration: "none",
                     }}>
-                    Đã gửi thành công!
-                  </p>
-                  <p
-                    style={{
-                      fontFamily: "Inter, sans-serif",
-                      fontSize: 13,
-                      color: "#757575",
-                      margin: 0,
-                    }}>
-                    Người bán sẽ phản hồi sớm nhất có thể.
-                  </p>
+                    Xem yêu cầu đã gửi
+                  </Link>
                 </div>
               ) : (
                 <form onSubmit={handleContact}>
@@ -867,7 +1247,8 @@ export default function Detail() {
                   )}
                 </form>
               )}
-            </div>
+              </div>
+            )}
 
           </div>
         </div>

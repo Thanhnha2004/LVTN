@@ -6,6 +6,7 @@ import UiIcon from "../../components/UiIcon";
 import SiteFooter from "../../components/SiteFooter";
 import { useToast } from "../../components/ToastProvider";
 import { useConfirm } from "../../components/ConfirmProvider";
+import { fuzzyMatches } from "../../shared/search";
 import {
   FaListAlt,
   FaComments,
@@ -78,14 +79,14 @@ function FeaturedActionButton({ property, onClick }) {
       onClick={() => onClick(property)}
       title={active ? "Gia hạn gói nổi bật" : "Mua gói nổi bật"}
       style={{
-        height: 30,
-        minWidth: 74,
-        padding: "0 9px",
+        height: 28,
+        minWidth: 52,
+        padding: "0 8px",
         borderRadius: 6,
         border: active ? "0.5px solid #b9dfd3" : "0.5px solid #f0ce7a",
         background: active ? "#e6f9f0" : "#fff4d6",
         cursor: "pointer",
-        fontSize: 12,
+        fontSize: 11,
         fontWeight: 700,
         display: "inline-flex",
         alignItems: "center",
@@ -103,9 +104,93 @@ function FeaturedActionButton({ property, onClick }) {
         e.currentTarget.style.background = active ? "#e6f9f0" : "#fff4d6";
         e.currentTarget.style.borderColor = active ? "#b9dfd3" : "#f0ce7a";
       }}>
-      {active ? <FaRedo size={12} /> : <FaStar size={12} />}
-      {active ? "Gia hạn" : "Mua gói"}
+      {active ? <FaRedo size={11} /> : <FaStar size={11} />}
+      {active ? "Gia hạn" : "Gói"}
     </button>
+  );
+}
+
+function ActionButton({
+  as: Component = "button",
+  icon,
+  label,
+  tone = "neutral",
+  style,
+  ...props
+}) {
+  const tones = {
+    neutral: {
+      color: "#3f3f46",
+      border: "#d9d9de",
+      bg: "#fff",
+      hoverBg: "#f4f4f5",
+      hoverBorder: "#a1a1aa",
+    },
+    primary: {
+      color: "#b51b17",
+      border: "#f0b6b3",
+      bg: "#fff5f4",
+      hoverBg: "#ffe8e6",
+      hoverBorder: "#b51b17",
+    },
+    success: {
+      color: "#0f6e56",
+      border: "#b9dfd3",
+      bg: "#e6f9f0",
+      hoverBg: "#d7f3e7",
+      hoverBorder: "#0f6e56",
+    },
+    warning: {
+      color: "#8a5a00",
+      border: "#f0ce7a",
+      bg: "#fff4d6",
+      hoverBg: "#ffe8a3",
+      hoverBorder: "#d99a00",
+    },
+    danger: {
+      color: "#a32d2d",
+      border: "#f09595",
+      bg: "#fcebeb",
+      hoverBg: "#ffe3e3",
+      hoverBorder: "#a32d2d",
+    },
+  };
+  const palette = tones[tone] || tones.neutral;
+
+  return (
+    <Component
+      {...props}
+      style={{
+        height: 28,
+        minWidth: 52,
+        padding: "0 8px",
+        borderRadius: 7,
+        border: `0.5px solid ${palette.border}`,
+        background: palette.bg,
+        color: palette.color,
+        cursor: "pointer",
+        fontSize: 11,
+        fontWeight: 700,
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 5,
+        textDecoration: "none",
+        whiteSpace: "nowrap",
+        ...VN,
+        ...style,
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.background = palette.hoverBg;
+        e.currentTarget.style.borderColor = palette.hoverBorder;
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.background = palette.bg;
+        e.currentTarget.style.borderColor = palette.border;
+      }}>
+      {icon}
+      {label}
+    </Component>
   );
 }
 
@@ -529,9 +614,19 @@ export default function OwnerDashboard() {
     })
     .filter(
       (p) =>
-        search === "" ||
-        p.title?.toLowerCase().includes(search.toLowerCase()) ||
-        p.city?.toLowerCase().includes(search.toLowerCase()),
+        fuzzyMatches(
+          [
+          p.title,
+          p.city,
+          p.district,
+          p.ward,
+          p.address,
+          p.type,
+          p.transaction_type,
+          p.status,
+          ],
+          search,
+        ),
     );
 
   const totalPages = Math.ceil(filtered.length / PER_PAGE);
@@ -793,6 +888,7 @@ export default function OwnerDashboard() {
                             textAlign: i === 4 ? "right" : "left",
                             borderBottom: "0.5px solid #E8E8E8",
                             whiteSpace: "nowrap",
+                            width: i === 4 ? 260 : "auto",
                             ...VN,
                           }}>
                           {h}
@@ -822,10 +918,18 @@ export default function OwnerDashboard() {
                               alignItems: "center",
                               gap: 10,
                             }}>
-                            <Thumb src={p.thumbnail} status={p.type} />
+                            <Link
+                              to={`/property/${p.id}`}
+                              title="Xem chi tiết tin đăng"
+                              style={{ flexShrink: 0 }}>
+                              <Thumb src={p.thumbnail} status={p.type} />
+                            </Link>
                             <div style={{ minWidth: 0 }}>
-                              <div
+                              <Link
+                                to={`/property/${p.id}`}
+                                title="Xem chi tiết tin đăng"
                                 style={{
+                                  display: "block",
                                   fontSize: 13,
                                   fontWeight: 500,
                                   color:
@@ -837,10 +941,24 @@ export default function OwnerDashboard() {
                                   overflow: "hidden",
                                   textOverflow: "ellipsis",
                                   whiteSpace: "nowrap",
+                                  textDecoration: "none",
                                   ...VN,
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.color = "#b51b17";
+                                  e.currentTarget.style.textDecoration =
+                                    "underline";
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.color =
+                                    p.status === "rejected" ||
+                                    p.status === "hidden"
+                                      ? "#757575"
+                                      : "#1a1c1c";
+                                  e.currentTarget.style.textDecoration = "none";
                                 }}>
                                 {p.title}
-                              </div>
+                              </Link>
                               <FeaturedStatusBadge property={p} />
                               <div
                                 style={{
@@ -908,68 +1026,32 @@ export default function OwnerDashboard() {
                           <div
                             style={{
                               display: "flex",
-                              gap: 4,
+                              gap: 5,
                               justifyContent: "flex-end",
+                              flexWrap: "wrap",
                             }}>
                             {p.status !== "sold" && (
-                              <Link
+                              <ActionButton
+                                as={Link}
                                 to={`/owner/edit/${p.id}`}
                                 title={
                                   p.status === "rejected"
                                     ? "Chỉnh sửa để gửi duyệt lại"
                                     : "Chỉnh sửa"
                                 }
-                                style={{
-                                  width: 30,
-                                  height: 30,
-                                  borderRadius: 6,
-                                  border: "0.5px solid #E8E8E8",
-                                  background: "#fff",
-                                  display: "flex",
-                                  alignItems: "center",
-                                  justifyContent: "center",
-                                  fontSize: 14,
-                                  textDecoration: "none",
-                                  color: "#5f5e5e",
-                                }}
-                                onMouseEnter={(e) => {
-                                  e.currentTarget.style.color = "#b51b17";
-                                  e.currentTarget.style.borderColor = "#b51b17";
-                                }}
-                                onMouseLeave={(e) => {
-                                  e.currentTarget.style.color = "#5f5e5e";
-                                  e.currentTarget.style.borderColor = "#E8E8E8";
-                                }}>
-                                <FaEdit />
-                              </Link>
+                                tone={p.status === "rejected" ? "warning" : "primary"}
+                                icon={<FaEdit />}
+                                label={p.status === "rejected" ? "Sửa lại" : "Sửa"}
+                              />
                             )}
 
-                            <button
+                            <ActionButton
                               onClick={() => openHistory(p)}
                               title="Xem lịch sử trạng thái"
-                              style={{
-                                width: 30,
-                                height: 30,
-                                borderRadius: 6,
-                                border: "0.5px solid #E8E8E8",
-                                background: "#fff",
-                                cursor: "pointer",
-                                fontSize: 14,
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                color: "#5f5e5e",
-                              }}
-                              onMouseEnter={(e) => {
-                                e.currentTarget.style.background = "#f3f3f3";
-                                e.currentTarget.style.borderColor = "#aaa";
-                              }}
-                              onMouseLeave={(e) => {
-                                e.currentTarget.style.background = "#fff";
-                                e.currentTarget.style.borderColor = "#E8E8E8";
-                              }}>
-                              <FaHistory />
-                            </button>
+                              tone="neutral"
+                              icon={<FaHistory />}
+                              label="L.sử"
+                            />
 
                             {(p.status === "active" ||
                               p.status === "approved") && (
@@ -978,96 +1060,32 @@ export default function OwnerDashboard() {
                                   property={p}
                                   onClick={openPaymentModal}
                                 />
-                                <button
+                                <ActionButton
                                   onClick={() => handleSold(p.id)}
                                   title="Đánh dấu đã bán"
-                                  style={{
-                                    width: 30,
-                                    height: 30,
-                                    borderRadius: 6,
-                                    border: "0.5px solid #E8E8E8",
-                                    background: "#fff",
-                                    cursor: "pointer",
-                                    fontSize: 14,
-                                    display: "flex",
-                                    alignItems: "center",
-                                    justifyContent: "center",
-                                    color: "#5f5e5e",
-                                  }}
-                                  onMouseEnter={(e) => {
-                                    e.currentTarget.style.background =
-                                      "#faeeda";
-                                    e.currentTarget.style.borderColor =
-                                      "#ba7517";
-                                  }}
-                                  onMouseLeave={(e) => {
-                                    e.currentTarget.style.background = "#fff";
-                                    e.currentTarget.style.borderColor =
-                                      "#E8E8E8";
-                                  }}>
-                                  <FaTag />
-                                </button>
-                                <button
+                                  tone="warning"
+                                  icon={<FaTag />}
+                                  label="Bán"
+                                />
+                                <ActionButton
                                   onClick={() => handleHide(p.id)}
                                   title="Ẩn tin"
-                                  style={{
-                                    width: 30,
-                                    height: 30,
-                                    borderRadius: 6,
-                                    border: "0.5px solid #E8E8E8",
-                                    background: "#fff",
-                                    cursor: "pointer",
-                                    fontSize: 14,
-                                    display: "flex",
-                                    alignItems: "center",
-                                    justifyContent: "center",
-                                    color: "#5f5e5e",
-                                  }}
-                                  onMouseEnter={(e) => {
-                                    e.currentTarget.style.background =
-                                      "#f3f3f3";
-                                    e.currentTarget.style.borderColor = "#aaa";
-                                  }}
-                                  onMouseLeave={(e) => {
-                                    e.currentTarget.style.background = "#fff";
-                                    e.currentTarget.style.borderColor =
-                                      "#E8E8E8";
-                                  }}>
-                                  <FaEyeSlash />
-                                </button>
+                                  tone="neutral"
+                                  icon={<FaEyeSlash />}
+                                  label="Ẩn"
+                                />
                               </>
                             )}
 
                             {/* NÚT HIỆN LẠI khi đang ẩn */}
                             {p.status === "hidden" && (
-                              <button
+                              <ActionButton
                                 onClick={() => handleUnhide(p.id)}
                                 title="Hiện lại"
-                                style={{
-                                  width: 30,
-                                  height: 30,
-                                  borderRadius: 6,
-                                  border: "0.5px solid #E8E8E8",
-                                  background: "#fff",
-                                  cursor: "pointer",
-                                  fontSize: 14,
-                                  display: "flex",
-                                  alignItems: "center",
-                                  justifyContent: "center",
-                                  color: "#5f5e5e",
-                                }}
-                                onMouseEnter={(e) => {
-                                  e.currentTarget.style.background = "#e6f9f0";
-                                  e.currentTarget.style.borderColor = "#0f6e56";
-                                  e.currentTarget.style.color = "#0f6e56";
-                                }}
-                                onMouseLeave={(e) => {
-                                  e.currentTarget.style.background = "#fff";
-                                  e.currentTarget.style.borderColor = "#E8E8E8";
-                                  e.currentTarget.style.color = "#5f5e5e";
-                                }}>
-                                <FaEye />
-                              </button>
+                                tone="success"
+                                icon={<FaEye />}
+                                label="Hiện"
+                              />
                             )}
 
                             {/* XEM LÝ DO khi bị từ chối */}
@@ -1076,48 +1094,27 @@ export default function OwnerDashboard() {
                                 onClick={() => setRejectModal(p)}
                                 style={{
                                   height: 30,
-                                  padding: "0 10px",
-                                  borderRadius: 6,
+                                  padding: "0 8px",
+                                  borderRadius: 7,
                                   border: "0.5px solid #f09595",
                                   background: "#fcebeb",
                                   cursor: "pointer",
-                                  fontSize: 12,
+                                  fontSize: 11,
                                   color: "#a32d2d",
                                   whiteSpace: "nowrap",
                                   ...VN,
                                 }}>
-                                Xem lý do
+                                Lý do
                               </button>
                             )}
 
-                            <button
+                            <ActionButton
                               onClick={() => handleDelete(p.id)}
                               title="Xoá"
-                              style={{
-                                width: 30,
-                                height: 30,
-                                borderRadius: 6,
-                                border: "0.5px solid #E8E8E8",
-                                background: "#fff",
-                                cursor: "pointer",
-                                fontSize: 14,
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                color: "#5f5e5e",
-                              }}
-                              onMouseEnter={(e) => {
-                                e.currentTarget.style.background = "#fcebeb";
-                                e.currentTarget.style.borderColor = "#f09595";
-                                e.currentTarget.style.color = "#a32d2d";
-                              }}
-                              onMouseLeave={(e) => {
-                                e.currentTarget.style.background = "#fff";
-                                e.currentTarget.style.borderColor = "#E8E8E8";
-                                e.currentTarget.style.color = "#5f5e5e";
-                              }}>
-                              <FaTrash />
-                            </button>
+                              tone="danger"
+                              icon={<FaTrash />}
+                              label="Xóa"
+                            />
                           </div>
                         </td>
                       </tr>

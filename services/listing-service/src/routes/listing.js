@@ -165,14 +165,16 @@ router.get("/", async (req, res) => {
 
     // --- Từ khoá (tìm trong title, description, address) ---
     if (keyword && keyword.trim()) {
-      // Keyword tim tren nhieu cot de nguoi dung co the tim theo tieu de, mo ta hoac vi tri.
-      conditions.push(
-        "(p.title LIKE ? OR p.description LIKE ? OR p.address LIKE ? OR p.district LIKE ? OR p.ward LIKE ?)",
-      );
-      const kw = `%${keyword.trim()}%`;
-      params.push(kw, kw, kw, kw, kw);
+      // Tach tu khoa thanh nhieu token de tim gan dung theo tung phan cua cum tu.
+      const tokens = keyword.trim().split(/\s+/).filter(Boolean).slice(0, 8);
+      tokens.forEach((token) => {
+        conditions.push(
+          "(p.title LIKE ? OR p.description LIKE ? OR p.address LIKE ? OR p.city LIKE ? OR p.district LIKE ? OR p.ward LIKE ?)",
+        );
+        const kw = `%${token}%`;
+        params.push(kw, kw, kw, kw, kw, kw);
+      });
     }
-
     // --- Bounding box cho bản đồ ---
     // bbox=lat_min,lng_min,lat_max,lng_max
     if (bbox) {
@@ -196,8 +198,8 @@ router.get("/", async (req, res) => {
     const sortMap = {
       newest: `${featuredOrder}, p.created_at DESC`,
       oldest: `${featuredOrder}, p.created_at ASC`,
-      price_asc: `${featuredOrder}, p.price ASC`,
-      price_desc: `${featuredOrder}, p.price DESC`,
+      price_asc: "p.price ASC, p.created_at DESC",
+      price_desc: "p.price DESC, p.created_at DESC",
       area_asc: `${featuredOrder}, p.area ASC`,
       area_desc: `${featuredOrder}, p.area DESC`,
     };

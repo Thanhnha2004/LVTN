@@ -86,20 +86,29 @@ export default function PendingPage({ showToast }) {
       hidden: "ẩn tin",
       pending: "chuyển về chờ duyệt",
     }[status];
+    const confirmMessage = {
+      approved: "Tin sẽ được hiển thị công khai cho Buyer.",
+      rejected: "Tin sẽ bị từ chối và Owner sẽ nhìn thấy lý do từ chối.",
+      hidden: "Tin sẽ bị ẩn khỏi danh sách công khai của Buyer.",
+      pending: "Tin sẽ được chuyển về trạng thái chờ duyệt.",
+    }[status];
+    const confirmText = {
+      approved: "Duyệt tin",
+      rejected: "Từ chối",
+      hidden: "Ẩn tin",
+      pending: "Xác nhận",
+    }[status];
+    const successMessage = {
+      approved: "✓ Đã duyệt tin đăng",
+      rejected: "✓ Đã từ chối tin đăng",
+      hidden: "✓ Đã ẩn tin đăng",
+      pending: "✓ Đã chuyển tin về chờ duyệt",
+    }[status];
+
     const ok = await confirm({
       title: `Xác nhận ${statusText}?`,
-      message:
-        status === "rejected"
-          ? "Tin sẽ bị từ chối và Owner sẽ nhìn thấy lý do từ chối."
-          : status === "approved"
-            ? "Tin sẽ được hiển thị công khai cho Buyer."
-            : "Trạng thái tin đăng sẽ được cập nhật trong hệ thống.",
-      confirmText:
-        status === "approved"
-          ? "Duyệt tin"
-          : status === "rejected"
-            ? "Từ chối"
-            : "Xác nhận",
+      message: confirmMessage,
+      confirmText,
       danger: status === "rejected" || status === "hidden",
     });
     if (!ok) return;
@@ -111,9 +120,7 @@ export default function PendingPage({ showToast }) {
         body: { status, ...(reason ? { reject_reason: reason } : {}) },
       });
       setProperties((prev) => prev.filter((p) => p.id !== id));
-      notify(
-        status === "approved" ? "✓ Đã duyệt tin đăng" : "✓ Đã từ chối tin đăng",
-      );
+      notify(successMessage);
       setRejectModal(null);
       setDetailModal(null);
       setRejectReason("");
@@ -128,7 +135,9 @@ export default function PendingPage({ showToast }) {
     { key: "pending", label: "Chờ duyệt" },
     { key: "approved", label: "Đã duyệt" },
     { key: "rejected", label: "Đã từ chối" },
+    { key: "hidden", label: "Đã ẩn" },
   ];
+  const activeTab = tabs.find((t) => t.key === tab) || tabs[0];
 
   return (
     <div style={{ padding: "32px", fontFamily: font.body }}>
@@ -141,8 +150,8 @@ export default function PendingPage({ showToast }) {
           marginBottom: 28,
         }}>
         <StatCard
-          label="Đang chờ duyệt"
-          value={tab === "pending" ? total : "—"}
+          label={activeTab.label}
+          value={total}
           sub={tab === "pending" && total > 0 ? "Cần xem xét ngay" : ""}
           subColor={C.amber}
           accent={tab === "pending" && total > 0}
@@ -376,6 +385,7 @@ export default function PendingPage({ showToast }) {
                         )}
                         {prop.status === "approved" && (
                           <button
+                            disabled={actionLoading[prop.id]}
                             onClick={() => handleStatus(prop.id, "hidden")}
                             style={{
                               padding: "5px 12px",
@@ -385,10 +395,12 @@ export default function PendingPage({ showToast }) {
                               color: C.secondary,
                               fontSize: 12,
                               fontWeight: 600,
-                              cursor: "pointer",
+                              cursor: actionLoading[prop.id]
+                                ? "not-allowed"
+                                : "pointer",
                               fontFamily: font.body,
                             }}>
-                            Ẩn tin
+                            {actionLoading[prop.id] ? "..." : "Ẩn tin"}
                           </button>
                         )}
                       </div>
@@ -635,6 +647,37 @@ export default function PendingPage({ showToast }) {
                         fontFamily: font.body,
                       }}>
                       {actionLoading[detailModal.id] ? "..." : "Duyệt tin"}
+                    </button>
+                  </div>
+                )}
+
+                {detailModal.status === "approved" && (
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "flex-end",
+                      gap: 10,
+                      marginTop: 22,
+                      paddingTop: 18,
+                      borderTop: `1px solid ${C.borderSubtle}`,
+                    }}>
+                    <button
+                      disabled={actionLoading[detailModal.id]}
+                      onClick={() => handleStatus(detailModal.id, "hidden")}
+                      style={{
+                        padding: "9px 18px",
+                        borderRadius: 8,
+                        border: `1px solid ${C.error}30`,
+                        background: C.errorContainer,
+                        color: C.error,
+                        fontSize: 14,
+                        fontWeight: 800,
+                        cursor: actionLoading[detailModal.id]
+                          ? "not-allowed"
+                          : "pointer",
+                        fontFamily: font.body,
+                      }}>
+                      {actionLoading[detailModal.id] ? "..." : "Ẩn tin"}
                     </button>
                   </div>
                 )}

@@ -45,11 +45,14 @@ const ownerStats = {
 };
 
 const adminStats = {
-  users: 3,
-  properties: 1,
-  pending: 1,
-  contacts: 2,
-  featured: 1,
+  users: { total: 3, buyers: 1, owners: 1 },
+  properties: { total: 2, pending: 1, approved: 1, rejected: 0, hidden: 0 },
+  contacts: { total: 2 },
+  monthly_properties: [],
+  properties_by_transaction_type: [],
+  properties_by_type: [],
+  top_owners: [],
+  top_viewed_properties: [],
 };
 
 function json(route, body, status = 200) {

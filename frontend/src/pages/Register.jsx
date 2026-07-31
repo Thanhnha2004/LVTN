@@ -45,11 +45,28 @@ export default function Register() {
     showToast(message, "error");
   };
 
+  const validateNameAndPhone = () => {
+    const fullName = form.full_name.trim().replace(/\s+/g, " ");
+    const phoneNumber = form.phone_number.trim();
+    const nameParts = fullName.split(" ").filter(Boolean);
+    const nameRegex = /^[A-Za-zÀ-ỹ\s'.-]+$/;
+    const phoneRegex = /^0\d{9}$/;
+
+    if (fullName.length < 4 || nameParts.length < 2)
+      return showError("Họ tên phải có ít nhất 2 từ và tối thiểu 4 ký tự");
+    if (!nameRegex.test(fullName))
+      return showError("Họ tên không được chứa số hoặc ký tự đặc biệt không hợp lệ");
+    if (!phoneRegex.test(phoneNumber))
+      return showError("Số điện thoại phải gồm 10 chữ số và bắt đầu bằng số 0");
+
+    setForm((prev) => ({ ...prev, full_name: fullName, phone_number: phoneNumber }));
+    return true;
+  };
+
   const handleNext = () => {
     setError("");
     if (step === 0) {
-      if (!form.full_name || form.full_name.trim().length < 2)
-        return showError("Họ tên phải có ít nhất 2 ký tự");
+      if (!validateNameAndPhone()) return;
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email))
         return showError("Email không hợp lệ");
     }

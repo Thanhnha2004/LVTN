@@ -67,6 +67,127 @@ function getFeaturedStartDate(featuredUntil) {
   return now;
 }
 
+const VALID_PROPERTY_TYPES = ["apartment", "house", "land", "office"];
+const VALID_TRANSACTION_TYPES = ["sale", "rent"];
+const VALID_DIRECTIONS = [
+  "north",
+  "south",
+  "east",
+  "west",
+  "northeast",
+  "northwest",
+  "southeast",
+  "southwest",
+];
+const VALID_LEGAL_STATUSES = ["sohong", "sokhongdo", "dangchoso", "other"];
+const ROOM_REQUIRED_TYPES = ["apartment", "house"];
+
+function normalizeText(value) {
+  return String(value || "")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+function optionalNumber(value) {
+  if (value === undefined || value === null || value === "") return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : NaN;
+}
+
+function optionalInteger(value) {
+  const number = optionalNumber(value);
+  if (number === null) return null;
+  return Number.isInteger(number) ? number : NaN;
+}
+
+function validatePropertyInput(body) {
+  const values = {
+    title: normalizeText(body.title),
+    description: normalizeText(body.description),
+    type: body.type || "",
+    transaction_type: body.transaction_type || "",
+    price: Number(body.price),
+    area: Number(body.area),
+    address: normalizeText(body.address),
+    city: normalizeText(body.city),
+    district: normalizeText(body.district),
+    ward: normalizeText(body.ward),
+    bedrooms: optionalInteger(body.bedrooms),
+    bathrooms: optionalInteger(body.bathrooms),
+    direction: body.direction || "",
+    legal_status: body.legal_status || "",
+    latitude: optionalNumber(body.latitude),
+    longitude: optionalNumber(body.longitude),
+  };
+
+  if (values.title.length < 10)
+    return { error: "Tiêu đề phải có ít nhất 10 ký tự" };
+  if (values.title.length > 180)
+    return { error: "Tiêu đề không được vượt quá 180 ký tự" };
+  if (values.description.length < 20)
+    return { error: "Mô tả phải có ít nhất 20 ký tự" };
+  if (values.description.length > 3000)
+    return { error: "Mô tả không được vượt quá 3000 ký tự" };
+  if (!VALID_PROPERTY_TYPES.includes(values.type))
+    return { error: "Loại hình không hợp lệ" };
+  if (!VALID_TRANSACTION_TYPES.includes(values.transaction_type))
+    return { error: "Loại giao dịch không hợp lệ (sale | rent)" };
+  if (!Number.isFinite(values.price) || values.price <= 0)
+    return { error: "Giá phải là số hợp lệ và lớn hơn 0" };
+  if (values.transaction_type === "sale" && values.price < 100000000)
+    return { error: "Giá bán phải từ 100 triệu đồng trở lên" };
+  if (values.transaction_type === "rent" && values.price < 500000)
+    return { error: "Giá thuê phải từ 500 nghìn đồng/tháng trở lên" };
+  if (values.price > 10000000000000)
+    return { error: "Giá nhập quá lớn, vui lòng kiểm tra lại" };
+  if (!Number.isFinite(values.area) || values.area < 5)
+    return { error: "Diện tích phải từ 5 m² trở lên" };
+  if (values.area > 100000)
+    return { error: "Diện tích nhập quá lớn, vui lòng kiểm tra lại" };
+  if (values.address.length < 5)
+    return { error: "Địa chỉ phải có ít nhất 5 ký tự" };
+  if (!values.city) return { error: "Thành phố không được để trống" };
+  if (!values.district) return { error: "Quận/huyện không được để trống" };
+  if (values.direction && !VALID_DIRECTIONS.includes(values.direction))
+    return { error: "Hướng nhà không hợp lệ" };
+  if (values.legal_status && !VALID_LEGAL_STATUSES.includes(values.legal_status))
+    return { error: "Pháp lý không hợp lệ" };
+  for (const [key, label] of [
+    ["bedrooms", "Số phòng ngủ"],
+    ["bathrooms", "Số phòng tắm"],
+  ]) {
+    const value = values[key];
+    if (value !== null && (!Number.isInteger(value) || value < 0 || value > 50))
+      return { error: `${label} phải là số nguyên từ 0 đến 50` };
+  }
+  if (ROOM_REQUIRED_TYPES.includes(values.type)) {
+    if (!values.bedrooms || values.bedrooms < 1)
+      return { error: "Căn hộ/nhà ở cần có ít nhất 1 phòng ngủ" };
+    if (!values.bathrooms || values.bathrooms < 1)
+      return { error: "Căn hộ/nhà ở cần có ít nhất 1 phòng tắm" };
+  }
+
+  const hasLatitude = values.latitude !== null;
+  const hasLongitude = values.longitude !== null;
+  if (hasLatitude !== hasLongitude)
+    return { error: "Vui lòng nhập đủ cả vĩ độ và kinh độ" };
+  if (
+    hasLatitude &&
+    (!Number.isFinite(values.latitude) ||
+      !Number.isFinite(values.longitude) ||
+      values.latitude < 8 ||
+      values.latitude > 24 ||
+      values.longitude < 102 ||
+      values.longitude > 110)
+  ) {
+    return {
+      error: "Tọa độ không hợp lệ. Vĩ độ/kinh độ cần nằm trong phạm vi Việt Nam",
+    };
+  }
+
+  return { values };
+}
+
 function formatVnpayDate(date) {
   // VNPay yeu cau ngay gio theo format yyyyMMddHHmmss va mui gio Viet Nam.
   // Dung Intl.DateTimeFormat de tranh sai ngay khi server chay o timezone khac.
@@ -404,75 +525,38 @@ router.post("/", authMiddleware, async (req, res) => {
   if (req.user.role !== "owner")
     return res.status(403).json({ message: "Chỉ owner mới được đăng tin" });
 
-  const {
-    title,
-    description,
-    type,
-    transaction_type,
-    price,
-    area,
-    address,
-    city,
-    district,
-    ward,
-    bedrooms,
-    bathrooms,
-    direction,
-    legal_status,
-    latitude,
-    longitude,
-  } = req.body;
-
-  const validTypes = ["apartment", "house", "land", "office"];
-  const validTx = ["sale", "rent"];
-  const validDirections = [
-    "north",
-    "south",
-    "east",
-    "west",
-    "northeast",
-    "northwest",
-    "southeast",
-    "southwest",
-  ];
-  const validLegalStatuses = ["sohong", "sokhongdo", "dangchoso", "other"];
-  const priceValue = Number(price);
-  const areaValue = Number(area);
-  const latitudeValue =
-    latitude === undefined || latitude === null || latitude === ""
-      ? null
-      : Number(latitude);
-  const longitudeValue =
-    longitude === undefined || longitude === null || longitude === ""
-      ? null
-      : Number(longitude);
-
-  if (!title || title.trim().length < 5)
-    return res.status(400).json({ message: "Tiêu đề phải có ít nhất 5 ký tự" });
-  if (!validTypes.includes(type))
-    return res.status(400).json({ message: "Loại hình không hợp lệ" });
-  if (!validTx.includes(transaction_type))
-    return res
-      .status(400)
-      .json({ message: "Loại giao dịch không hợp lệ (sale | rent)" });
-  if (!Number.isFinite(priceValue) || priceValue <= 0)
-    return res.status(400).json({ message: "Giá phải lớn hơn 0" });
-  if (!Number.isFinite(areaValue) || areaValue <= 0)
-    return res.status(400).json({ message: "Diện tích phải lớn hơn 0" });
-  if (!address || !city)
-    return res
-      .status(400)
-      .json({ message: "Địa chỉ và thành phố không được để trống" });
-  if (direction && !validDirections.includes(direction))
-    return res.status(400).json({ message: "Hướng nhà không hợp lệ" });
-  if (legal_status && !validLegalStatuses.includes(legal_status))
-    return res.status(400).json({ message: "Pháp lý không hợp lệ" });
-  if (latitudeValue !== null && !Number.isFinite(latitudeValue))
-    return res.status(400).json({ message: "Vĩ độ không hợp lệ" });
-  if (longitudeValue !== null && !Number.isFinite(longitudeValue))
-    return res.status(400).json({ message: "Kinh độ không hợp lệ" });
+  const validation = validatePropertyInput(req.body);
+  if (validation.error)
+    return res.status(400).json({ message: validation.error });
+  const property = validation.values;
 
   try {
+    const [duplicateRows] = await pool.query(
+      `SELECT id, status FROM properties
+       WHERE owner_id = ?
+         AND LOWER(TRIM(title)) = LOWER(TRIM(?))
+         AND LOWER(TRIM(address)) = LOWER(TRIM(?))
+         AND type = ?
+         AND transaction_type = ?
+         AND status <> 'sold'
+       LIMIT 1`,
+      [
+        req.user.id,
+        property.title,
+        property.address,
+        property.type,
+        property.transaction_type,
+      ],
+    );
+
+    if (duplicateRows.length > 0) {
+      return res.status(409).json({
+        message:
+          "Tin đăng này đã tồn tại. Vui lòng chỉnh sửa tin cũ hoặc thay đổi thông tin nếu đây là bất động sản khác.",
+        existing_id: duplicateRows[0].id,
+      });
+    }
+
     // Insert property khong set approved ngay; default status trong DB la pending.
     const [result] = await pool.query(
       `INSERT INTO properties
@@ -482,22 +566,22 @@ router.post("/", authMiddleware, async (req, res) => {
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         req.user.id,
-        title,
-        description || null,
-        type,
-        transaction_type,
-        priceValue,
-        areaValue,
-        address,
-        ward || null,
-        district || null,
-        city,
-        bedrooms ? parseInt(bedrooms) : null,
-        bathrooms ? parseInt(bathrooms) : null,
-        direction || null,
-        legal_status || null,
-        latitudeValue,
-        longitudeValue,
+        property.title,
+        property.description,
+        property.type,
+        property.transaction_type,
+        property.price,
+        property.area,
+        property.address,
+        property.ward || null,
+        property.district || null,
+        property.city,
+        property.bedrooms,
+        property.bathrooms,
+        property.direction || null,
+        property.legal_status || null,
+        property.latitude,
+        property.longitude,
       ],
     );
     await addStatusHistory(
@@ -817,24 +901,10 @@ router.get("/:id", authMiddleware, async (req, res) => {
 // Owner API: chinh sua tin cua chinh owner.
 // Sau khi sua, status quay ve pending de admin duyet lai noi dung moi.
 router.put("/:id", authMiddleware, async (req, res) => {
-  const {
-    title,
-    description,
-    type,
-    transaction_type,
-    price,
-    area,
-    address,
-    ward,
-    district,
-    city,
-    bedrooms,
-    bathrooms,
-    direction,
-    legal_status,
-    latitude,
-    longitude,
-  } = req.body;
+  const validation = validatePropertyInput(req.body);
+  if (validation.error)
+    return res.status(400).json({ message: validation.error });
+  const property = validation.values;
 
   try {
     const [rows] = await pool.query(
@@ -862,22 +932,22 @@ router.put("/:id", authMiddleware, async (req, res) => {
           rejected_at=NULL, hidden_at=NULL
       WHERE id=?`,
       [
-        title,
-        description,
-        type,
-        transaction_type,
-        parseFloat(price),
-        parseFloat(area),
-        address,
-        ward || null,
-        district || null,
-        city,
-        bedrooms ? parseInt(bedrooms) : null,
-        bathrooms ? parseInt(bathrooms) : null,
-        direction || null,
-        legal_status || null,
-        latitude ? parseFloat(latitude) : null,
-        longitude ? parseFloat(longitude) : null,
+        property.title,
+        property.description,
+        property.type,
+        property.transaction_type,
+        property.price,
+        property.area,
+        property.address,
+        property.ward || null,
+        property.district || null,
+        property.city,
+        property.bedrooms,
+        property.bathrooms,
+        property.direction || null,
+        property.legal_status || null,
+        property.latitude,
+        property.longitude,
         req.params.id,
       ],
     );

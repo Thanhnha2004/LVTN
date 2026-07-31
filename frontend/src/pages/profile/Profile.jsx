@@ -7,6 +7,7 @@ import Navbar from "../../components/Navbar";
 import UiIcon from "../../components/UiIcon";
 import { useToast } from "../../components/ToastProvider";
 import { useConfirm } from "../../components/ConfirmProvider";
+import { useAuth } from "../../context/AuthContext";
 
 export default function Profile() {
   const [searchParams] = useSearchParams();
@@ -29,6 +30,32 @@ export default function Profile() {
   const navigate = useNavigate();
   const { showToast } = useToast();
   const { confirm } = useConfirm();
+  const { updateUser } = useAuth();
+
+  const validateProfileForm = () => {
+    const fullName = formData.full_name.trim().replace(/\s+/g, " ");
+    const phoneNumber = formData.phone_number.trim();
+    const nameParts = fullName.split(" ").filter(Boolean);
+    const nameRegex = /^[A-Za-zÀ-ỹ\s'.-]+$/;
+    const phoneRegex = /^0\d{9}$/;
+
+    if (fullName.length < 4 || nameParts.length < 2) {
+      showToast("Họ tên phải có ít nhất 2 từ và tối thiểu 4 ký tự", "error");
+      return null;
+    }
+
+    if (!nameRegex.test(fullName)) {
+      showToast("Họ tên không được chứa số hoặc ký tự đặc biệt không hợp lệ", "error");
+      return null;
+    }
+
+    if (!phoneRegex.test(phoneNumber)) {
+      showToast("Số điện thoại phải gồm 10 chữ số và bắt đầu bằng số 0", "error");
+      return null;
+    }
+
+    return { fullName, phoneNumber };
+  };
 
   useEffect(() => {
     const tab = searchParams.get("tab");
@@ -42,6 +69,8 @@ export default function Profile() {
     } else {
       setActiveTab("profile");
     }
+    setEditing(false);
+    setAvatarFile(null);
     fetchData();
   }, [searchParams]);
 
@@ -59,6 +88,7 @@ export default function Profile() {
 
       const userData = profileRes.data;
       setUser(userData);
+      updateUser(userData);
 
       setFormData({
         full_name: userData.full_name || "",
@@ -109,11 +139,14 @@ export default function Profile() {
   };
 
   const handleSaveProfile = async () => {
+    const validated = validateProfileForm();
+    if (!validated) return;
+
     try {
       const data = new FormData();
 
-      data.append("full_name", formData.full_name);
-      data.append("phone_number", formData.phone_number);
+      data.append("full_name", validated.fullName);
+      data.append("phone_number", validated.phoneNumber);
 
       if (avatarFile) {
         data.append("avatar", avatarFile);
@@ -125,12 +158,23 @@ export default function Profile() {
         },
       });
 
+      const nextUser = {
+        ...(user || {}),
+        full_name: validated.fullName,
+        phone_number: validated.phoneNumber,
+        avatar_url: res.data.avatar_url || user?.avatar_url,
+      };
       setUser((prev) => ({
         ...prev,
-        full_name: formData.full_name,
-        phone_number: formData.phone_number,
+        full_name: validated.fullName,
+        phone_number: validated.phoneNumber,
         avatar_url: res.data.avatar_url || prev.avatar_url,
       }));
+      updateUser(nextUser);
+      setFormData({
+        full_name: validated.fullName,
+        phone_number: validated.phoneNumber,
+      });
 
       setEditing(false);
       setAvatarFile(null);
@@ -342,19 +386,35 @@ export default function Profile() {
                   <p className="text-muted mb-0">{user.email}</p>
                 </div>
 
-                {editing ? (
-                  <button
-                    className="btn btn-success"
-                    onClick={handleSaveProfile}>
-                    Lưu thay đổi
-                  </button>
-                ) : (
-                  <button
-                    className="btn text-white"
-                    style={{ background: "#b51b17" }}
-                    onClick={() => setEditing(true)}>
-                    Chỉnh sửa
-                  </button>
+                {activeTab === "profile" && (
+                  editing ? (
+                    <div className="d-flex gap-2">
+                      <button
+                        className="btn btn-outline-secondary"
+                        onClick={() => {
+                          setEditing(false);
+                          setAvatarFile(null);
+                          setFormData({
+                            full_name: user.full_name || "",
+                            phone_number: user.phone_number || user.phone || "",
+                          });
+                        }}>
+                        Hủy
+                      </button>
+                      <button
+                        className="btn btn-success"
+                        onClick={handleSaveProfile}>
+                        Lưu thay đổi
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      className="btn text-white"
+                      style={{ background: "#b51b17" }}
+                      onClick={() => setEditing(true)}>
+                      Chỉnh sửa
+                    </button>
+                  )
                 )}
               </div>
             </div>
@@ -362,8 +422,39 @@ export default function Profile() {
             {/* Form */}
             {/* PROFILE */}
             {activeTab === "profile" && (
-              <div className="card border p-4" style={{ borderRadius: 12 }}>
-                <h5 className="fw-semibold mb-4">Thông tin tài khoản</h5>
+              <div
+                className="card p-4"
+                style={{
+                  borderRadius: 12,
+                  border: editing ? "1.5px solid #b51b17" : "1px solid #dee2e6",
+                  boxShadow: editing
+                    ? "0 10px 28px rgba(181, 27, 23, 0.08)"
+                    : "none",
+                }}>
+                <div className="d-flex justify-content-between align-items-start gap-3 mb-4">
+                  <div>
+                    <h5 className="fw-semibold mb-1">Thông tin tài khoản</h5>
+                    <p className="text-muted mb-0" style={{ fontSize: 14 }}>
+                      {editing
+                        ? "Bạn đang chỉnh sửa thông tin hồ sơ. Các thay đổi chỉ được lưu khi bấm Lưu thay đổi."
+                        : "Thông tin hồ sơ cá nhân của bạn."}
+                    </p>
+                  </div>
+
+                  {editing && (
+                    <span
+                      className="badge"
+                      style={{
+                        background: "#fff1f0",
+                        color: "#b51b17",
+                        border: "1px solid #ffd4d1",
+                        padding: "8px 10px",
+                        whiteSpace: "nowrap",
+                      }}>
+                      Đang chỉnh sửa
+                    </span>
+                  )}
+                </div>
 
                 <div className="row g-3">
                   <div className="col-md-6">
@@ -373,6 +464,10 @@ export default function Profile() {
                       className="form-control"
                       value={formData.full_name}
                       readOnly={!editing}
+                      style={{
+                        background: editing ? "#fff" : "#f8f9fa",
+                        borderColor: editing ? "#b51b17" : "#dee2e6",
+                      }}
                       onChange={(e) =>
                         setFormData({
                           ...formData,
@@ -389,6 +484,10 @@ export default function Profile() {
                       className="form-control"
                       value={formData.phone_number}
                       readOnly={!editing}
+                      style={{
+                        background: editing ? "#fff" : "#f8f9fa",
+                        borderColor: editing ? "#b51b17" : "#dee2e6",
+                      }}
                       onChange={(e) =>
                         setFormData({
                           ...formData,
@@ -404,6 +503,7 @@ export default function Profile() {
                       type="email"
                       className="form-control"
                       value={user.email || ""}
+                      style={{ background: "#f8f9fa" }}
                       readOnly
                     />
                   </div>
