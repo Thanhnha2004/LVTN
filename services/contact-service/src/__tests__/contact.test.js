@@ -2,8 +2,9 @@ const express = require("express");
 const request = require("supertest");
 const pool = require("../db");
 const contactRouter = require("../routes/contact");
+const { sendContactNotification } = require("../mailer");
 
-jest.mock("../db", () => ({ query: jest.fn() }));
+jest.mock("../db", () => ({ query: jest.fn(), getConnection: jest.fn() }));
 jest.mock("../mailer", () => ({
   sendContactNotification: jest.fn().mockResolvedValue(),
 }));
@@ -20,8 +21,25 @@ function app() {
 }
 
 describe("contact-service", () => {
+  const mockConnection = {
+    query: jest.fn(),
+    beginTransaction: jest.fn(),
+    commit: jest.fn(),
+    rollback: jest.fn(),
+    release: jest.fn(),
+  };
+
   beforeEach(() => {
     jest.clearAllMocks();
+    pool.query.mockReset();
+    pool.getConnection.mockReset();
+    mockConnection.query.mockReset();
+    pool.getConnection.mockResolvedValue(mockConnection);
+    sendContactNotification.mockResolvedValue();
+    mockConnection.beginTransaction.mockResolvedValue();
+    mockConnection.commit.mockResolvedValue();
+    mockConnection.rollback.mockResolvedValue();
+    mockConnection.release.mockReturnValue();
     global.mockUser = { id: 1, role: "buyer" };
   });
 
@@ -115,6 +133,15 @@ describe("contact-service", () => {
     expect(res.body.message).toBeTruthy();
   });
 
+  test("rejects too short contact message", async () => {
+    const res = await request(app())
+      .post("/api/contact")
+      .send({ property_id: 1, message: "Hi" });
+
+    expect(res.status).toBe(400);
+    expect(pool.query).not.toHaveBeenCalled();
+  });
+
   test("owner can reply only to owned contact", async () => {
     global.mockUser = { id: 7, role: "owner" };
     pool.query.mockResolvedValueOnce([[{ id: 5 }]]).mockResolvedValueOnce([{}]);
@@ -162,16 +189,51 @@ describe("contact-service", () => {
 
   test("owner updates lead status for owned contact", async () => {
     global.mockUser = { id: 7, role: "owner" };
-    pool.query.mockResolvedValueOnce([[{ id: 9 }]]).mockResolvedValueOnce([{}]);
+    mockConnection.query
+      .mockResolvedValueOnce([[{ id: 9, property_id: 3, property_status: "approved" }]])
+      .mockResolvedValueOnce([{}]);
+
+    const res = await request(app())
+      .patch("/api/contact/9/lead")
+      .send({
+        lead_status: "scheduled",
+        owner_note: "Lịch hẹn xem: 09:30 20/08/2026. Hẹn tại sảnh",
+      });
+
+    expect(res.status).toBe(200);
+    expect(mockConnection.query).toHaveBeenCalledWith(
+      "UPDATE contacts SET lead_status = ?, owner_note = ? WHERE id = ?",
+      ["scheduled", "Lịch hẹn xem: 09:30 20/08/2026. Hẹn tại sảnh", "9"],
+    );
+  });
+
+  test("scheduled lead requires appointment time", async () => {
+    global.mockUser = { id: 7, role: "owner" };
 
     const res = await request(app())
       .patch("/api/contact/9/lead")
       .send({ lead_status: "scheduled", owner_note: "Hen xem nha" });
 
+    expect(res.status).toBe(400);
+    expect(pool.getConnection).not.toHaveBeenCalled();
+  });
+
+  test("closed lead marks approved property as sold", async () => {
+    global.mockUser = { id: 7, role: "owner" };
+    mockConnection.query
+      .mockResolvedValueOnce([[{ id: 9, property_id: 3, property_status: "approved" }]])
+      .mockResolvedValueOnce([{}])
+      .mockResolvedValueOnce([{}])
+      .mockResolvedValueOnce([{}]);
+
+    const res = await request(app())
+      .patch("/api/contact/9/lead")
+      .send({ lead_status: "closed", owner_note: "Khach da dat coc" });
+
     expect(res.status).toBe(200);
-    expect(pool.query).toHaveBeenCalledWith(
-      "UPDATE contacts SET lead_status = ?, owner_note = ? WHERE id = ?",
-      ["scheduled", "Hen xem nha", "9"],
+    expect(mockConnection.query).toHaveBeenCalledWith(
+      "UPDATE properties SET status = 'sold', sold_at = NOW() WHERE id = ?",
+      [3],
     );
   });
 

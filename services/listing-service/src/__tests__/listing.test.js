@@ -64,6 +64,30 @@ describe("listing-service", () => {
 
     expect(res.status).toBe(404);
   });
+
+  test("returns public owner profile with approved properties", async () => {
+    pool.query
+      .mockResolvedValueOnce([
+        [
+          {
+            id: 2,
+            full_name: "Owner Demo",
+            email_verified: 1,
+            approved_properties: 3,
+          },
+        ],
+      ])
+      .mockResolvedValueOnce([[{ id: 10, title: "Tin da duyet" }]]);
+
+    const res = await request(app()).get("/api/listing/owners/2");
+
+    expect(res.status).toBe(200);
+    expect(res.body.owner.full_name).toBe("Owner Demo");
+    expect(res.body.properties).toHaveLength(1);
+    expect(pool.query.mock.calls[0][0]).toContain("u.role = 'owner'");
+    expect(pool.query.mock.calls[1][0]).toContain("p.status = 'approved'");
+  });
+
   test("rejects invalid bbox filter", async () => {
     const res = await request(app()).get("/api/listing?bbox=10,106,11");
 

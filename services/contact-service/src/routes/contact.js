@@ -3,6 +3,18 @@ const pool = require("../db");
 const authMiddleware = require("../middleware/auth");
 const router = express.Router();
 
+function hasAppointmentSchedule(note) {
+  return /lịch hẹn xem\s*:\s*\d{1,2}:\d{2}.*\d{1,2}\/\d{1,2}\/\d{4}/i.test(
+    String(note || ""),
+  );
+}
+
+function normalizeMessage(value) {
+  return String(value || "")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
 // POST /api/contact — Người dùng gửi yêu cầu liên hệ
 // Contact API: tao mot yeu cau lien he cho tin approved.
 // He thong chan tu lien he tin cua minh va chan gui trung lien he cho cung mot property.
@@ -10,9 +22,20 @@ router.post("/", authMiddleware, async (req, res) => {
   if (!["buyer", "owner"].includes(req.user.role))
     return res.status(403).json({ message: "Không có quyền gửi liên hệ" });
 
-  const { property_id, message } = req.body;
+  const { property_id } = req.body;
+  const message = normalizeMessage(req.body.message);
   if (!property_id || !message)
     return res.status(400).json({ message: "Thiếu property_id hoặc message" });
+  if (message.length < 10) {
+    return res
+      .status(400)
+      .json({ message: "Nội dung liên hệ phải có ít nhất 10 ký tự" });
+  }
+  if (message.length > 1000) {
+    return res
+      .status(400)
+      .json({ message: "Nội dung liên hệ không được vượt quá 1000 ký tự" });
+  }
 
   try {
     // Kiểm tra property tồn tại và đã approved
@@ -99,7 +122,9 @@ router.get("/owner", authMiddleware, async (req, res) => {
   try {
     const [rows] = await pool.query(
       `
-        SELECT c.*, p.title as property_title, u.full_name as buyer_name, u.email as buyer_email
+        SELECT c.*, p.title as property_title, p.city, p.price,
+               u.full_name as buyer_name, u.email as buyer_email,
+               u.phone_number as buyer_phone
         FROM contacts c
         JOIN properties p ON c.property_id = p.id
         JOIN users u ON c.buyer_id = u.id
@@ -154,29 +179,68 @@ router.patch("/:id/lead", authMiddleware, async (req, res) => {
   if (!validStatuses.includes(lead_status)) {
     return res.status(400).json({ message: "Trạng thái lead không hợp lệ" });
   }
+  if (lead_status === "scheduled" && !hasAppointmentSchedule(owner_note)) {
+    return res.status(400).json({
+      message:
+        "Trạng thái đã hẹn xem phải có lịch hẹn cụ thể trong ghi chú",
+    });
+  }
 
+  let connection;
   try {
-    const [rows] = await pool.query(
-      `SELECT c.id
+    connection = await pool.getConnection();
+    await connection.beginTransaction();
+
+    const [rows] = await connection.query(
+      `SELECT c.id, c.property_id, p.status AS property_status
        FROM contacts c
        JOIN properties p ON c.property_id = p.id
        WHERE c.id = ? AND p.owner_id = ?`,
       [req.params.id, req.user.id],
     );
 
-    if (rows.length === 0)
+    if (rows.length === 0) {
+      await connection.rollback();
       return res
         .status(403)
         .json({ message: "Không có quyền cập nhật lead này" });
+    }
 
-    await pool.query(
+    await connection.query(
       "UPDATE contacts SET lead_status = ?, owner_note = ? WHERE id = ?",
       [lead_status, owner_note || null, req.params.id],
     );
 
-    res.json({ message: "Cập nhật lead thành công" });
+    if (lead_status === "closed" && rows[0].property_status === "approved") {
+      await connection.query(
+        "UPDATE properties SET status = 'sold', sold_at = NOW() WHERE id = ?",
+        [rows[0].property_id],
+      );
+      await connection.query(
+        `INSERT INTO property_status_history
+          (property_id, old_status, new_status, actor_id, note)
+         VALUES (?, 'approved', 'sold', ?, ?)`,
+        [
+          rows[0].property_id,
+          req.user.id,
+          "Owner chốt lead liên hệ và đánh dấu tin đã giao dịch",
+        ],
+      );
+    }
+
+    await connection.commit();
+
+    res.json({
+      message:
+        lead_status === "closed"
+          ? "Đã chốt lead và cập nhật tin thành đã giao dịch"
+          : "Cập nhật lead thành công",
+    });
   } catch (err) {
+    if (connection) await connection.rollback();
     res.status(500).json({ message: "Lỗi server", error: err.message });
+  } finally {
+    if (connection) connection.release();
   }
 });
 
@@ -231,9 +295,11 @@ router.get("/buyer", authMiddleware, async (req, res) => {
     // Phan hoi cung phai kiem tra ownership de owner khong tra loi contact cua owner khac.
     const [rows] = await pool.query(
       `
-        SELECT c.*, p.title as property_title, p.city, p.price,
+        SELECT c.*, p.title as property_title, p.city, p.price, p.owner_id,
               o.full_name as owner_name, o.phone_number as owner_phone,
-              o.email as owner_email
+              o.email as owner_email,
+              (SELECT pi.url FROM property_images pi
+               WHERE pi.property_id = p.id ORDER BY pi.\`order\` LIMIT 1) as thumbnail
         FROM contacts c
         JOIN properties p ON c.property_id = p.id
         JOIN users o ON p.owner_id = o.id

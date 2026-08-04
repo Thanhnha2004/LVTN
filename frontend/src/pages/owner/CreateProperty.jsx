@@ -24,6 +24,28 @@ const STEPS = [
 ];
 
 
+const POSTING_POLICY = [
+  "Tài khoản đăng tin phải có email đã xác minh và đang hoạt động.",
+  "Tin đăng cần có tiêu đề rõ ràng, mô tả đúng thực tế và tối thiểu 30 ký tự.",
+  "Giá, diện tích, loại hình và hình thức giao dịch phải hợp lý, không nhập sai lệch để câu view.",
+  "Địa chỉ cần đủ tỉnh/thành, quận/huyện, phường/xã và địa chỉ cụ thể; tọa độ bản đồ giúp người mua xác định vị trí.",
+  "Hình ảnh phải là ảnh thật hoặc ảnh phù hợp với bất động sản, không dùng ảnh sai nội dung.",
+  "Thông tin pháp lý cần khai báo rõ: sổ hồng, sổ đỏ, đang chờ sổ hoặc loại khác.",
+  "Không chèn số điện thoại, email, đường dẫn ngoài hệ thống trong phần mô tả.",
+  "Không đăng nhiều tin giống nhau cùng địa chỉ, loại hình và hình thức giao dịch.",
+];
+
+const DETAILED_POSTING_POLICY = [
+  "Tiêu đề: từ 10 đến 180 ký tự, không viết chung chung như \"bán nhà đẹp\".",
+  "Mô tả: từ 30 đến 3000 ký tự, nêu vị trí, hiện trạng, tiện ích, pháp lý và điều kiện giao dịch.",
+  "Giá: tin bán từ 100 triệu đồng trở lên; tin thuê từ 500 nghìn đồng/tháng trở lên.",
+  "Diện tích: từ 5 m² đến 100.000 m²; căn hộ/nhà ở cần có ít nhất 1 phòng ngủ và 1 phòng tắm.",
+  "Địa chỉ: bắt buộc có tỉnh/thành, quận/huyện, địa chỉ cụ thể tối thiểu 5 ký tự; nên chọn đúng phường/xã.",
+  "Tọa độ: nếu chọn trên bản đồ thì vĩ độ phải trong khoảng 8-24, kinh độ trong khoảng 102-110.",
+  "Pháp lý: chọn đúng một trạng thái gồm sổ hồng, sổ đỏ, đang chờ sổ hoặc khác.",
+  "Nội dung bị từ chối: mô tả có số điện thoại, email, link ngoài hệ thống, ảnh sai nội dung hoặc tin trùng.",
+];
+
 const sectionTitle = (icon, text) => (
   <div
     style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 24 }}>
@@ -1232,6 +1254,70 @@ export default function CreateProperty() {
                   </p>
 
                   {renderDescriptionField()}
+
+                  <div
+                    style={{
+                      border: "1px solid #f1d28a",
+                      background: "#fffaf0",
+                      borderRadius: 10,
+                      padding: "16px 18px",
+                      marginBottom: 20,
+                    }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
+                        marginBottom: 10,
+                      }}>
+                      <UiIcon name="shield" size={18} color="#9a6700" />
+                      <strong
+                        style={{
+                          fontSize: 14,
+                          color: "#6f4f00",
+                        }}>
+                        Chính sách đăng tin và kiểm duyệt
+                      </strong>
+                    </div>
+                    <p
+                      style={{
+                        fontSize: 13,
+                        color: "#6f4f00",
+                        lineHeight: 1.6,
+                        margin: "0 0 10px",
+                      }}>
+                      Tin đăng sẽ được chuyển sang trạng thái chờ duyệt. Quản
+                      trị viên kiểm tra theo các tiêu chí dưới đây trước khi cho
+                      hiển thị công khai.
+                    </p>
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                        gap: "8px 14px",
+                      }}>
+                      {DETAILED_POSTING_POLICY.map((item) => (
+                        <div
+                          key={item}
+                          style={{
+                            display: "flex",
+                            alignItems: "flex-start",
+                            gap: 7,
+                            fontSize: 12,
+                            color: "#5f4b12",
+                            lineHeight: 1.55,
+                          }}>
+                          <UiIcon
+                            name="check"
+                            size={14}
+                            color="#9a6700"
+                            style={{ marginTop: 2, flexShrink: 0 }}
+                          />
+                          <span>{item}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
 
                   {/* Summary card */}
                   <div

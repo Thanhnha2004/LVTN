@@ -15,6 +15,53 @@ import {
   formatPrice,
 } from "../../shared/property";
 
+function buildOwnerTrust(property) {
+  const hasTrustData =
+    property.owner_email_verified !== undefined ||
+    property.owner_approved_properties !== undefined ||
+    property.owner_sold_properties !== undefined ||
+    property.owner_total_contacts !== undefined;
+  const approved = Number(property.owner_approved_properties || 0);
+  const sold = Number(property.owner_sold_properties || 0);
+  const rejected = Number(property.owner_rejected_properties || 0);
+  const totalContacts = Number(property.owner_total_contacts || 0);
+  const repliedContacts = Number(property.owner_replied_contacts || 0);
+  const totalViews = Number(property.owner_total_views || 0);
+  const responseRate =
+    totalContacts > 0 ? Math.round((repliedContacts / totalContacts) * 100) : 0;
+  const score = Math.max(
+    0,
+    Math.min(
+      100,
+      (Number(property.owner_email_verified) ? 20 : 0) +
+        Math.min(approved * 4, 20) +
+        Math.min(sold * 12, 30) +
+        Math.min(responseRate * 0.2, 20) +
+        Math.min(Math.floor(totalViews / 20), 10) -
+        Math.min(rejected * 8, 24),
+    ),
+  );
+
+  return {
+    score: Math.round(score),
+    hasTrustData,
+    emailVerified:
+      property.owner_email_verified === undefined
+        ? null
+        : Boolean(Number(property.owner_email_verified)),
+    approved,
+    sold,
+    rejected,
+    totalContacts,
+    responseRate,
+  };
+}
+
+function formatDetailDate(value) {
+  if (!value) return "Chưa cập nhật";
+  return new Date(value).toLocaleDateString("vi-VN");
+}
+
 export default function Detail() {
   const { id } = useParams();
   const { user } = useAuth();
@@ -32,6 +79,7 @@ export default function Detail() {
   const [contactLoading, setContactLoading] = useState(false);
   const [contactError, setContactError] = useState("");
   const [similar, setSimilar] = useState([]);
+  const [loadError, setLoadError] = useState("");
 
   useEffect(() => {
     const fetchData = async () => {
@@ -46,6 +94,7 @@ export default function Detail() {
         } else {
           res = await api.get(`/api/listing/${id}`);
         }
+        setLoadError("");
         const imgs = res.data.images;
         if (typeof imgs === "string") {
           res.data.images = imgs ? imgs.split(",") : [];
@@ -53,26 +102,34 @@ export default function Detail() {
         setProperty(res.data);
 
         if (user?.role === "buyer") {
-          const [savedRes, contactsRes] = await Promise.all([
-            api.get("/api/contact/saved"),
-            api.get("/api/contact/buyer", { params: { limit: 100 } }),
-          ]);
-          setSaved(savedRes.data.some((p) => p.id === parseInt(id)));
-          const sentContact = (contactsRes.data.data || []).find(
-            (item) => Number(item.property_id) === Number(id),
-          );
-          setExistingContact(sentContact || null);
-          setContactSent(!!sentContact);
+          try {
+            const [savedRes, contactsRes] = await Promise.all([
+              api.get("/api/contact/saved"),
+              api.get("/api/contact/buyer", { params: { limit: 100 } }),
+            ]);
+            setSaved(savedRes.data.some((p) => p.id === parseInt(id)));
+            const sentContact = (contactsRes.data.data || []).find(
+              (item) => Number(item.property_id) === Number(id),
+            );
+            setExistingContact(sentContact || null);
+            setContactSent(!!sentContact);
+          } catch (err) {
+            console.warn("Không thể tải trạng thái tương tác của buyer", err);
+          }
         }
         if (user?.role === "owner") {
-          const contactsRes = await api.get("/api/contact/buyer", {
-            params: { limit: 100 },
-          });
-          const sentContact = (contactsRes.data.data || []).find(
-            (item) => Number(item.property_id) === Number(id),
-          );
-          setExistingContact(sentContact || null);
-          setContactSent(!!sentContact);
+          try {
+            const contactsRes = await api.get("/api/contact/buyer", {
+              params: { limit: 100 },
+            });
+            const sentContact = (contactsRes.data.data || []).find(
+              (item) => Number(item.property_id) === Number(id),
+            );
+            setExistingContact(sentContact || null);
+            setContactSent(!!sentContact);
+          } catch (err) {
+            console.warn("Không thể tải lịch sử liên hệ đã gửi", err);
+          }
         }
 
         if (res.data.status === "approved") {
@@ -81,8 +138,12 @@ export default function Detail() {
             setSimilar(simRes.data.data || []);
           } catch {}
         }
-      } catch {
-        navigate("/");
+      } catch (err) {
+        setLoadError(
+          err.response?.data?.message ||
+            "Không thể tải thông tin bất động sản này.",
+        );
+        setProperty(null);
       } finally {
         setLoading(false);
       }
@@ -150,6 +211,88 @@ export default function Detail() {
     );
   }
 
+  if (loadError) {
+    return (
+      <div style={{ background: "#f9f9f9", minHeight: "100vh" }}>
+        <Navbar />
+        <div
+          style={{
+            maxWidth: 720,
+            margin: "0 auto",
+            padding: "84px 32px",
+            textAlign: "center",
+            fontFamily: "Inter, sans-serif",
+          }}>
+          <div
+            style={{
+              width: 58,
+              height: 58,
+              borderRadius: "50%",
+              background: "#fff0ef",
+              color: "#b51b17",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              margin: "0 auto 18px",
+            }}>
+            <UiIcon name="alert" size={26} />
+          </div>
+          <h1
+            style={{
+              fontFamily: "Manrope, sans-serif",
+              fontSize: 24,
+              fontWeight: 800,
+              color: "#1a1c1c",
+              margin: "0 0 10px",
+            }}>
+            Chưa xem được tin đăng
+          </h1>
+          <p style={{ color: "#5f5e5e", fontSize: 14, lineHeight: 1.7, marginBottom: 22 }}>
+            {loadError}
+          </p>
+          <div style={{ display: "flex", justifyContent: "center", gap: 10 }}>
+            <Link
+              to="/profile?tab=contacts"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                height: 40,
+                padding: "0 16px",
+                borderRadius: 8,
+                background: "#b51b17",
+                color: "#fff",
+                textDecoration: "none",
+                fontSize: 14,
+                fontWeight: 700,
+              }}>
+              Quay lại liên hệ
+            </Link>
+            <Link
+              to="/search"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                height: 40,
+                padding: "0 16px",
+                borderRadius: 8,
+                border: "1px solid #E8E8E8",
+                color: "#1a1c1c",
+                textDecoration: "none",
+                fontSize: 14,
+                fontWeight: 700,
+                background: "#fff",
+              }}>
+              Xem tin khác
+            </Link>
+          </div>
+        </div>
+        <SiteFooter />
+      </div>
+    );
+  }
+
   if (!property) return null;
 
   const images = Array.isArray(property.images) ? property.images : [];
@@ -159,6 +302,7 @@ export default function Detail() {
   const canManageProperty =
     user?.role === "admin" ||
     (user?.role === "owner" && Number(property.owner_id) === Number(user.id));
+  const ownerTrust = buildOwnerTrust(property);
   const openImageViewer = (index = 0) => {
     if (images.length === 0) return;
     setActiveImg(Math.max(0, Math.min(index, images.length - 1)));
@@ -885,6 +1029,101 @@ export default function Detail() {
               )}
             </div>
 
+            <div
+              style={{
+                background: "#fff",
+                border: "1px solid #E8E8E8",
+                borderRadius: 12,
+                padding: "24px",
+                marginBottom: 24,
+              }}>
+              <h2
+                style={{
+                  fontFamily: "Manrope, sans-serif",
+                  fontSize: 18,
+                  fontWeight: 700,
+                  color: "#1a1c1c",
+                  marginBottom: 14,
+                  marginTop: 0,
+                }}>
+                Thông tin cần xác minh khi giao dịch
+              </h2>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: 12,
+                }}>
+                {[
+                  [
+                    "Pháp lý",
+                    property.legal_status
+                      ? `Đối chiếu giấy tờ ${LEGAL_LABEL[property.legal_status] || property.legal_status} với thông tin tin đăng.`
+                      : "Yêu cầu người bán cung cấp giấy tờ pháp lý trước khi đặt cọc.",
+                  ],
+                  [
+                    "Vị trí thực tế",
+                    "Kiểm tra địa chỉ và xem thực tế khu vực trước khi ra quyết định.",
+                  ],
+                  [
+                    "Giá và diện tích",
+                    "So sánh giá, diện tích với bất động sản cùng khu vực để tránh thông tin bất thường.",
+                  ],
+                  [
+                    "Thanh toán",
+                    "Không chuyển tiền khi chưa xác minh người bán, giấy tờ và tình trạng bất động sản.",
+                  ],
+                ].map(([title, text]) => (
+                  <div
+                    key={title}
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "28px 1fr",
+                      gap: 10,
+                      padding: "12px 14px",
+                      borderRadius: 10,
+                      background: "#fff8e1",
+                      border: "1px solid #f0ce7a",
+                    }}>
+                    <div
+                      style={{
+                        width: 28,
+                        height: 28,
+                        borderRadius: "50%",
+                        background: "#8a5a00",
+                        color: "#fff",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}>
+                      <UiIcon name="shield" size={15} />
+                    </div>
+                    <div>
+                      <div
+                        style={{
+                          fontFamily: "Inter, sans-serif",
+                          fontSize: 13,
+                          fontWeight: 800,
+                          color: "#1a1c1c",
+                          marginBottom: 3,
+                        }}>
+                        {title}
+                      </div>
+                      <div
+                        style={{
+                          fontFamily: "Inter, sans-serif",
+                          fontSize: 13,
+                          color: "#5f5e5e",
+                          lineHeight: 1.55,
+                        }}>
+                        {text}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
             {/* Map */}
             {property.latitude && property.longitude && (
               <div
@@ -941,6 +1180,196 @@ export default function Detail() {
 
           {/* RIGHT COLUMN — STICKY SIDEBAR */}
           <div style={{ position: "sticky", top: 80 }}>
+            <div
+              style={{
+                background: "#fff",
+                border: "1px solid #E8E8E8",
+                borderRadius: 12,
+                padding: "20px 24px",
+                marginBottom: 16,
+              }}>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "flex-start",
+                  gap: 14,
+                  marginBottom: 14,
+                }}>
+                <div>
+                  <h3
+                    style={{
+                      fontFamily: "Manrope, sans-serif",
+                      fontSize: 16,
+                      fontWeight: 700,
+                      color: "#1a1c1c",
+                      margin: "0 0 4px",
+                    }}>
+                    Độ uy tín người bán
+                  </h3>
+                  <div
+                    style={{
+                      fontFamily: "Inter, sans-serif",
+                      fontSize: 13,
+                      color: "#5f5e5e",
+                    }}>
+                    {property.owner_name || "Người bán"}
+                  </div>
+                </div>
+                <div
+                  style={{
+                    width: 58,
+                    height: 58,
+                    borderRadius: "50%",
+                    background:
+                      ownerTrust.score >= 75
+                        ? "#e6f9f0"
+                        : ownerTrust.score >= 45
+                          ? "#fff8e1"
+                          : "#f4f4f4",
+                    color:
+                      ownerTrust.score >= 75
+                        ? "#0f6e56"
+                        : ownerTrust.score >= 45
+                          ? "#9a6700"
+                          : "#5f5e5e",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontFamily: "Manrope, sans-serif",
+                    fontSize: 18,
+                    fontWeight: 800,
+                    flexShrink: 0,
+                  }}>
+                  {ownerTrust.hasTrustData ? ownerTrust.score : "--"}
+                </div>
+              </div>
+
+              <div style={{ display: "grid", gap: 9 }}>
+                {[
+                  [
+                    "Email xác minh",
+                    ownerTrust.emailVerified === null
+                      ? "Đang cập nhật"
+                      : ownerTrust.emailVerified
+                        ? "Đã xác minh"
+                        : "Chưa xác minh",
+                  ],
+                  [
+                    "Tin đã duyệt",
+                    ownerTrust.hasTrustData
+                      ? `${ownerTrust.approved} tin`
+                      : "Đang cập nhật",
+                  ],
+                  [
+                    "Đã giao dịch",
+                    ownerTrust.hasTrustData
+                      ? `${ownerTrust.sold} tin`
+                      : "Đang cập nhật",
+                  ],
+                  [
+                    "Tỷ lệ phản hồi",
+                    !ownerTrust.hasTrustData
+                      ? "Đang cập nhật"
+                      : ownerTrust.totalContacts > 0
+                      ? `${ownerTrust.responseRate}%`
+                      : "Chưa có liên hệ",
+                  ],
+                ].map(([label, value]) => (
+                  <div
+                    key={label}
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      gap: 12,
+                      fontFamily: "Inter, sans-serif",
+                      fontSize: 13,
+                    }}>
+                    <span style={{ color: "#757575" }}>{label}</span>
+                    <strong style={{ color: "#1a1c1c", textAlign: "right" }}>
+                      {value}
+                    </strong>
+                  </div>
+                ))}
+              </div>
+              {property.owner_id && (
+                <Link
+                  to={`/owners/${property.owner_id}`}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 8,
+                    marginTop: 16,
+                    padding: "10px 12px",
+                    borderRadius: 8,
+                    border: "1px solid #b51b17",
+                    color: "#b51b17",
+                    textDecoration: "none",
+                    fontFamily: "Inter, sans-serif",
+                    fontSize: 13,
+                    fontWeight: 700,
+                  }}>
+                  <UiIcon name="user" size={15} />
+                  Xem hồ sơ người bán
+                </Link>
+              )}
+            </div>
+
+            <div
+              style={{
+                background: "#fff",
+                border: "1px solid #E8E8E8",
+                borderRadius: 12,
+                padding: "20px 24px",
+                marginBottom: 16,
+              }}>
+              <h3
+                style={{
+                  fontFamily: "Manrope, sans-serif",
+                  fontSize: 16,
+                  fontWeight: 700,
+                  color: "#1a1c1c",
+                  marginTop: 0,
+                  marginBottom: 14,
+                }}>
+                Hoạt động tin đăng
+              </h3>
+              <div style={{ display: "grid", gap: 9 }}>
+                {[
+                  ["Ngày đăng", formatDetailDate(property.created_at)],
+                  ["Ngày duyệt", formatDetailDate(property.approved_at)],
+                  [
+                    "Lượt xem",
+                    property.view_count !== undefined
+                      ? Number(property.view_count || 0).toLocaleString("vi-VN")
+                      : "Đang cập nhật",
+                  ],
+                  [
+                    "Trạng thái",
+                    property.status === "approved"
+                      ? "Đang hiển thị"
+                      : property.status || "Đang cập nhật",
+                  ],
+                ].map(([label, value]) => (
+                  <div
+                    key={label}
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      gap: 12,
+                      fontFamily: "Inter, sans-serif",
+                      fontSize: 13,
+                    }}>
+                    <span style={{ color: "#757575" }}>{label}</span>
+                    <strong style={{ color: "#1a1c1c", textAlign: "right" }}>
+                      {value}
+                    </strong>
+                  </div>
+                ))}
+              </div>
+            </div>
+
             {/* Contact form */}
             {canManageProperty ? (
               <div

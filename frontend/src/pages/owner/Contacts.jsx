@@ -17,6 +17,92 @@ const LEAD_STATUS = [
   { value: "cancelled", label: "Đã hủy" },
 ];
 
+const LEAD_STATUS_LABEL = Object.fromEntries(
+  LEAD_STATUS.map((item) => [item.value, item.label]),
+);
+
+const LEAD_HINTS = {
+  new: {
+    note: "Lead mới, owner nên phản hồi để xác nhận nhu cầu của khách.",
+    placeholder: "Ghi chú nhu cầu ban đầu của khách...",
+  },
+  contacted: {
+    note: "Đã liên hệ khách, nên ghi lại nhu cầu, ngân sách và kênh đã trao đổi.",
+    placeholder: "Ví dụ: đã gọi, khách cần căn 2PN, ngân sách khoảng 3 tỷ...",
+  },
+  scheduled: {
+    note: "Chọn lịch hẹn xem thực tế để dễ theo dõi và tránh bỏ sót khách.",
+    placeholder: "Ghi chú địa điểm hẹn, người dẫn xem, yêu cầu của khách...",
+  },
+  closed: {
+    note: "Lead đã chốt. Khi lưu trạng thái này, tin đang hiển thị sẽ được chuyển thành đã giao dịch.",
+    placeholder: "Ghi chú kết quả giao dịch...",
+  },
+  cancelled: {
+    note: "Lead đã hủy. Nên ghi lại lý do để cải thiện tin đăng hoặc cách tư vấn.",
+    placeholder: "Ví dụ: khách đổi nhu cầu, giá chưa phù hợp, không liên hệ được...",
+  },
+};
+
+const REPLY_TEMPLATES = [
+  "Cảm ơn bạn đã quan tâm. Bất động sản hiện vẫn còn, bạn muốn xem nhà vào thời gian nào?",
+  "Mình đã nhận thông tin liên hệ. Bạn có thể cho mình biết nhu cầu cụ thể và ngân sách dự kiến không?",
+  "Tin này còn hiệu lực. Mình có thể hỗ trợ thêm thông tin pháp lý, vị trí và lịch xem thực tế.",
+];
+
+function formatDateTime(value) {
+  if (!value) return "Chưa cập nhật";
+  return new Date(value).toLocaleString("vi-VN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+}
+
+function formatAppointmentValue(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const offsetDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  return offsetDate.toISOString().slice(0, 16);
+}
+
+function hoursSince(value) {
+  if (!value) return 0;
+  return Math.max(0, (Date.now() - new Date(value).getTime()) / 36e5);
+}
+
+function contactPriority(contact) {
+  if (contact.status === "replied") return { label: "Đã xử lý", color: "#0f6e56", bg: "#e6f9f0" };
+  const hours = hoursSince(contact.created_at);
+  if (hours >= 24) return { label: "Cần phản hồi gấp", color: "#a32d2d", bg: "#fcebeb" };
+  if (hours >= 6) return { label: "Nên phản hồi sớm", color: "#8a5a00", bg: "#fff4d6" };
+  return { label: "Mới gửi", color: "#2456a6", bg: "#e8f1ff" };
+}
+
+function ContactSummaryCard({ label, value, sub, tone = "#b51b17" }) {
+  return (
+    <div
+      style={{
+        background: "#fff",
+        border: "0.5px solid #E8E8E8",
+        borderRadius: 12,
+        padding: "14px 16px",
+        ...VN,
+      }}>
+      <div style={{ fontSize: 12, color: "#757575", marginBottom: 6 }}>
+        {label}
+      </div>
+      <div style={{ fontSize: 25, fontWeight: 800, color: tone, lineHeight: 1 }}>
+        {value}
+      </div>
+      {sub && <div style={{ fontSize: 11, color: "#5f5e5e", marginTop: 6 }}>{sub}</div>}
+    </div>
+  );
+}
+
 function initials(name) {
   if (!name) return "?";
   return name
@@ -100,6 +186,32 @@ function ReplyBox({ contactId, onSent, onCancel, showToast }) {
       <div
         style={{
           display: "flex",
+          gap: 8,
+          flexWrap: "wrap",
+          marginTop: 8,
+        }}>
+        {REPLY_TEMPLATES.map((template, index) => (
+          <button
+            key={template}
+            type="button"
+            onClick={() => setText(template)}
+            style={{
+              border: "0.5px solid #E8E8E8",
+              background: "#fff",
+              color: "#5f5e5e",
+              borderRadius: 999,
+              padding: "5px 10px",
+              fontSize: 12,
+              cursor: "pointer",
+              ...VN,
+            }}>
+            Mẫu {index + 1}
+          </button>
+        ))}
+      </div>
+      <div
+        style={{
+          display: "flex",
           justifyContent: "flex-end",
           gap: 10,
           marginTop: 10,
@@ -144,22 +256,47 @@ function ContactCard({ contact, onReplied, onLeadUpdated, showToast }) {
   const [open, setOpen] = useState(false);
   const [leadStatus, setLeadStatus] = useState(contact.lead_status || "new");
   const [ownerNote, setOwnerNote] = useState(contact.owner_note || "");
+  const [appointmentAt, setAppointmentAt] = useState(
+    contact.appointment_at ? formatAppointmentValue(contact.appointment_at) : "",
+  );
   const [leadSaving, setLeadSaving] = useState(false);
   const [leadError, setLeadError] = useState("");
   const isPending = contact.status === "pending";
+  const priority = contactPriority(contact);
+  const leadHint = LEAD_HINTS[leadStatus] || LEAD_HINTS.new;
 
   const bgColor = isPending ? "#ffdad5" : "#e4e2e1";
   const textColor = isPending ? "#410001" : "#5f5e5e";
 
   const saveLead = async () => {
+    if (leadStatus === "scheduled" && !appointmentAt) {
+      const message = "Vui lòng chọn ngày giờ hẹn xem";
+      setLeadError(message);
+      showToast(message, "error");
+      return;
+    }
+
+    const noteToSave =
+      leadStatus === "scheduled"
+        ? [
+            `Lịch hẹn xem: ${formatDateTime(appointmentAt)}`,
+            ownerNote.trim(),
+          ]
+            .filter(Boolean)
+            .join(". ")
+        : ownerNote.trim();
+
     setLeadSaving(true);
     setLeadError("");
     try {
       await api.patch(`/api/contact/${contact.id}/lead`, {
         lead_status: leadStatus,
-        owner_note: ownerNote,
+        owner_note: noteToSave,
       });
-      onLeadUpdated(contact.id, leadStatus, ownerNote);
+      onLeadUpdated(contact.id, leadStatus, noteToSave);
+      if (leadStatus === "scheduled") {
+        setOwnerNote(noteToSave);
+      }
       showToast("Đã lưu trạng thái chăm sóc khách hàng");
     } catch (err) {
       const message =
@@ -260,6 +397,18 @@ function ContactCard({ contact, onReplied, onLeadUpdated, showToast }) {
             }}>
             {isPending ? "Chưa phản hồi" : "Đã phản hồi"}
           </span>
+          <span
+            style={{
+              fontSize: 11,
+              fontWeight: 700,
+              padding: "3px 10px",
+              borderRadius: 20,
+              background: priority.bg,
+              color: priority.color,
+              whiteSpace: "nowrap",
+            }}>
+            {priority.label}
+          </span>
         </div>
 
         {/* Property link */}
@@ -286,6 +435,45 @@ function ContactCard({ contact, onReplied, onLeadUpdated, showToast }) {
             {contact.property_title || `Tin #${contact.property_id}`}
           </Link>
         </p>
+
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+            gap: 8,
+            marginBottom: 12,
+          }}>
+          {[
+            ["Email", contact.buyer_email || "Chưa có"],
+            ["Số điện thoại", contact.buyer_phone || "Chưa cập nhật"],
+            ["Thời gian gửi", formatDateTime(contact.created_at)],
+          ].map(([label, value]) => (
+            <div
+              key={label}
+              style={{
+                background: "#f9f9f9",
+                border: "0.5px solid #E8E8E8",
+                borderRadius: 8,
+                padding: "8px 10px",
+                minWidth: 0,
+              }}>
+              <div style={{ fontSize: 10, color: "#757575", marginBottom: 3 }}>
+                {label}
+              </div>
+              <div
+                style={{
+                  fontSize: 12,
+                  color: "#1a1c1c",
+                  fontWeight: 700,
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}>
+                {value}
+              </div>
+            </div>
+          ))}
+        </div>
 
         {/* Message bubble */}
         <div
@@ -336,7 +524,8 @@ function ContactCard({ contact, onReplied, onLeadUpdated, showToast }) {
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "180px 1fr auto",
+            gridTemplateColumns:
+              leadStatus === "scheduled" ? "170px 210px 1fr auto" : "180px 1fr auto",
             gap: 10,
             alignItems: "center",
             marginBottom: 12,
@@ -360,10 +549,26 @@ function ContactCard({ contact, onReplied, onLeadUpdated, showToast }) {
               </option>
             ))}
           </select>
+          {leadStatus === "scheduled" && (
+            <input
+              type="datetime-local"
+              value={appointmentAt}
+              onChange={(e) => setAppointmentAt(e.target.value)}
+              style={{
+                height: 36,
+                border: "0.5px solid #E8E8E8",
+                borderRadius: 8,
+                padding: "0 10px",
+                fontSize: 13,
+                color: "#1a1c1c",
+                ...VN,
+              }}
+            />
+          )}
           <input
             value={ownerNote}
             onChange={(e) => setOwnerNote(e.target.value)}
-            placeholder="Ghi chú chăm sóc khách hàng..."
+            placeholder={leadHint.placeholder}
             style={{
               height: 36,
               border: "0.5px solid #E8E8E8",
@@ -391,6 +596,15 @@ function ContactCard({ contact, onReplied, onLeadUpdated, showToast }) {
             }}>
             {leadSaving ? "Đang lưu" : "Lưu lead"}
           </button>
+        </div>
+        <div
+          style={{
+            fontSize: 12,
+            color: "#757575",
+            margin: "-4px 0 10px",
+            lineHeight: 1.5,
+          }}>
+          {leadHint.note}
         </div>
         {leadError && (
           <div style={{ fontSize: 12, color: "#a32d2d", marginBottom: 10 }}>
@@ -537,6 +751,10 @@ export default function OwnerContacts() {
   const replied = contacts.filter((c) => c.status === "replied").length;
   const scheduled = contacts.filter((c) => c.lead_status === "scheduled").length;
   const closed = contacts.filter((c) => c.lead_status === "closed").length;
+  const urgent = contacts.filter(
+    (c) => c.status === "pending" && hoursSince(c.created_at) >= 24,
+  ).length;
+  const responseRate = total > 0 ? Math.round((replied / total) * 100) : 0;
 
   const tabCount = { all: total, pending, replied };
 
@@ -654,6 +872,32 @@ export default function OwnerContacts() {
                 />
               </div>
             </div>
+          </div>
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(3, 1fr)",
+              gap: 12,
+              marginBottom: 20,
+            }}>
+            <ContactSummaryCard
+              label="Tổng liên hệ"
+              value={total}
+              sub={`${scheduled} đã hẹn xem, ${closed} đã chốt`}
+            />
+            <ContactSummaryCard
+              label="Chưa phản hồi"
+              value={pending}
+              sub={urgent > 0 ? `${urgent} liên hệ quá 24 giờ` : "Không có liên hệ quá hạn"}
+              tone={pending > 0 ? "#b51b17" : "#0f6e56"}
+            />
+            <ContactSummaryCard
+              label="Tỷ lệ phản hồi"
+              value={`${responseRate}%`}
+              sub="Phản hồi càng sớm càng tăng cơ hội giao dịch"
+              tone="#0f6e56"
+            />
           </div>
 
           {/* Tabs */}

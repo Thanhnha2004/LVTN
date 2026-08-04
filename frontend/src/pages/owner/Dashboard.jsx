@@ -342,6 +342,81 @@ function StatCard({ label, value, sub, subColor = "#5f5e5e" }) {
   );
 }
 
+function getCompleteness(property) {
+  const checks = [
+    property.title && property.title.trim().length >= 10,
+    property.description && property.description.trim().length >= 30,
+    property.price && Number(property.price) > 0,
+    property.area && Number(property.area) >= 5,
+    property.city && property.district && property.address,
+    property.legal_status,
+    property.thumbnail,
+    property.latitude && property.longitude,
+  ];
+  const passed = checks.filter(Boolean).length;
+  const score = Math.round((passed / checks.length) * 100);
+  if (score >= 85) return { score, label: "Đầy đủ", color: "#0f6e56", bg: "#e6f9f0" };
+  if (score >= 65) return { score, label: "Cần bổ sung", color: "#8a5a00", bg: "#fff4d6" };
+  return { score, label: "Thiếu nhiều", color: "#a32d2d", bg: "#fcebeb" };
+}
+
+function PerformanceItem({ property, metric, icon, emptyText }) {
+  if (!property) {
+    return (
+      <div style={{ fontSize: 13, color: "#757575", padding: "8px 0", ...VN }}>
+        {emptyText}
+      </div>
+    );
+  }
+
+  return (
+    <Link
+      to={`/property/${property.id}`}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 10,
+        padding: "10px 0",
+        color: "inherit",
+        textDecoration: "none",
+        borderBottom: "1px solid #f1f1f1",
+      }}>
+      <Thumb src={property.thumbnail} status={property.status} />
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <div
+          style={{
+            fontSize: 13,
+            fontWeight: 700,
+            color: "#1a1c1c",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+            ...VN,
+          }}>
+          {property.title}
+        </div>
+        <div style={{ fontSize: 11, color: "#757575", marginTop: 2, ...VN }}>
+          {property.district}, {property.city}
+        </div>
+      </div>
+      <div
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 5,
+          color: "#b51b17",
+          fontSize: 12,
+          fontWeight: 800,
+          whiteSpace: "nowrap",
+          ...VN,
+        }}>
+        {icon}
+        {metric}
+      </div>
+    </Link>
+  );
+}
+
 function Thumb({ src, status }) {
   const grayscale =
     status === "rejected" || status === "hidden" || status === "sold";
@@ -608,6 +683,12 @@ export default function OwnerDashboard() {
   const contacts =
     ownerStats?.overview?.total_contacts ??
     properties.reduce((s, p) => s + (p.contact_count || 0), 0);
+  const topViewed = (ownerStats?.top_properties || [])
+    .filter((p) => Number(p.view_count || 0) > 0)
+    .slice(0, 3);
+  const topContacted = (ownerStats?.top_contacted_properties || [])
+    .filter((p) => Number(p.contact_count || 0) > 0)
+    .slice(0, 3);
 
   const tabCount = (key) => {
     if (key === "all") return total;
@@ -697,6 +778,62 @@ export default function OwnerDashboard() {
               subColor="#0f6e56"
             />
           </div>
+
+          <section
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(2, 1fr)",
+              gap: 12,
+              marginBottom: 24,
+            }}>
+            <div
+              style={{
+                background: "#fff",
+                border: "0.5px solid #E8E8E8",
+                borderRadius: 12,
+                padding: "16px 18px",
+              }}>
+              <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 8, ...VN }}>
+                Tin được xem nhiều
+              </div>
+              {topViewed.length > 0 ? (
+                topViewed.map((p) => (
+                  <PerformanceItem
+                    key={p.id}
+                    property={p}
+                    icon={<FaEye />}
+                    metric={`${Number(p.view_count || 0).toLocaleString("vi-VN")} lượt`}
+                  />
+                ))
+              ) : (
+                <PerformanceItem emptyText="Chưa có tin nào phát sinh lượt xem." />
+              )}
+            </div>
+
+            <div
+              style={{
+                background: "#fff",
+                border: "0.5px solid #E8E8E8",
+                borderRadius: 12,
+                padding: "16px 18px",
+              }}>
+              <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 8, ...VN }}>
+                Tin có nhiều liên hệ
+              </div>
+              {topContacted.length > 0 ? (
+                topContacted.map((p) => (
+                  <PerformanceItem
+                    key={p.id}
+                    property={p}
+                    icon={<FaComments />}
+                    metric={`${Number(p.contact_count || 0).toLocaleString("vi-VN")} liên hệ`}
+                  />
+                ))
+              ) : (
+                <PerformanceItem emptyText="Chưa có tin nào nhận liên hệ." />
+              )}
+            </div>
+          </section>
 
           {/* Table card */}
           <div
@@ -895,6 +1032,7 @@ export default function OwnerDashboard() {
                         "Ngày đăng",
                         "Trạng thái",
                         "Giá bán",
+                        "Hoàn thiện",
                         "Liên hệ",
                         "Hành động",
                       ].map((h, i) => (
@@ -905,10 +1043,10 @@ export default function OwnerDashboard() {
                             fontSize: 12,
                             fontWeight: 500,
                             color: "#757575",
-                            textAlign: i === 5 ? "right" : "left",
+                            textAlign: i === 6 ? "right" : "left",
                             borderBottom: "0.5px solid #E8E8E8",
                             whiteSpace: "nowrap",
-                            width: i === 5 ? 260 : i === 1 ? 150 : "auto",
+                            width: i === 6 ? 260 : i === 1 ? 150 : "auto",
                             ...VN,
                           }}>
                           {h}
@@ -917,7 +1055,9 @@ export default function OwnerDashboard() {
                     </tr>
                   </thead>
                   <tbody>
-                    {paginated.map((p) => (
+                    {paginated.map((p) => {
+                      const completeness = getCompleteness(p);
+                      return (
                       <tr
                         key={p.id}
                         style={{
@@ -1030,6 +1170,27 @@ export default function OwnerDashboard() {
                                   : "#b51b17",
                             }}>
                             {formatPrice(p.price)}
+                          </span>
+                        </td>
+
+                        {/* Hoàn thiện */}
+                        <td style={{ padding: "12px 16px" }}>
+                          <span
+                            title="Tính theo tiêu đề, mô tả, giá, diện tích, địa chỉ, pháp lý, ảnh và tọa độ"
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: 6,
+                              borderRadius: 999,
+                              padding: "4px 9px",
+                              background: completeness.bg,
+                              color: completeness.color,
+                              fontSize: 11,
+                              fontWeight: 800,
+                              whiteSpace: "nowrap",
+                              ...VN,
+                            }}>
+                            {completeness.score}%
                           </span>
                         </td>
 
@@ -1161,7 +1322,8 @@ export default function OwnerDashboard() {
                           </div>
                         </td>
                       </tr>
-                    ))}
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -1326,6 +1488,23 @@ export default function OwnerDashboard() {
                     Chọn gói bên dưới để gia hạn thêm thời gian hiển thị.
                   </div>
                 )}
+
+                <div
+                  style={{
+                    padding: "10px 12px",
+                    borderRadius: 8,
+                    background: "#fff8e1",
+                    border: "0.5px solid #f1d28a",
+                    color: "#6f4f00",
+                    fontSize: 13,
+                    lineHeight: 1.55,
+                    marginBottom: 14,
+                  }}>
+                  Gói nổi bật giúp tin được ưu tiên trước tin thường. Nếu nhiều
+                  tin cùng mua gói, hệ thống xếp trong nhóm nổi bật theo thời
+                  hạn còn lại và thời gian đăng để tránh một tin chiếm vị trí cố
+                  định.
+                </div>
 
                 <div
                   style={{

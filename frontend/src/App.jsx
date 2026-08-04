@@ -13,6 +13,7 @@ const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
 const Home = lazy(() => import("./pages/buyer/Home"));
 const Detail = lazy(() => import("./pages/buyer/Detail"));
 const OwnerDashboard = lazy(() => import("./pages/owner/Dashboard"));
+const PublicOwnerProfile = lazy(() => import("./pages/owner/PublicProfile"));
 const CreateProperty = lazy(() => import("./pages/owner/CreateProperty"));
 const EditProperty = lazy(() => import("./pages/owner/EditProperty"));
 const OwnerContacts = lazy(() => import("./pages/owner/Contacts"));
@@ -22,6 +23,7 @@ const Users = lazy(() => import("./pages/admin/Users"));
 const Profile = lazy(() => import("./pages/profile/Profile"));
 const PropertyList = lazy(() => import("./pages/property/PropertyList"));
 const VnpayReturn = lazy(() => import("./pages/payment/VnpayReturn"));
+const PostingPolicy = lazy(() => import("./pages/policy/PostingPolicy"));
 
 function PageLoading() {
   return (
@@ -60,8 +62,10 @@ export default function App() {
                 <Route path="/verify-email" element={<VerifyEmail />} />
                 <Route path="/forgot-password" element={<ForgotPassword />} />
                 <Route path="/property/:id" element={<Detail />} />
+                <Route path="/owners/:id" element={<PublicOwnerProfile />} />
                 <Route path="/profile" element={<Profile />} />
                 <Route path="/search" element={<PropertyList />} />
+                <Route path="/posting-policy" element={<PostingPolicy />} />
                 <Route path="/payment/vnpay-return" element={<VnpayReturn />} />
 
                 {/* Owner */}

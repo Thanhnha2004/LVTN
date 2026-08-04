@@ -18,6 +18,66 @@ import UiIcon from "../../components/UiIcon";
 import { useToast } from "../../components/ToastProvider";
 import { useConfirm } from "../../components/ConfirmProvider";
 
+const ADMIN_REVIEW_POLICY = [
+  {
+    title: "1. Tiêu đề và mô tả",
+    text: "Tiêu đề phải từ 10 đến 180 ký tự. Mô tả phải từ 30 đến 3000 ký tự, nêu rõ vị trí, tình trạng, tiện ích, pháp lý và điều kiện giao dịch.",
+  },
+  {
+    title: "2. Giá và diện tích",
+    text: "Giá bán phải từ 100 triệu đồng trở lên, giá thuê phải từ 500 nghìn đồng/tháng trở lên. Diện tích tối thiểu 5 m², tối đa 100.000 m².",
+  },
+  {
+    title: "3. Địa chỉ và tọa độ",
+    text: "Bắt buộc có tỉnh/thành, quận/huyện, phường/xã nếu có dữ liệu, địa chỉ cụ thể tối thiểu 5 ký tự. Tọa độ phải nằm trong phạm vi Việt Nam.",
+  },
+  {
+    title: "4. Pháp lý và hình ảnh",
+    text: "Tin cần khai báo pháp lý thuộc một trong các loại: sổ hồng, sổ đỏ, đang chờ sổ hoặc khác. Nên có ít nhất 1 ảnh thật, rõ ràng, đúng bất động sản.",
+  },
+  {
+    title: "5. Nội dung bị từ chối ngay",
+    text: "Từ chối nếu mô tả chứa số điện thoại, email, đường dẫn ngoài hệ thống, nội dung sai sự thật, ảnh không liên quan hoặc tin trùng với tin đang hoạt động.",
+  },
+];
+
+const REJECT_REASON_TEMPLATES = [
+  {
+    label: "Thiếu thông tin",
+    text: "Tin đăng thiếu thông tin bắt buộc: địa chỉ cụ thể, pháp lý, mô tả tình trạng bất động sản hoặc thông tin vị trí. Vui lòng bổ sung đầy đủ trước khi gửi duyệt lại.",
+  },
+  {
+    label: "Giá/diện tích bất thường",
+    text: "Giá hoặc diện tích chưa hợp lý so với loại giao dịch và thông tin mô tả. Vui lòng kiểm tra lại giá, diện tích và bổ sung giải thích nếu đây là trường hợp đặc biệt.",
+  },
+  {
+    label: "Ảnh chưa đạt",
+    text: "Hình ảnh chưa đủ rõ hoặc chưa thể hiện đúng bất động sản. Vui lòng tải ảnh thật, rõ ràng, liên quan trực tiếp đến tin đăng.",
+  },
+  {
+    label: "Nội dung vi phạm",
+    text: "Mô tả chứa thông tin không được phép như số điện thoại, email, đường dẫn ngoài hệ thống hoặc nội dung quảng cáo không liên quan. Vui lòng chỉnh sửa mô tả theo chính sách đăng tin.",
+  },
+  {
+    label: "Tin trùng",
+    text: "Tin có dấu hiệu trùng với tin đang hoạt động về địa chỉ, giá, diện tích hoặc nội dung mô tả. Vui lòng cập nhật tin cũ thay vì tạo tin mới.",
+  },
+];
+
+const TYPE_LABELS = {
+  apartment: "Căn hộ",
+  house: "Nhà phố",
+  land: "Đất nền",
+  office: "Văn phòng",
+};
+
+const LEGAL_LABELS = {
+  sohong: "Sổ hồng",
+  sokhongdo: "Sổ đỏ",
+  dangchoso: "Đang chờ sổ",
+  other: "Khác",
+};
+
 export default function PendingPage({ showToast }) {
   const { showToast: globalToast } = useToast();
   const { confirm } = useConfirm();
@@ -68,16 +128,154 @@ export default function PendingPage({ showToast }) {
     }
   };
 
-  const getValidationItems = (prop) => [
-    { label: "Tiêu đề rõ ràng", ok: Boolean(prop?.title && prop.title.length >= 5) },
-    { label: "Có mô tả bất động sản", ok: Boolean(prop?.description) },
-    { label: "Giá và diện tích hợp lệ", ok: Number(prop?.price) > 0 && Number(prop?.area) > 0 },
-    { label: "Có địa chỉ / thành phố", ok: Boolean(prop?.address && prop?.city) },
-    { label: "Có thông tin pháp lý", ok: Boolean(prop?.legal_status) },
-    { label: "Có ảnh bất động sản", ok: Array.isArray(prop?.images) ? prop.images.length > 0 : Boolean(prop?.thumbnail) },
-    { label: "Có tọa độ bản đồ", ok: Boolean(prop?.latitude && prop?.longitude) },
-  ];
+  const getValidationItems = (prop) => {
+    const images = Array.isArray(prop?.images)
+      ? prop.images
+      : prop?.images
+        ? String(prop.images).split(",").filter(Boolean)
+        : [];
+    const description = prop?.description || "";
+    const hasContactInDescription = /(?:\+?84|0)\d{8,10}|[^\s@]+@[^\s@]+\.[^\s@]+/.test(
+      description,
+    );
 
+    return [
+      {
+        label: "Tiêu đề đạt 10-180 ký tự",
+        ok: Boolean(
+          prop?.title &&
+            prop.title.trim().length >= 10 &&
+            prop.title.trim().length <= 180,
+        ),
+      },
+      {
+        label: "Mô tả đạt 30-3000 ký tự",
+        ok: description.trim().length >= 30 && description.trim().length <= 3000,
+      },
+      {
+        label: "Giá đạt ngưỡng tối thiểu theo loại giao dịch",
+        ok:
+          prop?.transaction_type === "sale"
+            ? Number(prop?.price) >= 100000000
+            : Number(prop?.price) >= 500000,
+      },
+      {
+        label: "Diện tích từ 5 m² đến 100.000 m²",
+        ok: Number(prop?.area) >= 5 && Number(prop?.area) <= 100000,
+      },
+      {
+        label: "Địa chỉ đủ tỉnh/thành, quận/huyện, địa chỉ cụ thể",
+        ok: Boolean(
+          prop?.city && prop?.district && prop?.address?.trim?.().length >= 5,
+        ),
+      },
+      {
+        label: "Pháp lý thuộc danh mục hợp lệ",
+        ok: ["sohong", "sokhongdo", "dangchoso", "other"].includes(
+          prop?.legal_status,
+        ),
+      },
+      {
+        label: "Có ít nhất 1 hình ảnh bất động sản",
+        ok: images.length > 0 || Boolean(prop?.thumbnail),
+      },
+      {
+        label: "Tọa độ nằm trong phạm vi Việt Nam",
+        ok:
+          Number(prop?.latitude) >= 8 &&
+          Number(prop?.latitude) <= 24 &&
+          Number(prop?.longitude) >= 102 &&
+          Number(prop?.longitude) <= 110,
+      },
+      {
+        label: "Mô tả không chèn số điện thoại/email ngoài hệ thống",
+        ok: !hasContactInDescription,
+      },
+    ];
+  };
+
+  const getRiskItems = (prop) => {
+    const validationItems = getValidationItems(prop);
+    const failedCount = validationItems.filter((item) => !item.ok).length;
+    const descriptionLength = (prop?.description || "").trim().length;
+    const price = Number(prop?.price || 0);
+    const area = Number(prop?.area || 0);
+    const pricePerM2 = area > 0 ? price / area : 0;
+    const hasCoordinates = Boolean(prop?.latitude && prop?.longitude);
+    const hasImages =
+      (Array.isArray(prop?.images) && prop.images.length > 0) ||
+      Boolean(prop?.thumbnail);
+    const ownerRejected = Number(prop?.owner_rejected_properties || 0);
+    const ownerApproved = Number(prop?.owner_approved_properties || 0);
+
+    return [
+      {
+        label: "Mức độ đầy đủ hồ sơ",
+        level: failedCount >= 3 ? "high" : failedCount > 0 ? "medium" : "low",
+        detail:
+          failedCount === 0
+            ? "Các trường bắt buộc cơ bản đã đầy đủ."
+            : `Còn ${failedCount} tiêu chí chưa đạt, cần kiểm tra trước khi duyệt.`,
+      },
+      {
+        label: "Rủi ro giá và diện tích",
+        level:
+          price <= 0 ||
+          area <= 0 ||
+          (prop?.transaction_type === "sale" && pricePerM2 > 500000000) ||
+          (prop?.transaction_type === "rent" && pricePerM2 > 2000000)
+            ? "medium"
+            : "low",
+        detail:
+          price > 0 && area > 0
+            ? `Giá trung bình khoảng ${Math.round(pricePerM2).toLocaleString("vi-VN")} đ/m².`
+            : "Thiếu giá hoặc diện tích để đối chiếu.",
+      },
+      {
+        label: "Rủi ro nội dung",
+        level:
+          descriptionLength < 30 || !hasImages || !hasCoordinates
+            ? "medium"
+            : "low",
+        detail: [
+          descriptionLength < 30 && "mô tả còn ngắn",
+          !hasImages && "chưa có ảnh",
+          !hasCoordinates && "chưa có tọa độ bản đồ",
+        ]
+          .filter(Boolean)
+          .join(", ") || "Mô tả, ảnh và tọa độ đủ để người mua kiểm tra.",
+      },
+      {
+        label: "Lịch sử người bán",
+        level:
+          ownerRejected > 0 && ownerApproved === 0
+            ? "high"
+            : ownerRejected > 0
+              ? "medium"
+              : "low",
+        detail:
+          ownerApproved > 0 || ownerRejected > 0
+            ? `Người bán có ${ownerApproved} tin đã duyệt, ${ownerRejected} tin từng bị từ chối.`
+            : "Người bán chưa có nhiều lịch sử kiểm duyệt trên hệ thống.",
+      },
+    ];
+  };
+
+  const handleApproveWithPolicy = async (prop) => {
+    const failedItems = getValidationItems(prop).filter((item) => !item.ok);
+    if (failedItems.length > 0) {
+      const ok = await confirm({
+        title: "Tin còn tiêu chí chưa đạt",
+        message: `Tin này còn ${failedItems.length} tiêu chí chưa đạt: ${failedItems
+          .map((item) => item.label)
+          .join("; ")}. Bạn vẫn muốn duyệt tin?`,
+        confirmText: "Vẫn duyệt",
+        danger: true,
+      });
+      if (!ok) return;
+    }
+    handleStatus(prop.id, "approved");
+  };
 
   const handleStatus = async (id, status, reason) => {
     const statusText = {
@@ -347,42 +545,6 @@ export default function PendingPage({ showToast }) {
                           }}>
                           Xem kiểm tra
                         </button>
-                        {prop.status === "pending" && (
-                          <>
-                            <button
-                              disabled={actionLoading[prop.id]}
-                              onClick={() => handleStatus(prop.id, "approved")}
-                              style={{
-                                padding: "5px 12px",
-                                borderRadius: 6,
-                                border: `1px solid #a7f3d040`,
-                                background: "#e6f9f0",
-                                color: "#0f6e56",
-                                fontSize: 12,
-                                fontWeight: 600,
-                                cursor: "pointer",
-                                fontFamily: font.body,
-                              }}>
-                              {actionLoading[prop.id] ? "..." : "✓ Duyệt"}
-                            </button>
-                            <button
-                              disabled={actionLoading[prop.id]}
-                              onClick={() => setRejectModal(prop)}
-                              style={{
-                                padding: "5px 12px",
-                                borderRadius: 6,
-                                border: `1px solid ${C.error}30`,
-                                background: C.errorContainer,
-                                color: C.error,
-                                fontSize: 12,
-                                fontWeight: 600,
-                                cursor: "pointer",
-                                fontFamily: font.body,
-                              }}>
-                              ✕ Từ chối
-                            </button>
-                          </>
-                        )}
                         {prop.status === "approved" && (
                           <button
                             disabled={actionLoading[prop.id]}
@@ -425,10 +587,11 @@ export default function PendingPage({ showToast }) {
             inset: 0,
             background: "rgba(0,0,0,0.5)",
             display: "flex",
-            alignItems: "center",
+            alignItems: "flex-start",
             justifyContent: "center",
-            zIndex: 1000,
-            padding: 20,
+            zIndex: 2200,
+            padding: "76px 20px 24px",
+            overflowY: "auto",
           }}
           onClick={() => setDetailModal(null)}>
           <div
@@ -437,9 +600,10 @@ export default function PendingPage({ showToast }) {
               borderRadius: 12,
               width: "100%",
               maxWidth: 920,
-              maxHeight: "90vh",
+              maxHeight: "calc(100vh - 100px)",
               overflow: "auto",
               fontFamily: font.body,
+              boxShadow: "0 18px 60px rgba(0,0,0,0.22)",
             }}
             onClick={(e) => e.stopPropagation()}>
             <div
@@ -537,9 +701,9 @@ export default function PendingPage({ showToast }) {
                       {[
                         ["Giá", formatPrice(detailModal.price)],
                         ["Diện tích", detailModal.area ? `${detailModal.area} m²` : "Chưa có"],
-                        ["Loại hình", detailModal.type || "Chưa có"],
+                        ["Loại hình", TYPE_LABELS[detailModal.type] || "Chưa có"],
                         ["Giao dịch", detailModal.transaction_type === "sale" ? "Bán" : "Cho thuê"],
-                        ["Pháp lý", detailModal.legal_status || "Chưa có"],
+                        ["Pháp lý", LEGAL_LABELS[detailModal.legal_status] || "Chưa có"],
                         ["Vị trí", [detailModal.address, detailModal.ward, detailModal.district, detailModal.city].filter(Boolean).join(", ") || "Chưa có"],
                       ].map(([label, value]) => (
                         <div
@@ -576,12 +740,159 @@ export default function PendingPage({ showToast }) {
 
                     <div
                       style={{
-                        padding: 14,
+                        padding: 16,
                         borderRadius: 10,
                         background: C.surfaceContainerLow,
+                        border: `1px solid ${C.borderSubtle}`,
                       }}>
-                      <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 10 }}>
-                        Checklist hợp lệ trước khi duyệt
+                      <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 6 }}>
+                        Chính sách kiểm duyệt trước khi công khai
+                      </div>
+                      <div
+                        style={{
+                          fontSize: 12,
+                          color: C.secondary,
+                          lineHeight: 1.55,
+                          marginBottom: 14,
+                        }}>
+                        Admin duyệt tin theo nguyên tắc bảo vệ người mua, giữ
+                        thông tin minh bạch và hạn chế giao dịch ngoài hệ thống.
+                        Tin không đạt cần bị từ chối kèm lý do cụ thể để người
+                        bán chỉnh sửa.
+                      </div>
+
+                      <div style={{ display: "grid", gap: 10, marginBottom: 16 }}>
+                        {ADMIN_REVIEW_POLICY.map((policy) => (
+                          <div
+                            key={policy.title}
+                            style={{
+                              display: "grid",
+                              gridTemplateColumns: "18px 1fr",
+                              gap: 8,
+                              alignItems: "flex-start",
+                            }}>
+                            <UiIcon
+                              name="shield"
+                              size={16}
+                              color="#0f6e56"
+                              style={{ marginTop: 2 }}
+                            />
+                            <div>
+                              <div
+                                style={{
+                                  fontSize: 12,
+                                  fontWeight: 800,
+                                  color: C.onSurface,
+                                  marginBottom: 2,
+                                }}>
+                                {policy.title}
+                              </div>
+                              <div
+                                style={{
+                                  fontSize: 12,
+                                  color: C.secondary,
+                                  lineHeight: 1.45,
+                                }}>
+                                {policy.text}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div
+                        style={{
+                          fontSize: 13,
+                          fontWeight: 800,
+                          color: C.onSurface,
+                          marginBottom: 10,
+                        }}>
+                        Đánh giá rủi ro tin này
+                      </div>
+                      <div
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: "repeat(2, 1fr)",
+                          gap: 8,
+                          marginBottom: 16,
+                        }}>
+                        {getRiskItems(detailModal).map((item) => {
+                          const tone =
+                            item.level === "high"
+                              ? {
+                                  label: "Cao",
+                                  bg: C.errorContainer,
+                                  border: "#f4b8b8",
+                                  color: C.error,
+                                }
+                              : item.level === "medium"
+                                ? {
+                                    label: "Cần xem kỹ",
+                                    bg: "#fff8e1",
+                                    border: "#f0ce7a",
+                                    color: "#8a5a00",
+                                  }
+                                : {
+                                    label: "Thấp",
+                                    bg: "#e6f9f0",
+                                    border: "#b9dfd3",
+                                    color: "#0f6e56",
+                                  };
+                          return (
+                            <div
+                              key={item.label}
+                              style={{
+                                border: `1px solid ${tone.border}`,
+                                background: tone.bg,
+                                borderRadius: 8,
+                                padding: "10px 12px",
+                              }}>
+                              <div
+                                style={{
+                                  display: "flex",
+                                  justifyContent: "space-between",
+                                  alignItems: "center",
+                                  gap: 10,
+                                  marginBottom: 5,
+                                }}>
+                                <strong
+                                  style={{
+                                    fontSize: 12,
+                                    color: C.onSurface,
+                                  }}>
+                                  {item.label}
+                                </strong>
+                                <span
+                                  style={{
+                                    fontSize: 11,
+                                    fontWeight: 800,
+                                    color: tone.color,
+                                    whiteSpace: "nowrap",
+                                  }}>
+                                  {tone.label}
+                                </span>
+                              </div>
+                              <div
+                                style={{
+                                  fontSize: 12,
+                                  color: C.secondary,
+                                  lineHeight: 1.45,
+                                }}>
+                                {item.detail}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      <div
+                        style={{
+                          fontSize: 13,
+                          fontWeight: 800,
+                          color: C.onSurface,
+                          marginBottom: 10,
+                        }}>
+                        Checklist kiểm tra tin này
                       </div>
                       <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 8 }}>
                         {getValidationItems(detailModal).map((item) => (
@@ -594,8 +905,26 @@ export default function PendingPage({ showToast }) {
                               fontSize: 13,
                               color: item.ok ? "#0f6e56" : C.error,
                               fontWeight: 600,
+                              background: item.ok ? "#e6f9f0" : C.errorContainer,
+                              border: `1px solid ${item.ok ? "#b9dfd3" : "#f4b8b8"}`,
+                              borderRadius: 8,
+                              padding: "8px 10px",
                             }}>
-                            <span>{item.ok ? "✓" : "!"}</span>
+                            <span
+                              style={{
+                                display: "inline-flex",
+                                width: 18,
+                                height: 18,
+                                borderRadius: "50%",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                background: item.ok ? "#0f6e56" : C.error,
+                                color: "#fff",
+                                fontSize: 11,
+                                flexShrink: 0,
+                              }}>
+                              {item.ok ? "✓" : "!"}
+                            </span>
                             {item.label}
                           </div>
                         ))}
@@ -634,7 +963,7 @@ export default function PendingPage({ showToast }) {
                     </button>
                     <button
                       disabled={actionLoading[detailModal.id]}
-                      onClick={() => handleStatus(detailModal.id, "approved")}
+                      onClick={() => handleApproveWithPolicy(detailModal)}
                       style={{
                         padding: "9px 18px",
                         borderRadius: 8,
@@ -723,6 +1052,38 @@ export default function PendingPage({ showToast }) {
             <div style={{ fontSize: 13, color: C.textMuted, marginBottom: 20 }}>
               {rejectModal.title}
             </div>
+            <div style={{ marginBottom: 14 }}>
+              <div
+                style={{
+                  fontSize: 12,
+                  fontWeight: 700,
+                  color: C.onSurface,
+                  marginBottom: 8,
+                }}>
+                Mẫu lý do nhanh
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                {REJECT_REASON_TEMPLATES.map((template) => (
+                  <button
+                    key={template.label}
+                    type="button"
+                    onClick={() => setRejectReason(template.text)}
+                    style={{
+                      border: `1px solid ${C.borderSubtle}`,
+                      borderRadius: 999,
+                      background: C.surfaceContainerHigh,
+                      color: C.secondary,
+                      padding: "6px 10px",
+                      fontSize: 12,
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      fontFamily: font.body,
+                    }}>
+                    {template.label}
+                  </button>
+                ))}
+              </div>
+            </div>
             <label
               style={{
                 fontSize: 13,
@@ -736,7 +1097,7 @@ export default function PendingPage({ showToast }) {
             <textarea
               value={rejectReason}
               onChange={(e) => setRejectReason(e.target.value)}
-              placeholder="Nhập lý do từ chối để thông báo cho chủ sở hữu..."
+              placeholder="Nêu rõ tiêu chí chưa đạt và hướng sửa để owner gửi duyệt lại..."
               rows={4}
               style={{
                 width: "100%",
@@ -750,6 +1111,15 @@ export default function PendingPage({ showToast }) {
                 boxSizing: "border-box",
               }}
             />
+            <div
+              style={{
+                fontSize: 12,
+                color:
+                  rejectReason.trim().length >= 20 ? C.textMuted : C.error,
+                marginTop: 6,
+              }}>
+              Lý do cần tối thiểu 20 ký tự và phải nêu rõ tiêu chí chưa đạt.
+            </div>
             <div
               style={{
                 display: "flex",
@@ -775,7 +1145,10 @@ export default function PendingPage({ showToast }) {
                 Hủy
               </button>
               <button
-                disabled={!rejectReason.trim() || actionLoading[rejectModal.id]}
+                disabled={
+                  rejectReason.trim().length < 20 ||
+                  actionLoading[rejectModal.id]
+                }
                 onClick={() =>
                   handleStatus(rejectModal.id, "rejected", rejectReason)
                 }
@@ -783,11 +1156,15 @@ export default function PendingPage({ showToast }) {
                   padding: "8px 20px",
                   borderRadius: 8,
                   border: "none",
-                  background: !rejectReason.trim() ? "#ccc" : C.error,
+                  background:
+                    rejectReason.trim().length < 20 ? "#ccc" : C.error,
                   color: "#fff",
                   fontSize: 14,
                   fontWeight: 700,
-                  cursor: !rejectReason.trim() ? "not-allowed" : "pointer",
+                  cursor:
+                    rejectReason.trim().length < 20
+                      ? "not-allowed"
+                      : "pointer",
                   fontFamily: font.body,
                 }}>
                 {actionLoading[rejectModal.id] ? "..." : "Xác nhận từ chối"}

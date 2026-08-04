@@ -192,14 +192,15 @@ router.get("/", async (req, res) => {
     }
 
     // --- Sắp xếp ---
-    // Tin con han featured_until se duoc uu tien len dau danh sach.
+    // Tin noi bat duoc uu tien theo nhom, sau do xoay thu tu theo ngay de cong bang
+    // khi nhieu owner cung mua goi noi bat. Tin thuong van sap xep theo lua chon cua user.
     const featuredOrder =
-      "CASE WHEN p.featured_until > NOW() THEN 1 ELSE 0 END DESC";
+      "CASE WHEN p.featured_until > NOW() THEN 1 ELSE 0 END DESC, CASE WHEN p.featured_until > NOW() THEN MOD(CRC32(CONCAT(p.id, CURDATE())), 100000) ELSE NULL END ASC";
     const sortMap = {
       newest: `${featuredOrder}, p.created_at DESC`,
       oldest: `${featuredOrder}, p.created_at ASC`,
-      price_asc: "p.price ASC, p.created_at DESC",
-      price_desc: "p.price DESC, p.created_at DESC",
+      price_asc: `${featuredOrder}, p.price ASC, p.created_at DESC`,
+      price_desc: `${featuredOrder}, p.price DESC, p.created_at DESC`,
       area_asc: `${featuredOrder}, p.area ASC`,
       area_desc: `${featuredOrder}, p.area DESC`,
     };
@@ -224,6 +225,7 @@ router.get("/", async (req, res) => {
          p.latitude, p.longitude,
          p.direction, p.legal_status,
          p.status,
+         p.owner_id,
          p.featured_until,
          p.created_at,
          u.full_name AS owner_name,
@@ -277,6 +279,73 @@ router.get("/", async (req, res) => {
 // GET /api/listing/:id — chi tiết tin (public)
 // Tự động tăng view_count trực tiếp trên bảng properties
 // Public API: xem chi tiet mot tin approved, gom anh thanh mang images va tang view_count.
+// GET /api/listing/owners/:id - ho so cong khai cua nguoi ban
+// Public API: tong hop uy tin owner tu du lieu san co va danh sach tin dang da duyet.
+router.get("/owners/:id", async (req, res) => {
+  const ownerId = Number(req.params.id);
+  if (!Number.isInteger(ownerId) || ownerId <= 0) {
+    return res.status(400).json({ message: "ID nguoi ban khong hop le" });
+  }
+
+  try {
+    const [owners] = await pool.query(
+      `SELECT
+         u.id,
+         u.full_name,
+         u.email_verified,
+         u.created_at,
+         COUNT(p.id) AS total_properties,
+         SUM(CASE WHEN p.status = 'approved' THEN 1 ELSE 0 END) AS approved_properties,
+         SUM(CASE WHEN p.status = 'sold' THEN 1 ELSE 0 END) AS sold_properties,
+         SUM(CASE WHEN p.status = 'rejected' THEN 1 ELSE 0 END) AS rejected_properties,
+         COALESCE(SUM(p.view_count), 0) AS total_views,
+         (SELECT COUNT(*)
+          FROM contacts c
+          JOIN properties cp ON cp.id = c.property_id
+          WHERE cp.owner_id = u.id) AS total_contacts,
+         (SELECT COUNT(*)
+          FROM contacts c
+          JOIN properties cp ON cp.id = c.property_id
+          WHERE cp.owner_id = u.id AND c.status = 'replied') AS replied_contacts
+       FROM users u
+       LEFT JOIN properties p ON p.owner_id = u.id
+       WHERE u.id = ? AND u.role = 'owner' AND u.status = 'active'
+       GROUP BY u.id`,
+      [ownerId],
+    );
+
+    if (owners.length === 0) {
+      return res.status(404).json({ message: "Khong tim thay nguoi ban" });
+    }
+
+    const [properties] = await pool.query(
+      `SELECT
+         p.id, p.title, p.type, p.transaction_type,
+         p.price, p.area, p.bedrooms, p.bathrooms,
+         p.address, p.ward, p.district, p.city,
+         p.featured_until, p.created_at, p.view_count,
+         (SELECT pi.url
+          FROM property_images pi
+          WHERE pi.property_id = p.id
+          ORDER BY pi.\`order\`
+          LIMIT 1) AS thumbnail
+       FROM properties p
+       WHERE p.owner_id = ? AND p.status = 'approved'
+       ORDER BY
+         CASE WHEN p.featured_until > NOW() THEN 1 ELSE 0 END DESC,
+         CASE WHEN p.featured_until > NOW() THEN MOD(CRC32(CONCAT(p.id, CURDATE())), 100000) ELSE NULL END ASC,
+         p.created_at DESC
+       LIMIT 12`,
+      [ownerId],
+    );
+
+    res.json({ owner: owners[0], properties });
+  } catch (err) {
+    console.error("Owner public profile error:", err);
+    res.status(500).json({ message: "Loi server", error: err.message });
+  }
+});
+
 router.get("/:id", async (req, res) => {
   try {
     const [rows] = await pool.query(
@@ -285,6 +354,27 @@ router.get("/:id", async (req, res) => {
          u.full_name  AS owner_name,
          u.email      AS owner_email,
          u.phone_number AS owner_phone,
+         u.email_verified AS owner_email_verified,
+         (SELECT COUNT(*)
+          FROM properties op
+          WHERE op.owner_id = p.owner_id AND op.status = 'approved') AS owner_approved_properties,
+         (SELECT COUNT(*)
+          FROM properties op
+          WHERE op.owner_id = p.owner_id AND op.status = 'sold') AS owner_sold_properties,
+         (SELECT COUNT(*)
+          FROM properties op
+          WHERE op.owner_id = p.owner_id AND op.status = 'rejected') AS owner_rejected_properties,
+         (SELECT COALESCE(SUM(op.view_count), 0)
+          FROM properties op
+          WHERE op.owner_id = p.owner_id) AS owner_total_views,
+         (SELECT COUNT(*)
+          FROM contacts c
+          JOIN properties cp ON cp.id = c.property_id
+          WHERE cp.owner_id = p.owner_id) AS owner_total_contacts,
+         (SELECT COUNT(*)
+          FROM contacts c
+          JOIN properties cp ON cp.id = c.property_id
+          WHERE cp.owner_id = p.owner_id AND c.status = 'replied') AS owner_replied_contacts,
          (
            SELECT GROUP_CONCAT(pi.url ORDER BY pi.\`order\` SEPARATOR ',')
            FROM property_images pi

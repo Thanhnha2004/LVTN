@@ -53,6 +53,7 @@ describe("property-service", () => {
       address: "Nguyen Hue",
       district: "Quan 1",
       city: "TP.HCM",
+      legal_status: "sohong",
       bedrooms: 2,
       bathrooms: 2,
     });
@@ -82,6 +83,7 @@ describe("property-service", () => {
       address: "Nguyen Hue",
       district: "Quan 1",
       city: "TP.HCM",
+      legal_status: "sohong",
       bedrooms: 2,
       bathrooms: 2,
     });
@@ -105,6 +107,7 @@ describe("property-service", () => {
       ward: "Ben Nghe",
       district: "Quan Mot",
       city: "Ho Chi Minh",
+      legal_status: "sohong",
       bedrooms: 2,
       bathrooms: 2,
     });
@@ -126,6 +129,17 @@ describe("property-service", () => {
     const res = await request(app())
       .patch("/api/property/20/status")
       .send({ status: "rejected" });
+
+    expect(res.status).toBe(400);
+    expect(pool.query).not.toHaveBeenCalled();
+  });
+
+  test("admin rejection reason must be specific", async () => {
+    global.mockUser = { id: 99, role: "admin" };
+
+    const res = await request(app())
+      .patch("/api/property/20/status")
+      .send({ status: "rejected", reject_reason: "sai" });
 
     expect(res.status).toBe(400);
     expect(pool.query).not.toHaveBeenCalled();
@@ -153,6 +167,20 @@ describe("property-service", () => {
       expect.stringContaining("INSERT INTO property_status_history"),
       ["20", "pending", "approved", 99, expect.any(String)],
     );
+  });
+
+  test("admin cannot use invalid property lifecycle transition", async () => {
+    global.mockUser = { id: 99, role: "admin" };
+    pool.query.mockResolvedValueOnce([
+      [{ id: 20, owner_id: 1, title: "Can ho", status: "approved" }],
+    ]);
+
+    const res = await request(app())
+      .patch("/api/property/20/status")
+      .send({ status: "pending" });
+
+    expect(res.status).toBe(400);
+    expect(res.body.message).toContain("Chuyển trạng thái");
   });
 
   test("owner can hide approved own property", async () => {
@@ -244,8 +272,18 @@ describe("property-service", () => {
   test("owner can create featured order for approved own property", async () => {
     pool.query
       .mockResolvedValueOnce([
-        [{ id: 20, owner_id: 1, title: "Can ho", status: "approved" }],
+        [
+          {
+            id: 20,
+            owner_id: 1,
+            title: "Can ho",
+            status: "approved",
+            featured_until: null,
+          },
+        ],
       ])
+      .mockResolvedValueOnce([[{ active_featured_count: 0 }]])
+      .mockResolvedValueOnce([[{ pending_order_count: 0 }]])
       .mockResolvedValueOnce([
         [{ id: 2, name: "Goi 7 ngay", price: 99000, duration_days: 7 }],
       ])
@@ -264,5 +302,52 @@ describe("property-service", () => {
       expect.stringContaining("INSERT INTO featured_orders"),
       [20, 1, 2, 99000, "vnpay", expect.any(String)],
     );
+  });
+
+  test("owner cannot create new featured order when active featured limit reached", async () => {
+    pool.query
+      .mockResolvedValueOnce([
+        [
+          {
+            id: 20,
+            owner_id: 1,
+            title: "Can ho",
+            status: "approved",
+            featured_until: null,
+          },
+        ],
+      ])
+      .mockResolvedValueOnce([[{ active_featured_count: 5 }]]);
+
+    const res = await request(app())
+      .post("/api/property/20/featured-orders")
+      .send({ package_id: 2, payment_method: "vnpay" });
+
+    expect(res.status).toBe(400);
+    expect(res.body.message).toContain("tối đa 5 tin nổi bật");
+  });
+
+  test("owner cannot create duplicate pending featured payment order", async () => {
+    pool.query
+      .mockResolvedValueOnce([
+        [
+          {
+            id: 20,
+            owner_id: 1,
+            title: "Can ho",
+            status: "approved",
+            featured_until: null,
+          },
+        ],
+      ])
+      .mockResolvedValueOnce([[{ active_featured_count: 0 }]])
+      .mockResolvedValueOnce([[{ pending_order_count: 1 }]]);
+
+    const res = await request(app())
+      .post("/api/property/20/featured-orders")
+      .send({ package_id: 2, payment_method: "vnpay" });
+
+    expect(res.status).toBe(400);
+    expect(res.body.message).toContain("đơn thanh toán");
   });
 });

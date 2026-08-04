@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import api from "../../api/axios";
 import Navbar from "../../components/Navbar";
 import { locationData } from "../../data/locationData";
@@ -19,6 +19,7 @@ const EMPTY_FILTERS = {
   bedrooms: "",
   direction: "",
   legal_status: "",
+  featured_only: "",
 };
 
 const PRICE_MIN = 0;
@@ -58,6 +59,7 @@ const normalizeRangeFilterValue = (field, value) => {
 };
 
 export default function PropertyList() {
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [properties, setProperties] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -96,6 +98,7 @@ export default function PropertyList() {
       bedrooms: searchParams.get("bedrooms") || "",
       direction: searchParams.get("direction") || "",
       legal_status: searchParams.get("legal_status") || "",
+      featured_only: searchParams.get("featured_only") || "",
       sort: searchParams.get("sort") || "newest",
       page: searchParams.get("page") || 1,
       limit: 12,
@@ -116,6 +119,7 @@ export default function PropertyList() {
       bedrooms: filter.bedrooms,
       direction: filter.direction,
       legal_status: filter.legal_status,
+      featured_only: filter.featured_only,
     }));
     fetchProperties(filter);
   }, [searchParams]);
@@ -610,7 +614,36 @@ export default function PropertyList() {
 
                         <p className="text-muted mb-3"><UiIcon name="location" size={16} style={{ verticalAlign: "-3px", marginRight: 5 }} />{item.address}</p>
 
-                        <p className="mb-3"><UiIcon name="user" size={16} style={{ verticalAlign: "-3px", marginRight: 5 }} />{item.owner_name}</p>
+                        <p className="mb-3">
+                          <UiIcon name="user" size={16} style={{ verticalAlign: "-3px", marginRight: 5 }} />
+                          {item.owner_id ? (
+                            <span
+                              role="link"
+                              tabIndex={0}
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                navigate(`/owners/${item.owner_id}`);
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter" || e.key === " ") {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  navigate(`/owners/${item.owner_id}`);
+                                }
+                              }}
+                              style={{
+                                color: "#b51b17",
+                                fontWeight: 600,
+                                textDecoration: "underline",
+                                cursor: "pointer",
+                              }}>
+                              {item.owner_name}
+                            </span>
+                          ) : (
+                            item.owner_name
+                          )}
+                        </p>
 
                         <div className="d-flex justify-content-between align-items-center border-top pt-3">
                           <div>

@@ -81,11 +81,37 @@ const VALID_DIRECTIONS = [
 ];
 const VALID_LEGAL_STATUSES = ["sohong", "sokhongdo", "dangchoso", "other"];
 const ROOM_REQUIRED_TYPES = ["apartment", "house"];
+const MAX_ACTIVE_FEATURED_PER_OWNER = 5;
+const MIN_REJECT_REASON_LENGTH = 20;
+const ADMIN_STATUS_TRANSITIONS = {
+  pending: ["approved", "rejected", "hidden"],
+  approved: ["hidden", "rejected"],
+  rejected: ["pending", "hidden"],
+  hidden: ["pending"],
+};
 
 function normalizeText(value) {
   return String(value || "")
     .trim()
     .replace(/\s+/g, " ");
+}
+
+function isWeakRejectReason(reason) {
+  const normalized = normalizeText(reason).toLowerCase();
+  return [
+    "không hợp lệ",
+    "khong hop le",
+    "sai",
+    "thiếu thông tin",
+    "thieu thong tin",
+    "không đạt",
+    "khong dat",
+  ].includes(normalized);
+}
+
+function canAdminChangeStatus(from, to) {
+  if (from === to) return false;
+  return (ADMIN_STATUS_TRANSITIONS[from] || []).includes(to);
 }
 
 function optionalNumber(value) {
@@ -124,8 +150,8 @@ function validatePropertyInput(body) {
     return { error: "Tiêu đề phải có ít nhất 10 ký tự" };
   if (values.title.length > 180)
     return { error: "Tiêu đề không được vượt quá 180 ký tự" };
-  if (values.description.length < 20)
-    return { error: "Mô tả phải có ít nhất 20 ký tự" };
+  if (values.description.length < 30)
+    return { error: "Mô tả phải có ít nhất 30 ký tự" };
   if (values.description.length > 3000)
     return { error: "Mô tả không được vượt quá 3000 ký tự" };
   if (!VALID_PROPERTY_TYPES.includes(values.type))
@@ -150,10 +176,8 @@ function validatePropertyInput(body) {
   if (!values.district) return { error: "Quận/huyện không được để trống" };
   if (values.direction && !VALID_DIRECTIONS.includes(values.direction))
     return { error: "Hướng nhà không hợp lệ" };
-  if (
-    values.legal_status &&
-    !VALID_LEGAL_STATUSES.includes(values.legal_status)
-  )
+  if (!values.legal_status) return { error: "Vui lòng chọn tình trạng pháp lý" };
+  if (!VALID_LEGAL_STATUSES.includes(values.legal_status))
     return { error: "Pháp lý không hợp lệ" };
   for (const [key, label] of [
     ["bedrooms", "Số phòng ngủ"],
@@ -672,7 +696,7 @@ router.post("/:id/featured-orders", authMiddleware, async (req, res) => {
   try {
     // Kiem tra property truoc khi tao don: phai ton tai, thuoc owner hien tai va da approved.
     const [[property]] = await pool.query(
-      `SELECT id, owner_id, title, status
+      `SELECT id, owner_id, title, status, featured_until
        FROM properties
        WHERE id = ?`,
       [req.params.id],
@@ -688,6 +712,40 @@ router.post("/:id/featured-orders", authMiddleware, async (req, res) => {
       return res
         .status(400)
         .json({ message: "Chỉ tin đã được duyệt mới có thể mua gói nổi bật" });
+
+    const isRenewingActiveFeatured =
+      property.featured_until && new Date(property.featured_until) > new Date();
+    if (!isRenewingActiveFeatured) {
+      const [[{ active_featured_count }]] = await pool.query(
+        `SELECT COUNT(*) AS active_featured_count
+         FROM properties
+         WHERE owner_id = ?
+           AND status = 'approved'
+           AND featured_until > NOW()`,
+        [req.user.id],
+      );
+      if (Number(active_featured_count) >= MAX_ACTIVE_FEATURED_PER_OWNER) {
+        return res.status(400).json({
+          message: `Mỗi owner chỉ được có tối đa ${MAX_ACTIVE_FEATURED_PER_OWNER} tin nổi bật đang chạy. Vui lòng chờ gói cũ hết hạn hoặc gia hạn tin đang nổi bật.`,
+        });
+      }
+    }
+
+    const [[{ pending_order_count }]] = await pool.query(
+      `SELECT COUNT(*) AS pending_order_count
+       FROM featured_orders
+       WHERE property_id = ?
+         AND owner_id = ?
+         AND status = 'pending'
+         AND created_at >= DATE_SUB(NOW(), INTERVAL 30 MINUTE)`,
+      [property.id, req.user.id],
+    );
+    if (Number(pending_order_count) > 0) {
+      return res.status(400).json({
+        message:
+          "Tin này đang có đơn thanh toán gói nổi bật chưa hoàn tất. Vui lòng thanh toán hoặc đợi đơn hết hạn trước khi tạo đơn mới.",
+      });
+    }
 
     const [[pkg]] = await pool.query(
       `SELECT id, name, price, duration_days
@@ -769,6 +827,10 @@ router.get("/vnpay-return", async (req, res) => {
     }
 
     if (responseCode !== "00") {
+      await pool.query(
+        "UPDATE featured_orders SET status = 'failed' WHERE id = ? AND status = 'pending'",
+        [orderId],
+      );
       return res.json({
         success: false,
         message: "Thanh toán VNPay không thành công",
@@ -876,7 +938,28 @@ router.get("/:id", authMiddleware, async (req, res) => {
   try {
     // Chi tiet noi bo khong yeu cau status approved, nen can kiem quyen owner/admin that chat.
     const [rows] = await pool.query(
-      `SELECT p.*, u.full_name as owner_name, u.phone_number as owner_phone,
+      `SELECT p.*, u.full_name as owner_name, u.email as owner_email,
+       u.phone_number as owner_phone, u.email_verified AS owner_email_verified,
+       (SELECT COUNT(*)
+        FROM properties op
+        WHERE op.owner_id = p.owner_id AND op.status = 'approved') AS owner_approved_properties,
+       (SELECT COUNT(*)
+        FROM properties op
+        WHERE op.owner_id = p.owner_id AND op.status = 'sold') AS owner_sold_properties,
+       (SELECT COUNT(*)
+        FROM properties op
+        WHERE op.owner_id = p.owner_id AND op.status = 'rejected') AS owner_rejected_properties,
+       (SELECT COALESCE(SUM(op.view_count), 0)
+        FROM properties op
+        WHERE op.owner_id = p.owner_id) AS owner_total_views,
+       (SELECT COUNT(*)
+        FROM contacts c
+        JOIN properties cp ON cp.id = c.property_id
+        WHERE cp.owner_id = p.owner_id) AS owner_total_contacts,
+       (SELECT COUNT(*)
+        FROM contacts c
+        JOIN properties cp ON cp.id = c.property_id
+        WHERE cp.owner_id = p.owner_id AND c.status = 'replied') AS owner_replied_contacts,
        GROUP_CONCAT(pi.url ORDER BY pi.\`order\` SEPARATOR ',') as images
        FROM properties p
        JOIN users u ON p.owner_id = u.id
@@ -1020,8 +1103,18 @@ router.patch("/:id/status", authMiddleware, async (req, res) => {
   if (!valid.includes(status))
     return res.status(400).json({ message: "Trạng thái không hợp lệ" });
 
-  if (status === "rejected" && !reject_reason)
+  const reason = status === "rejected" ? normalizeText(reject_reason) : null;
+  if (status === "rejected" && !reason)
     return res.status(400).json({ message: "Vui lòng nhập lý do từ chối" });
+  if (
+    status === "rejected" &&
+    (reason.length < MIN_REJECT_REASON_LENGTH || isWeakRejectReason(reason))
+  ) {
+    return res.status(400).json({
+      message:
+        "Lý do từ chối cần cụ thể hơn, nêu rõ tiêu chí chưa đạt để owner có thể sửa tin.",
+    });
+  }
 
   try {
     // Kiểm tra tin tồn tại
@@ -1032,8 +1125,12 @@ router.patch("/:id/status", authMiddleware, async (req, res) => {
     if (rows.length === 0)
       return res.status(404).json({ message: "Không tìm thấy tin đăng" });
     const property = rows[0];
-    const reason = status === "rejected" ? reject_reason.trim() : null;
-
+    if (!canAdminChangeStatus(property.status, status)) {
+      return res.status(400).json({
+        message:
+          "Chuyển trạng thái không hợp lệ theo vòng đời tin đăng hiện tại",
+      });
+    }
     // IF trong SQL giup chi cap nhat timestamp tuong ung voi status moi.
     await pool.query(
       `UPDATE properties

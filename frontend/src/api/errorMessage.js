@@ -44,6 +44,7 @@ function getRequestFallback(error) {
   if (/\/api\/property$/.test(path) && method === "POST") return "Không thể đăng tin. Vui lòng kiểm tra lại thông tin bất động sản.";
 
   if (/\/api\/listing\/category-counts$/.test(path)) return "Không thể tải số lượng tin theo danh mục.";
+  if (/\/api\/listing\/owners\/[^/]+$/.test(path)) return "Không thể tải hồ sơ người bán.";
   if (/\/api\/listing\/[^/]+\/similar$/.test(path)) return "Không thể tải tin tương tự.";
   if (/\/api\/listing\/[^/]+$/.test(path)) return "Không thể tải chi tiết bất động sản.";
   if (/\/api\/listing$/.test(path)) return "Không thể tải danh sách bất động sản.";

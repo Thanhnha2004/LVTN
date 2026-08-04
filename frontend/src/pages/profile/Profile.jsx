@@ -9,6 +9,34 @@ import { useToast } from "../../components/ToastProvider";
 import { useConfirm } from "../../components/ConfirmProvider";
 import { useAuth } from "../../context/AuthContext";
 
+function formatContactDate(value) {
+  if (!value) return "Chưa cập nhật";
+  return new Date(value).toLocaleString("vi-VN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+}
+
+function buyerContactStep(contact) {
+  if (contact.status === "replied") {
+    return {
+      label: "Người bán đã phản hồi",
+      bg: "#e6f9f0",
+      color: "#0f6e56",
+      note: "Bạn có thể kiểm tra thông tin người bán và chủ động hẹn lịch xem thực tế.",
+    };
+  }
+  return {
+    label: "Đang chờ người bán phản hồi",
+    bg: "#fff4d6",
+    color: "#8a5a00",
+    note: "Yêu cầu đã được ghi nhận. Khi người bán phản hồi, thông tin liên hệ sẽ hiển thị tại đây.",
+  };
+}
+
 export default function Profile() {
   const [searchParams] = useSearchParams();
   const [user, setUser] = useState(null);
@@ -612,130 +640,169 @@ export default function Profile() {
                     <h6>Chưa có yêu cầu liên hệ</h6>
                   </div>
                 ) : (
-                  <div className="table-responsive">
-                    <table className="table align-middle">
-                      <thead>
-                        <tr>
-                          <th>Bất động sản</th>
-                          <th>Trạng thái</th>
-                          <th>Phản hồi của người bán</th>
-                          <th>Ngày gửi</th>
-                          <th></th>
-                        </tr>
-                      </thead>
-
-                      <tbody>
-                        {contacts.map((c) => (
-                          <tr key={c.id}>
-                            <td>
-                              <div className="fw-semibold">
+                  <div style={{ display: "grid", gap: 14 }}>
+                    {contacts.map((c) => {
+                      const step = buyerContactStep(c);
+                      return (
+                        <div
+                          key={c.id}
+                          style={{
+                            border: "1px solid #e8e8e8",
+                            borderRadius: 12,
+                            padding: 16,
+                            background: "#fff",
+                          }}>
+                          <div
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              gap: 14,
+                              alignItems: "flex-start",
+                              marginBottom: 12,
+                            }}>
+                            <div>
+                              <div
+                                className="fw-semibold"
+                                style={{ fontSize: 15, marginBottom: 4 }}>
                                 {c.property_title}
                               </div>
-                            </td>
+                              <div className="text-muted" style={{ fontSize: 13 }}>
+                                Gửi lúc {formatContactDate(c.created_at)}
+                              </div>
+                            </div>
+                            <span
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: 6,
+                                padding: "5px 10px",
+                                borderRadius: 999,
+                                background: step.bg,
+                                color: step.color,
+                                fontSize: 12,
+                                fontWeight: 700,
+                                whiteSpace: "nowrap",
+                              }}>
+                              <UiIcon
+                                name={c.status === "replied" ? "success" : "message"}
+                                size={14}
+                              />
+                              {step.label}
+                            </span>
+                          </div>
 
-                            <td>
-                              <span
-                                className={`badge ${
-                                  c.status === "replied"
-                                    ? "bg-success"
-                                    : "bg-warning text-dark"
-                                }`}>
-                                {c.status === "replied"
-                                  ? "Đã phản hồi"
-                                  : "Đang chờ"}
-                              </span>
-                            </td>
+                          <div
+                            style={{
+                              display: "grid",
+                              gridTemplateColumns: "1fr 1fr",
+                              gap: 12,
+                              marginBottom: 12,
+                            }}>
+                            <div
+                              style={{
+                                background: "#f9f9f9",
+                                borderRadius: 10,
+                                padding: "10px 12px",
+                              }}>
+                              <div
+                                style={{
+                                  fontSize: 11,
+                                  color: "#757575",
+                                  marginBottom: 5,
+                                  fontWeight: 700,
+                                  textTransform: "uppercase",
+                                }}>
+                                Nội dung bạn đã gửi
+                              </div>
+                              <div style={{ fontSize: 13, color: "#5f5e5e", lineHeight: 1.55 }}>
+                                {c.message}
+                              </div>
+                            </div>
 
-                            <td style={{ minWidth: 260 }}>
-                              {c.status === "replied" && c.owner_reply ? (
-                                <div
-                                  style={{
-                                    background: "#f1f8f4",
-                                    border: "1px solid #cfe9d8",
-                                    borderRadius: 10,
-                                    padding: "10px 12px",
-                                    color: "#24563a",
-                                    fontSize: 13,
-                                    lineHeight: 1.5,
-                                  }}>
-                                  <div className="fw-semibold mb-1">
-                                    Người bán đã phản hồi:
-                                  </div>
-                                  <div>{c.owner_reply}</div>
-                                  <div
-                                    style={{
-                                      marginTop: 10,
-                                      paddingTop: 10,
-                                      borderTop: "1px solid #cfe9d8",
-                                      color: "#1f3f2f",
-                                    }}>
-                                    <div className="fw-semibold mb-1">
-                                      Thông tin người bán:
-                                    </div>
-                                    <div>
-                                      Chủ sở hữu:{" "}
-                                      <span className="fw-semibold">
-                                        {c.owner_name || "Chưa cập nhật"}
-                                      </span>
-                                    </div>
-                                    <div>
-                                      Số điện thoại:{" "}
-                                      {c.owner_phone ? (
-                                        <a
-                                          href={`tel:${c.owner_phone}`}
-                                          style={{
-                                            color: "#0f6e56",
-                                            fontWeight: 600,
-                                            textDecoration: "none",
-                                          }}>
-                                          {c.owner_phone}
-                                        </a>
-                                      ) : (
-                                        <span className="text-muted">
-                                          Chưa cập nhật
-                                        </span>
-                                      )}
-                                    </div>
-                                    {c.owner_email && (
-                                      <div>
-                                        Email:{" "}
-                                        <a
-                                          href={`mailto:${c.owner_email}`}
-                                          style={{
-                                            color: "#0f6e56",
-                                            fontWeight: 600,
-                                            textDecoration: "none",
-                                          }}>
-                                          {c.owner_email}
-                                        </a>
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-                              ) : (
-                                <span className="text-muted small">
-                                  Chưa có phản hồi
-                                </span>
+                            <div
+                              style={{
+                                background: c.status === "replied" ? "#e6f9f0" : "#fff8e1",
+                                border: `1px solid ${
+                                  c.status === "replied" ? "#b9dfd3" : "#f0ce7a"
+                                }`,
+                                borderRadius: 10,
+                                padding: "10px 12px",
+                              }}>
+                              <div
+                                style={{
+                                  fontSize: 11,
+                                  color: c.status === "replied" ? "#0f6e56" : "#8a5a00",
+                                  marginBottom: 5,
+                                  fontWeight: 700,
+                                  textTransform: "uppercase",
+                                }}>
+                                Phản hồi từ người bán
+                              </div>
+                              <div style={{ fontSize: 13, color: "#1a1c1c", lineHeight: 1.55 }}>
+                                {c.status === "replied" && c.owner_reply
+                                  ? c.owner_reply
+                                  : "Chưa có phản hồi"}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div
+                            style={{
+                              display: "grid",
+                              gridTemplateColumns: "1fr auto",
+                              gap: 12,
+                              alignItems: "center",
+                              borderTop: "1px solid #f1f1f1",
+                              paddingTop: 12,
+                            }}>
+                            <div style={{ fontSize: 13, color: "#5f5e5e", lineHeight: 1.6 }}>
+                              <strong style={{ color: "#1a1c1c" }}>
+                                Thông tin người bán:
+                              </strong>{" "}
+                              {c.owner_name || "Chưa cập nhật"}
+                              {c.owner_phone && (
+                                <>
+                                  {" · "}
+                                  <a
+                                    href={`tel:${c.owner_phone}`}
+                                    style={{ color: "#0f6e56", fontWeight: 700 }}>
+                                    {c.owner_phone}
+                                  </a>
+                                </>
                               )}
-                            </td>
-
-                            <td>
-                              {new Date(c.created_at).toLocaleDateString(
-                                "vi-VN",
+                              {c.owner_email && (
+                                <>
+                                  {" · "}
+                                  <a
+                                    href={`mailto:${c.owner_email}`}
+                                    style={{ color: "#0f6e56", fontWeight: 700 }}>
+                                    {c.owner_email}
+                                  </a>
+                                </>
                               )}
-                            </td>
+                              <div style={{ color: "#757575", marginTop: 4 }}>
+                                {step.note}
+                              </div>
+                            </div>
 
-                            <td>
+                            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                              {c.owner_id && (
+                                <Link
+                                  to={`/owners/${c.owner_id}`}
+                                  className="btn btn-sm btn-outline-secondary">
+                                  Hồ sơ người bán
+                                </Link>
+                              )}
                               <Link
                                 to={`/property/${c.property_id}`}
                                 className="btn btn-sm btn-outline-danger">
-                                Xem
+                                Xem tin
                               </Link>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
