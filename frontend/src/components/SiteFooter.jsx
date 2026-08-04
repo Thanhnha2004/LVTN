@@ -47,7 +47,7 @@ export default function SiteFooter() {
         </div>
         <div style={{ paddingTop: 24, borderTop: "1px solid #E8E8E8", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <p style={{ color: "#656464", fontSize: 13, margin: 0 }}>
-            © 2026 Nền tảng Bất Động Sản LVTN. Bảo lưu mọi quyền.
+            © 2026 Nền tảng Bất Động Sản LVTN.
           </p>
         </div>
       </div>

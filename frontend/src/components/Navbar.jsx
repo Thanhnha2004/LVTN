@@ -205,7 +205,7 @@ export default function Navbar() {
                   className="nav-link fw-medium px-2"
                   style={navLinkStyle}
                   to="/admin/dashboard">
-                  Dashboard
+                  Quản trị
                 </NavLink>
               </li>
             </>

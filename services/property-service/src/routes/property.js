@@ -150,7 +150,10 @@ function validatePropertyInput(body) {
   if (!values.district) return { error: "Quận/huyện không được để trống" };
   if (values.direction && !VALID_DIRECTIONS.includes(values.direction))
     return { error: "Hướng nhà không hợp lệ" };
-  if (values.legal_status && !VALID_LEGAL_STATUSES.includes(values.legal_status))
+  if (
+    values.legal_status &&
+    !VALID_LEGAL_STATUSES.includes(values.legal_status)
+  )
     return { error: "Pháp lý không hợp lệ" };
   for (const [key, label] of [
     ["bedrooms", "Số phòng ngủ"],
@@ -181,7 +184,8 @@ function validatePropertyInput(body) {
       values.longitude > 110)
   ) {
     return {
-      error: "Tọa độ không hợp lệ. Vĩ độ/kinh độ cần nằm trong phạm vi Việt Nam",
+      error:
+        "Tọa độ không hợp lệ. Vĩ độ/kinh độ cần nằm trong phạm vi Việt Nam",
     };
   }
 
@@ -414,10 +418,10 @@ router.get("/owner/stats", authMiddleware, async (req, res) => {
 
     const [leadStats] = await pool.query(
       `SELECT c.lead_status, COUNT(*) AS count
-   FROM contacts c
-   JOIN properties p ON c.property_id = p.id
-   WHERE p.owner_id = ?
-   GROUP BY c.lead_status`,
+      FROM contacts c
+      JOIN properties p ON c.property_id = p.id
+      WHERE p.owner_id = ?
+      GROUP BY c.lead_status`,
       [req.user.id],
     );
 

@@ -23,6 +23,7 @@ import {
   FaHistory,
   FaStar,
   FaCreditCard,
+  FaChartBar,
 } from "react-icons/fa";
 
 const VN = { fontFamily: "'Be Vietnam Pro', Inter, sans-serif" };
@@ -400,6 +401,9 @@ export default function OwnerDashboard() {
   const [historyModal, setHistoryModal] = useState(null);
   const [historyItems, setHistoryItems] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [statsModal, setStatsModal] = useState(null);
+  const [propertyStats, setPropertyStats] = useState(null);
+  const [statsLoading, setStatsLoading] = useState(false);
   const [featuredPackages, setFeaturedPackages] = useState([]);
   const [featuredOrders, setFeaturedOrders] = useState([]);
   const [paymentModal, setPaymentModal] = useState(null);
@@ -451,7 +455,7 @@ export default function OwnerDashboard() {
   const handleHide = async (id) => {
     const ok = await confirm({
       title: "Ẩn tin đăng?",
-      message: "Tin này sẽ không còn hiển thị công khai cho Buyer.",
+      message: "Tin này sẽ không còn hiển thị công khai cho người mua.",
       confirmText: "Ẩn tin",
     });
     if (!ok) return;
@@ -490,7 +494,7 @@ export default function OwnerDashboard() {
   const handleUnhide = async (id) => {
     const ok = await confirm({
       title: "Gửi lại tin để chờ duyệt?",
-      message: "Tin sẽ chuyển về trạng thái chờ Admin duyệt trước khi hiển thị lại.",
+      message: "Tin sẽ chuyển về trạng thái chờ quản trị viên duyệt trước khi hiển thị lại.",
       confirmText: "Gửi duyệt",
     });
     if (!ok) return;
@@ -518,6 +522,21 @@ export default function OwnerDashboard() {
       setHistoryItems([]);
     } finally {
       setHistoryLoading(false);
+    }
+  };
+
+  const openPropertyStats = async (property) => {
+    setStatsModal(property);
+    setPropertyStats(null);
+    setStatsLoading(true);
+    try {
+      const res = await api.get(`/api/property/owner/stats/${property.id}`);
+      setPropertyStats(res.data);
+    } catch (err) {
+      showToast("Không thể tải thống kê chi tiết tin", "error");
+      setPropertyStats(null);
+    } finally {
+      setStatsLoading(false);
     }
   };
 
@@ -873,6 +892,7 @@ export default function OwnerDashboard() {
                     <tr style={{ background: "#f9f9f9" }}>
                       {[
                         "Tin đăng",
+                        "Ngày đăng",
                         "Trạng thái",
                         "Giá bán",
                         "Liên hệ",
@@ -885,10 +905,10 @@ export default function OwnerDashboard() {
                             fontSize: 12,
                             fontWeight: 500,
                             color: "#757575",
-                            textAlign: i === 4 ? "right" : "left",
+                            textAlign: i === 5 ? "right" : "left",
                             borderBottom: "0.5px solid #E8E8E8",
                             whiteSpace: "nowrap",
-                            width: i === 4 ? 260 : "auto",
+                            width: i === 5 ? 260 : i === 1 ? 150 : "auto",
                             ...VN,
                           }}>
                           {h}
@@ -973,6 +993,21 @@ export default function OwnerDashboard() {
                           </div>
                         </td>
 
+                        {/* Ngày đăng */}
+                        <td style={{ padding: "12px 16px", ...VN }}>
+                          <span
+                            style={{
+                              fontSize: 12,
+                              fontWeight: 500,
+                              color: "#5f5e5e",
+                              whiteSpace: "nowrap",
+                            }}>
+                            {p.created_at
+                              ? new Date(p.created_at).toLocaleDateString("vi-VN")
+                              : "—"}
+                          </span>
+                        </td>
+
                         {/* Trạng thái */}
                         <td style={{ padding: "12px 16px" }}>
                           <StatusBadge
@@ -1051,6 +1086,14 @@ export default function OwnerDashboard() {
                               tone="neutral"
                               icon={<FaHistory />}
                               label="L.sử"
+                            />
+
+                            <ActionButton
+                              onClick={() => openPropertyStats(p)}
+                              title="Xem thống kê chi tiết tin"
+                              tone="success"
+                              icon={<FaChartBar />}
+                              label="TK"
                             />
 
                             {(p.status === "active" ||
@@ -1587,6 +1630,247 @@ export default function OwnerDashboard() {
             </div>
           </div>
         )}
+        {statsModal && (
+          <div
+            onClick={() => setStatsModal(null)}
+            style={{
+              position: "fixed",
+              inset: 0,
+              background: "rgba(0,0,0,0.4)",
+              zIndex: 1000,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: 16,
+            }}>
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                background: "#fff",
+                borderRadius: 14,
+                width: "100%",
+                maxWidth: 760,
+                maxHeight: "88vh",
+                boxShadow: "0 8px 32px rgba(0,0,0,0.12)",
+                overflow: "hidden",
+                ...VN,
+              }}>
+              <div
+                style={{
+                  padding: "18px 20px",
+                  borderBottom: "0.5px solid #E8E8E8",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  gap: 12,
+                }}>
+                <div>
+                  <div style={{ fontSize: 15, fontWeight: 700 }}>
+                    Thống kê chi tiết tin
+                  </div>
+                  <div style={{ fontSize: 12, color: "#757575", marginTop: 3 }}>
+                    {statsModal.title}
+                  </div>
+                </div>
+                <button
+                  onClick={() => setStatsModal(null)}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    fontSize: 18,
+                    color: "#5f5e5e",
+                    cursor: "pointer",
+                    lineHeight: 1,
+                    padding: 0,
+                    flexShrink: 0,
+                  }}>
+                  ×
+                </button>
+              </div>
+
+              <div
+                style={{
+                  padding: "18px 20px",
+                  maxHeight: "calc(88vh - 72px)",
+                  overflowY: "auto",
+                }}>
+                {statsLoading ? (
+                  <div style={{ textAlign: "center", padding: "34px 0" }}>
+                    Đang tải thống kê...
+                  </div>
+                ) : !propertyStats ? (
+                  <div
+                    style={{
+                      padding: "24px 0",
+                      textAlign: "center",
+                      color: "#757575",
+                      fontSize: 13,
+                    }}>
+                    Chưa có dữ liệu thống kê
+                  </div>
+                ) : (
+                  <>
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "repeat(4, 1fr)",
+                        gap: 10,
+                        marginBottom: 18,
+                      }}>
+                      {[
+                        ["Lượt xem", propertyStats.stats?.total_views || 0],
+                        ["Tổng liên hệ", propertyStats.stats?.total_contacts || 0],
+                        ["Chờ phản hồi", propertyStats.stats?.pending_contacts || 0],
+                        [
+                          "Chuyển đổi",
+                          `${propertyStats.stats?.conversion_rate || 0}%`,
+                        ],
+                      ].map(([label, value]) => (
+                        <div
+                          key={label}
+                          style={{
+                            border: "0.5px solid #E8E8E8",
+                            borderRadius: 10,
+                            padding: "12px 14px",
+                            background: "#fafafa",
+                          }}>
+                          <div
+                            style={{
+                              fontSize: 11,
+                              color: "#757575",
+                              marginBottom: 6,
+                            }}>
+                            {label}
+                          </div>
+                          <div
+                            style={{
+                              fontSize: 20,
+                              fontWeight: 800,
+                              color: "#1a1c1c",
+                            }}>
+                            {value}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "1fr 1fr",
+                        gap: 14,
+                      }}>
+                      <div
+                        style={{
+                          border: "0.5px solid #E8E8E8",
+                          borderRadius: 10,
+                          padding: "14px",
+                        }}>
+                        <div
+                          style={{
+                            fontSize: 13,
+                            fontWeight: 700,
+                            marginBottom: 12,
+                          }}>
+                          Phân loại lead
+                        </div>
+                        {propertyStats.lead_stats?.length ? (
+                          <div style={{ display: "grid", gap: 8 }}>
+                            {propertyStats.lead_stats.map((item) => (
+                              <div
+                                key={item.lead_status || "unknown"}
+                                style={{
+                                  display: "flex",
+                                  justifyContent: "space-between",
+                                  fontSize: 13,
+                                  color: "#5f5e5e",
+                                }}>
+                                <span>{item.lead_status || "Chưa phân loại"}</span>
+                                <strong style={{ color: "#1a1c1c" }}>
+                                  {item.count}
+                                </strong>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div style={{ fontSize: 13, color: "#757575" }}>
+                            Chưa có lead
+                          </div>
+                        )}
+                      </div>
+
+                      <div
+                        style={{
+                          border: "0.5px solid #E8E8E8",
+                          borderRadius: 10,
+                          padding: "14px",
+                        }}>
+                        <div
+                          style={{
+                            fontSize: 13,
+                            fontWeight: 700,
+                            marginBottom: 12,
+                          }}>
+                          Liên hệ gần nhất
+                        </div>
+                        {propertyStats.recent_contacts?.length ? (
+                          <div style={{ display: "grid", gap: 10 }}>
+                            {propertyStats.recent_contacts.map((contact) => (
+                              <div
+                                key={contact.id}
+                                style={{
+                                  borderBottom: "1px solid #f1f1f1",
+                                  paddingBottom: 9,
+                                }}>
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    justifyContent: "space-between",
+                                    gap: 10,
+                                    marginBottom: 4,
+                                  }}>
+                                  <strong style={{ fontSize: 13 }}>
+                                    {contact.buyer_name || "Người mua"}
+                                  </strong>
+                                  <span
+                                    style={{
+                                      fontSize: 11,
+                                      color: "#757575",
+                                      whiteSpace: "nowrap",
+                                    }}>
+                                    {formatDateTime(contact.created_at)}
+                                  </span>
+                                </div>
+                                <div style={{ fontSize: 12, color: "#757575" }}>
+                                  {contact.buyer_phone || "Chưa có SĐT"} ·{" "}
+                                  {contact.status}
+                                </div>
+                                {contact.message && (
+                                  <div
+                                    style={{
+                                      fontSize: 12,
+                                      color: "#5f5e5e",
+                                      marginTop: 4,
+                                      lineHeight: 1.45,
+                                    }}>
+                                    {contact.message}
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div style={{ fontSize: 13, color: "#757575" }}>
+                            Chưa có liên hệ
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
         {historyModal && (
           <div
             onClick={() => setHistoryModal(null)}
@@ -1719,4 +2003,3 @@ export default function OwnerDashboard() {
     </div>
   );
 }
-

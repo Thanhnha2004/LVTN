@@ -12,6 +12,12 @@ import UiIcon from "../../components/UiIcon";
 import { useToast } from "../../components/ToastProvider";
 import { useConfirm } from "../../components/ConfirmProvider";
 
+const ROLE_LABELS = {
+  buyer: "Người mua",
+  owner: "Người bán",
+  admin: "Quản trị viên",
+};
+
 export default function UsersPage({ showToast }) {
   const { showToast: globalToast } = useToast();
   const { confirm } = useConfirm();
@@ -99,11 +105,11 @@ export default function UsersPage({ showToast }) {
           value={total.toLocaleString()}
         />
         <StatCard
-          label="Người bán (Owner)"
+          label="Người bán"
           value={users.filter((u) => u.role === "owner").length}
         />
         <StatCard
-          label="Người mua (Buyer)"
+          label="Người mua"
           value={users.filter((u) => u.role === "buyer").length}
         />
         <StatCard
@@ -150,9 +156,9 @@ export default function UsersPage({ showToast }) {
               }}
               style={selectStyle}>
               <option value="">Tất cả vai trò</option>
-              <option value="buyer">Buyer</option>
-              <option value="owner">Owner</option>
-              <option value="admin">Admin</option>
+              <option value="buyer">Người mua</option>
+              <option value="owner">Người bán</option>
+              <option value="admin">Quản trị viên</option>
             </select>
             <select
               value={filterStatus}
@@ -316,7 +322,7 @@ export default function UsersPage({ showToast }) {
                                 ? "#3730a3"
                                 : C.secondary,
                         }}>
-                        {user.role}
+                        {ROLE_LABELS[user.role] || user.role}
                       </span>
                     </td>
                     <td style={tdStyle}>

@@ -9,7 +9,7 @@ import UiIcon from "../../components/UiIcon";
 
 export function Sidebar({ page, setPage }) {
   const nav = [
-    { key: "dashboard", label: "Dashboard" },
+    { key: "dashboard", label: "Tổng quan" },
     { key: "users", label: "Quản lý người dùng" },
     { key: "pending", label: "Duyệt tin đăng" },
   ];
@@ -40,7 +40,7 @@ export function Sidebar({ page, setPage }) {
             color: C.primary,
             letterSpacing: "-0.02em",
           }}>
-          Admin Dashboard
+          Quản trị hệ thống
         </div>
         <div style={{ fontSize: 12, color: C.secondary, marginTop: 2 }}>
         </div>
@@ -446,7 +446,7 @@ function LoginPage({ onLogin }) {
               fontSize: 22,
               color: C.onSurface,
             }}>
-            Admin Portal
+            Cổng quản trị
           </div>
           <div style={{ fontSize: 13, color: C.textMuted, marginTop: 4 }}>
             PropTech Solutions — Đăng nhập quản trị
@@ -583,7 +583,7 @@ function DashboardPage() {
         <StatCard
           label="Tổng người dùng"
           value={stats?.users?.total?.toLocaleString() || "—"}
-          sub={`Buyers: ${stats?.users?.buyers?.toLocaleString()} | Owners: ${stats?.users?.owners?.toLocaleString()}`}
+          sub={`Người mua: ${stats?.users?.buyers?.toLocaleString()} | Người bán: ${stats?.users?.owners?.toLocaleString()}`}
         />
         <StatCard
           label="Tổng bất động sản"

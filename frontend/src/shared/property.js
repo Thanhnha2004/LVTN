@@ -23,24 +23,6 @@ export const LEGAL_OPTIONS = [
   { value: "other", label: "Khác" },
 ];
 
-export const CITIES = [
-  "Hà Nội",
-  "TP. Hồ Chí Minh",
-  "Đà Nẵng",
-  "Hải Phòng",
-  "Cần Thơ",
-  "Biên Hòa",
-  "Nha Trang",
-  "Huế",
-  "Vũng Tàu",
-  "Đà Lạt",
-  "Quảng Ninh",
-  "Bình Dương",
-  "Đồng Nai",
-  "Long An",
-  "Bà Rịa - Vũng Tàu",
-];
-
 export const TYPE_LABEL = Object.fromEntries(
   PROPERTY_TYPES.map(({ value, label }) => [value, label]),
 );

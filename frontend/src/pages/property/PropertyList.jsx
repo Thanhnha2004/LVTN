@@ -21,6 +21,42 @@ const EMPTY_FILTERS = {
   legal_status: "",
 };
 
+const PRICE_MIN = 0;
+const PRICE_MAX = 20000000000;
+const PRICE_STEP = 100000000;
+const AREA_MIN = 0;
+const AREA_MAX = 500;
+const AREA_STEP = 5;
+
+const formatSliderPrice = (value) => {
+  const number = Number(value || 0);
+  if (number >= 1000000000) {
+    return `${Number((number / 1000000000).toFixed(1))} tỷ`;
+  }
+  if (number >= 1000000) {
+    return `${Number((number / 1000000).toFixed(0))} triệu`;
+  }
+  return "0";
+};
+
+const getSliderValue = (value, fallback) =>
+  value === "" || value === undefined || value === null
+    ? fallback
+    : Number(value);
+
+const normalizeRangeFilterValue = (field, value) => {
+  if ((field === "min_price" || field === "min_area") && value === 0) {
+    return "";
+  }
+  if (field === "max_price" && value === PRICE_MAX) {
+    return "";
+  }
+  if (field === "max_area" && value === AREA_MAX) {
+    return "";
+  }
+  return value;
+};
+
 export default function PropertyList() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [properties, setProperties] = useState([]);
@@ -144,6 +180,45 @@ export default function PropertyList() {
   const handleSortChange = (value) => {
     setSort(value);
     updateQuery({ ...filters, sort: value, page: 1 });
+  };
+
+  const handleRangeFilterChange = (field, rawValue) => {
+    const value = Number(rawValue);
+    const nextFilters = {
+      ...filters,
+      [field]: normalizeRangeFilterValue(field, value),
+    };
+
+    if (
+      field === "min_price" &&
+      filters.max_price &&
+      value > Number(filters.max_price)
+    ) {
+      nextFilters.max_price = normalizeRangeFilterValue("max_price", value);
+    }
+    if (
+      field === "max_price" &&
+      filters.min_price &&
+      value < Number(filters.min_price)
+    ) {
+      nextFilters.min_price = normalizeRangeFilterValue("min_price", value);
+    }
+    if (
+      field === "min_area" &&
+      filters.max_area &&
+      value > Number(filters.max_area)
+    ) {
+      nextFilters.max_area = normalizeRangeFilterValue("max_area", value);
+    }
+    if (
+      field === "max_area" &&
+      filters.min_area &&
+      value < Number(filters.min_area)
+    ) {
+      nextFilters.min_area = normalizeRangeFilterValue("min_area", value);
+    }
+
+    handleFilterChange(nextFilters, { debounce: true });
   };
 
   const handlePageChange = (page) => {
@@ -285,74 +360,84 @@ export default function PropertyList() {
                 </select>
               </div>
 
-              <div className="row mb-3">
-                <div className="col">
+              <div className="mb-3">
+                <div className="d-flex justify-content-between align-items-center mb-2">
+                  <label className="mb-0">Khoảng giá</label>
+                  <span className="text-muted small">
+                    {filters.min_price || filters.max_price
+                      ? `${formatSliderPrice(getSliderValue(filters.min_price, PRICE_MIN))} - ${formatSliderPrice(getSliderValue(filters.max_price, PRICE_MAX))}`
+                      : "Tất cả"}
+                  </span>
+                </div>
+                <div className="mb-2">
+                  <div className="d-flex justify-content-between small text-muted mb-1">
+                    <span>Từ</span>
+                    <span>{formatSliderPrice(getSliderValue(filters.min_price, PRICE_MIN))}</span>
+                  </div>
                   <input
-                    className="form-control"
-                    placeholder="Giá từ"
-                    value={filters.min_price}
-                    onChange={(e) =>
-                      handleFilterChange(
-                        {
-                          ...filters,
-                          min_price: e.target.value,
-                        },
-                        { debounce: true },
-                      )
-                    }
+                    type="range"
+                    className="form-range"
+                    min={PRICE_MIN}
+                    max={PRICE_MAX}
+                    step={PRICE_STEP}
+                    value={getSliderValue(filters.min_price, PRICE_MIN)}
+                    onChange={(e) => handleRangeFilterChange("min_price", e.target.value)}
                   />
                 </div>
-
-                <div className="col">
+                <div>
+                  <div className="d-flex justify-content-between small text-muted mb-1">
+                    <span>Đến</span>
+                    <span>{formatSliderPrice(getSliderValue(filters.max_price, PRICE_MAX))}</span>
+                  </div>
                   <input
-                    className="form-control"
-                    placeholder="Giá đến"
-                    value={filters.max_price}
-                    onChange={(e) =>
-                      handleFilterChange(
-                        {
-                          ...filters,
-                          max_price: e.target.value,
-                        },
-                        { debounce: true },
-                      )
-                    }
+                    type="range"
+                    className="form-range"
+                    min={PRICE_MIN}
+                    max={PRICE_MAX}
+                    step={PRICE_STEP}
+                    value={getSliderValue(filters.max_price, PRICE_MAX)}
+                    onChange={(e) => handleRangeFilterChange("max_price", e.target.value)}
                   />
                 </div>
               </div>
 
-              <div className="row mb-3">
-                <div className="col">
+              <div className="mb-3">
+                <div className="d-flex justify-content-between align-items-center mb-2">
+                  <label className="mb-0">Diện tích</label>
+                  <span className="text-muted small">
+                    {filters.min_area || filters.max_area
+                      ? `${getSliderValue(filters.min_area, AREA_MIN)} - ${getSliderValue(filters.max_area, AREA_MAX)} m²`
+                      : "Tất cả"}
+                  </span>
+                </div>
+                <div className="mb-2">
+                  <div className="d-flex justify-content-between small text-muted mb-1">
+                    <span>Từ</span>
+                    <span>{getSliderValue(filters.min_area, AREA_MIN)} m²</span>
+                  </div>
                   <input
-                    className="form-control"
-                    placeholder="DT từ"
-                    value={filters.min_area}
-                    onChange={(e) =>
-                      handleFilterChange(
-                        {
-                          ...filters,
-                          min_area: e.target.value,
-                        },
-                        { debounce: true },
-                      )
-                    }
+                    type="range"
+                    className="form-range"
+                    min={AREA_MIN}
+                    max={AREA_MAX}
+                    step={AREA_STEP}
+                    value={getSliderValue(filters.min_area, AREA_MIN)}
+                    onChange={(e) => handleRangeFilterChange("min_area", e.target.value)}
                   />
                 </div>
-
-                <div className="col">
+                <div>
+                  <div className="d-flex justify-content-between small text-muted mb-1">
+                    <span>Đến</span>
+                    <span>{getSliderValue(filters.max_area, AREA_MAX)} m²</span>
+                  </div>
                   <input
-                    className="form-control"
-                    placeholder="DT đến"
-                    value={filters.max_area}
-                    onChange={(e) =>
-                      handleFilterChange(
-                        {
-                          ...filters,
-                          max_area: e.target.value,
-                        },
-                        { debounce: true },
-                      )
-                    }
+                    type="range"
+                    className="form-range"
+                    min={AREA_MIN}
+                    max={AREA_MAX}
+                    step={AREA_STEP}
+                    value={getSliderValue(filters.max_area, AREA_MAX)}
+                    onChange={(e) => handleRangeFilterChange("max_area", e.target.value)}
                   />
                 </div>
               </div>
@@ -457,11 +542,26 @@ export default function PropertyList() {
               <div className="row g-4">
                 {properties.map((item) => (
                   <div key={item.id} className="col-xl-6">
+                    <Link
+                      to={`/property/${item.id}`}
+                      className="text-decoration-none text-dark d-block h-100"
+                      aria-label={`Xem chi tiết ${item.title}`}>
                     <div
                       className="card border-0 shadow-sm h-100"
                       style={{
                         borderRadius: 16,
                         overflow: "hidden",
+                        cursor: "pointer",
+                        transition: "transform 0.18s ease, box-shadow 0.18s ease",
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.transform = "translateY(-3px)";
+                        e.currentTarget.style.boxShadow =
+                          "0 14px 30px rgba(15, 23, 42, 0.14)";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.transform = "translateY(0)";
+                        e.currentTarget.style.boxShadow = "";
                       }}>
                       {/* IMAGE */}
                       <div
@@ -537,13 +637,9 @@ export default function PropertyList() {
                           </div>
                         </div>
 
-                        <Link
-                          to={`/property/${item.id}`}
-                          className="btn btn-danger w-100 mt-3">
-                          Xem chi tiết
-                        </Link>
                       </div>
                     </div>
+                    </Link>
                   </div>
                 ))}
               </div>

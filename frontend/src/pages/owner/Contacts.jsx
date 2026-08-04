@@ -46,7 +46,7 @@ function ReplyBox({ contactId, onSent, onCancel, showToast }) {
     try {
       await api.patch(`/api/contact/${contactId}/reply`, { owner_reply: text });
       onSent(contactId, text);
-      showToast("Đã gửi phản hồi cho Buyer");
+      showToast("Đã gửi phản hồi cho người mua");
     } catch (err) {
       const message = err.response?.data?.message || "Gửi thất bại, thử lại.";
       setError(message);

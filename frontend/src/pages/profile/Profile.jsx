@@ -618,7 +618,7 @@ export default function Profile() {
                         <tr>
                           <th>Bất động sản</th>
                           <th>Trạng thái</th>
-                          <th>Phản hồi của Owner</th>
+                          <th>Phản hồi của người bán</th>
                           <th>Ngày gửi</th>
                           <th></th>
                         </tr>
@@ -659,7 +659,7 @@ export default function Profile() {
                                     lineHeight: 1.5,
                                   }}>
                                   <div className="fw-semibold mb-1">
-                                    Owner đã phản hồi:
+                                    Người bán đã phản hồi:
                                   </div>
                                   <div>{c.owner_reply}</div>
                                   <div
@@ -670,7 +670,7 @@ export default function Profile() {
                                       color: "#1f3f2f",
                                     }}>
                                     <div className="fw-semibold mb-1">
-                                      Thông tin Owner :
+                                      Thông tin người bán:
                                     </div>
                                     <div>
                                       Chủ sở hữu:{" "}

@@ -3,12 +3,12 @@ const pool = require("../db");
 const authMiddleware = require("../middleware/auth");
 const router = express.Router();
 
-// POST /api/contact — Buyer gửi yêu cầu liên hệ
-// Buyer API: tao mot yeu cau lien he cho tin approved.
-// He thong chan buyer gui trung lien he cho cung mot property va gui email thong bao owner.
+// POST /api/contact — Người dùng gửi yêu cầu liên hệ
+// Contact API: tao mot yeu cau lien he cho tin approved.
+// He thong chan tu lien he tin cua minh va chan gui trung lien he cho cung mot property.
 router.post("/", authMiddleware, async (req, res) => {
-  if (req.user.role !== "buyer")
-    return res.status(403).json({ message: "Chỉ buyer mới được liên hệ" });
+  if (!["buyer", "owner"].includes(req.user.role))
+    return res.status(403).json({ message: "Không có quyền gửi liên hệ" });
 
   const { property_id, message } = req.body;
   if (!property_id || !message)
@@ -18,11 +18,15 @@ router.post("/", authMiddleware, async (req, res) => {
     // Kiểm tra property tồn tại và đã approved
     // Chi cho lien he voi tin approved de tranh buyer lien he tin chua duyet/da an.
     const [props] = await pool.query(
-      "SELECT id FROM properties WHERE id = ? AND status = 'approved'",
+      "SELECT id, owner_id FROM properties WHERE id = ? AND status = 'approved'",
       [property_id],
     );
     if (props.length === 0)
       return res.status(404).json({ message: "Bất động sản không tồn tại" });
+    if (Number(props[0].owner_id) === Number(req.user.id))
+      return res
+        .status(400)
+        .json({ message: "Bạn không thể gửi liên hệ cho tin đăng của chính mình" });
 
     // Kiểm tra đã gửi liên hệ cho tin này chưa
     // Moi buyer chi tao mot contact cho mot property de giam spam lead.
@@ -214,10 +218,10 @@ router.patch("/:id/reply", authMiddleware, async (req, res) => {
   }
 });
 
-// GET /api/contact/buyer — Buyer xem danh sách liên hệ đã gửi
-// Buyer API: xem lich su cac lien he minh da gui, kem thong tin tin dang va owner.
+// GET /api/contact/buyer — Người dùng xem danh sách liên hệ đã gửi
+// Contact API: xem lich su cac lien he minh da gui, kem thong tin tin dang va owner.
 router.get("/buyer", authMiddleware, async (req, res) => {
-  if (req.user.role !== "buyer")
+  if (!["buyer", "owner"].includes(req.user.role))
     return res.status(403).json({ message: "Không có quyền" });
 
   const { page = 1, limit = 10 } = req.query;

@@ -26,7 +26,7 @@ export default function Detail() {
   const [activeImg, setActiveImg] = useState(0);
   const [saved, setSaved] = useState(false);
   const [showAllImages, setShowAllImages] = useState(false);
-  const [contact, setContact] = useState({ name: "", email: "", message: "" });
+  const [contact, setContact] = useState({ message: "" });
   const [contactSent, setContactSent] = useState(false);
   const [existingContact, setExistingContact] = useState(null);
   const [contactLoading, setContactLoading] = useState(false);
@@ -58,6 +58,16 @@ export default function Detail() {
             api.get("/api/contact/buyer", { params: { limit: 100 } }),
           ]);
           setSaved(savedRes.data.some((p) => p.id === parseInt(id)));
+          const sentContact = (contactsRes.data.data || []).find(
+            (item) => Number(item.property_id) === Number(id),
+          );
+          setExistingContact(sentContact || null);
+          setContactSent(!!sentContact);
+        }
+        if (user?.role === "owner") {
+          const contactsRes = await api.get("/api/contact/buyer", {
+            params: { limit: 100 },
+          });
           const sentContact = (contactsRes.data.data || []).find(
             (item) => Number(item.property_id) === Number(id),
           );
@@ -113,7 +123,7 @@ export default function Detail() {
         created_at: new Date().toISOString(),
       });
       setContactSent(true);
-      showToast("Đã gửi yêu cầu liên hệ. Owner sẽ phản hồi trong hệ thống.");
+      showToast("Đã gửi yêu cầu liên hệ. Người bán sẽ phản hồi trong hệ thống.");
     } catch (err) {
       const message = err.response?.data?.message || "Gửi thất bại";
       setContactError(message);
@@ -145,7 +155,7 @@ export default function Detail() {
   const images = Array.isArray(property.images) ? property.images : [];
   const isFeatured =
     property.featured_until && new Date(property.featured_until) > new Date();
-  const canInteractAsBuyer = !user || user.role === "buyer";
+  const canSaveAsBuyer = !user || user.role === "buyer";
   const canManageProperty =
     user?.role === "admin" ||
     (user?.role === "owner" && Number(property.owner_id) === Number(user.id));
@@ -538,7 +548,7 @@ export default function Detail() {
                 }}>
                 {property.title}
               </h1>
-              {canInteractAsBuyer && (
+              {canSaveAsBuyer && (
                 <button
                   onClick={handleSave}
                   style={{
@@ -1148,6 +1158,36 @@ export default function Detail() {
                     Xem yêu cầu đã gửi
                   </Link>
                 </div>
+              ) : !user ? (
+                <div>
+                  <p
+                    style={{
+                      fontFamily: "Inter, sans-serif",
+                      fontSize: 14,
+                      color: "#5f5e5e",
+                      lineHeight: 1.6,
+                      marginBottom: 14,
+                    }}>
+                    Đăng nhập để hệ thống tự dùng thông tin tài khoản của bạn
+                    khi gửi yêu cầu liên hệ.
+                  </p>
+                  <Link
+                    to="/login"
+                    style={{
+                      display: "block",
+                      textAlign: "center",
+                      background: "#1a1c1c",
+                      color: "#fff",
+                      padding: "12px 0",
+                      borderRadius: 8,
+                      fontFamily: "Inter, sans-serif",
+                      fontSize: 14,
+                      fontWeight: 600,
+                      textDecoration: "none",
+                    }}>
+                    Đăng nhập để liên hệ
+                  </Link>
+                </div>
               ) : (
                 <form onSubmit={handleContact}>
                   {contactError && (
@@ -1165,26 +1205,46 @@ export default function Detail() {
                     </div>
                   )}
 
-                  <input
-                    type="text"
-                    className="form-control"
-                    placeholder="Họ và tên"
-                    style={{ borderRadius: 8, marginBottom: 10, fontSize: 14 }}
-                    value={contact.name}
-                    onChange={(e) =>
-                      setContact({ ...contact, name: e.target.value })
-                    }
-                  />
-                  <input
-                    type="email"
-                    className="form-control"
-                    placeholder="Email liên hệ"
-                    style={{ borderRadius: 8, marginBottom: 10, fontSize: 14 }}
-                    value={contact.email}
-                    onChange={(e) =>
-                      setContact({ ...contact, email: e.target.value })
-                    }
-                  />
+                  <div
+                    style={{
+                      background: "#f9f9f9",
+                      border: "1px solid #E8E8E8",
+                      borderRadius: 10,
+                      padding: "12px 14px",
+                      marginBottom: 12,
+                    }}>
+                    <div
+                      style={{
+                        fontFamily: "Inter, sans-serif",
+                        fontSize: 11,
+                        fontWeight: 700,
+                        color: "#757575",
+                        textTransform: "uppercase",
+                        letterSpacing: ".04em",
+                        marginBottom: 8,
+                      }}>
+                      Thông tin người gửi
+                    </div>
+                    <div
+                      style={{
+                        fontFamily: "Inter, sans-serif",
+                        fontSize: 14,
+                        fontWeight: 700,
+                        color: "#1a1c1c",
+                        marginBottom: 4,
+                      }}>
+                      {user.full_name || "Người dùng"}
+                    </div>
+                    <div
+                      style={{
+                        fontFamily: "Inter, sans-serif",
+                        fontSize: 13,
+                        color: "#5f5e5e",
+                      }}>
+                      {user.email || "Chưa cập nhật email"}
+                    </div>
+                  </div>
+
                   <textarea
                     className="form-control"
                     rows={4}
@@ -1202,49 +1262,30 @@ export default function Detail() {
                     }
                   />
 
-                  {!user ? (
-                    <Link
-                      to="/login"
-                      style={{
-                        display: "block",
-                        textAlign: "center",
-                        background: "#1a1c1c",
-                        color: "#fff",
-                        padding: "12px 0",
-                        borderRadius: 8,
-                        fontFamily: "Inter, sans-serif",
-                        fontSize: 14,
-                        fontWeight: 600,
-                        textDecoration: "none",
-                      }}>
-                      Đăng nhập để liên hệ
-                    </Link>
-                  ) : (
-                    <button
-                      type="submit"
-                      disabled={contactLoading}
-                      style={{
-                        width: "100%",
-                        background: "#1a1c1c",
-                        color: "#fff",
-                        border: "none",
-                        padding: "12px 0",
-                        borderRadius: 8,
-                        fontFamily: "Inter, sans-serif",
-                        fontSize: 14,
-                        fontWeight: 600,
-                        cursor: contactLoading ? "not-allowed" : "pointer",
-                      }}>
-                      {contactLoading ? (
-                        <>
-                          <span className="spinner-border spinner-border-sm me-2" />
-                          Đang gửi...
-                        </>
-                      ) : (
-                        "Gửi tin nhắn"
-                      )}
-                    </button>
-                  )}
+                  <button
+                    type="submit"
+                    disabled={contactLoading}
+                    style={{
+                      width: "100%",
+                      background: "#1a1c1c",
+                      color: "#fff",
+                      border: "none",
+                      padding: "12px 0",
+                      borderRadius: 8,
+                      fontFamily: "Inter, sans-serif",
+                      fontSize: 14,
+                      fontWeight: 600,
+                      cursor: contactLoading ? "not-allowed" : "pointer",
+                    }}>
+                    {contactLoading ? (
+                      <>
+                        <span className="spinner-border spinner-border-sm me-2" />
+                        Đang gửi...
+                      </>
+                    ) : (
+                      "Gửi tin nhắn"
+                    )}
+                  </button>
                 </form>
               )}
               </div>

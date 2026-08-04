@@ -447,6 +447,7 @@ router.put("/me", authMiddleware, upload.single("avatar"), async (req, res) => {
     res.status(500).json({ message: "Lỗi server", error: err.message });
   }
 });
+
 // PUT /api/auth/change-password — đổi mật khẩu
 // Protected API: doi mat khau bang cach so sanh old_password voi password_hash cu.
 // Mat khau moi tiep tuc duoc hash bang bcrypt truoc khi luu.

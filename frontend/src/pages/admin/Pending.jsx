@@ -87,9 +87,9 @@ export default function PendingPage({ showToast }) {
       pending: "chuyển về chờ duyệt",
     }[status];
     const confirmMessage = {
-      approved: "Tin sẽ được hiển thị công khai cho Buyer.",
-      rejected: "Tin sẽ bị từ chối và Owner sẽ nhìn thấy lý do từ chối.",
-      hidden: "Tin sẽ bị ẩn khỏi danh sách công khai của Buyer.",
+      approved: "Tin sẽ được hiển thị công khai cho người mua.",
+      rejected: "Tin sẽ bị từ chối và người bán sẽ nhìn thấy lý do từ chối.",
+      hidden: "Tin sẽ bị ẩn khỏi danh sách công khai của người mua.",
       pending: "Tin sẽ được chuyển về trạng thái chờ duyệt.",
     }[status];
     const confirmText = {
@@ -313,7 +313,7 @@ export default function PendingPage({ showToast }) {
                             borderRadius: 4,
                             fontWeight: 700,
                           }}>
-                          PREMIUM
+                          GIÁ CAO
                         </span>
                       )}
                     </td>
@@ -461,7 +461,7 @@ export default function PendingPage({ showToast }) {
                   Kiểm tra tin trước khi duyệt
                 </div>
                 <div style={{ fontSize: 13, color: C.textMuted, marginTop: 4 }}>
-                  ID #{detailModal.id} · {detailModal.owner_name || "Owner"}
+                  ID #{detailModal.id} · {detailModal.owner_name || "Người bán"}
                 </div>
               </div>
               <button
