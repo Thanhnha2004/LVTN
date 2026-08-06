@@ -4,9 +4,26 @@ const authMiddleware = require("../middleware/auth");
 const router = express.Router();
 
 function hasAppointmentSchedule(note) {
-  return /lịch hẹn xem\s*:\s*\d{1,2}:\d{2}.*\d{1,2}\/\d{1,2}\/\d{4}/i.test(
+  return /(?:lịch hẹn xem|lich hen xem)\s*:\s*\d{1,2}:\d{2}.*\d{1,2}\/\d{1,2}\/\d{4}/i.test(
     String(note || ""),
   );
+}
+
+function parseAppointmentSchedule(note) {
+  const match = String(note || "").match(
+    /(?:lịch hẹn xem|lich hen xem)\s*:\s*(\d{1,2}):(\d{2})\s+(\d{1,2})\/(\d{1,2})\/(\d{4})/i,
+  );
+  if (!match) return null;
+
+  const [, hour, minute, day, month, year] = match;
+  const date = new Date(
+    Number(year),
+    Number(month) - 1,
+    Number(day),
+    Number(hour),
+    Number(minute),
+  );
+  return Number.isNaN(date.getTime()) ? null : date;
 }
 
 function normalizeMessage(value) {
@@ -14,6 +31,14 @@ function normalizeMessage(value) {
     .trim()
     .replace(/\s+/g, " ");
 }
+
+const LEAD_TRANSITIONS = {
+  new: ["contacted"],
+  contacted: ["scheduled", "closed", "cancelled"],
+  scheduled: ["closed", "cancelled"],
+  closed: [],
+  cancelled: [],
+};
 
 // POST /api/contact — Người dùng gửi yêu cầu liên hệ
 // Contact API: tao mot yeu cau lien he cho tin approved.
@@ -167,7 +192,8 @@ router.patch("/:id/lead", authMiddleware, async (req, res) => {
       .status(403)
       .json({ message: "Chỉ owner mới được cập nhật lead" });
 
-  const { lead_status, owner_note } = req.body;
+  const { lead_status } = req.body;
+  const owner_note = normalizeMessage(req.body.owner_note);
   const validStatuses = [
     "new",
     "contacted",
@@ -185,6 +211,24 @@ router.patch("/:id/lead", authMiddleware, async (req, res) => {
         "Trạng thái đã hẹn xem phải có lịch hẹn cụ thể trong ghi chú",
     });
   }
+  if (lead_status === "scheduled") {
+    const appointmentAt = parseAppointmentSchedule(owner_note);
+    if (!appointmentAt || appointmentAt <= new Date()) {
+      return res.status(400).json({
+        message: "Lịch hẹn xem phải lớn hơn thời gian hiện tại",
+      });
+    }
+  }
+  if (lead_status === "contacted" && owner_note.length < 10) {
+    return res.status(400).json({
+      message: "Trạng thái đã liên hệ phải có ghi chú trao đổi tối thiểu 10 ký tự",
+    });
+  }
+  if (["closed", "cancelled"].includes(lead_status) && owner_note.length < 10) {
+    return res.status(400).json({
+      message: "Trạng thái đã chốt hoặc hủy phải có ghi chú kết quả tối thiểu 10 ký tự",
+    });
+  }
 
   let connection;
   try {
@@ -192,7 +236,9 @@ router.patch("/:id/lead", authMiddleware, async (req, res) => {
     await connection.beginTransaction();
 
     const [rows] = await connection.query(
-      `SELECT c.id, c.property_id, p.status AS property_status
+      `SELECT c.id, c.property_id, c.status AS contact_status,
+              c.lead_status AS current_lead_status,
+              p.status AS property_status
        FROM contacts c
        JOIN properties p ON c.property_id = p.id
        WHERE c.id = ? AND p.owner_id = ?`,
@@ -206,6 +252,19 @@ router.patch("/:id/lead", authMiddleware, async (req, res) => {
         .json({ message: "Không có quyền cập nhật lead này" });
     }
 
+    const currentStatus = rows[0].current_lead_status || "new";
+    if (currentStatus === lead_status) {
+      await connection.rollback();
+      return res.status(400).json({ message: "Lead đã ở trạng thái này" });
+    }
+    if (!(LEAD_TRANSITIONS[currentStatus] || []).includes(lead_status)) {
+      await connection.rollback();
+      return res.status(400).json({
+        message:
+          "Chuyển trạng thái lead không hợp lệ. Vui lòng xử lý theo đúng quy trình chăm sóc khách.",
+      });
+    }
+
     await connection.query(
       "UPDATE contacts SET lead_status = ?, owner_note = ? WHERE id = ?",
       [lead_status, owner_note || null, req.params.id],
@@ -213,7 +272,11 @@ router.patch("/:id/lead", authMiddleware, async (req, res) => {
 
     if (lead_status === "closed" && rows[0].property_status === "approved") {
       await connection.query(
-        "UPDATE properties SET status = 'sold', sold_at = NOW() WHERE id = ?",
+        "UPDATE properties SET status = 'sold', sold_at = NOW(), featured_until = NULL WHERE id = ?",
+        [rows[0].property_id],
+      );
+      await connection.query(
+        "UPDATE featured_orders SET status = 'cancelled' WHERE property_id = ? AND status = 'pending'",
         [rows[0].property_id],
       );
       await connection.query(
@@ -260,7 +323,7 @@ router.patch("/:id/reply", authMiddleware, async (req, res) => {
     // Kiem tra contact co thuoc property cua owner khong truoc khi cho sua lead.
     const [rows] = await pool.query(
       `
-        SELECT c.id FROM contacts c
+        SELECT c.id, c.lead_status FROM contacts c
         JOIN properties p ON c.property_id = p.id
         WHERE c.id = ? AND p.owner_id = ?
       `,
@@ -271,12 +334,20 @@ router.patch("/:id/reply", authMiddleware, async (req, res) => {
       return res.status(403).json({ message: "Không có quyền phản hồi" });
 
     // owner_note co the null neu owner chi doi trang thai ma khong ghi chu.
+    const nextLeadStatus =
+      (rows[0].lead_status || "new") === "new"
+        ? "contacted"
+        : rows[0].lead_status;
+
     await pool.query(
-      "UPDATE contacts SET owner_reply = ?, status = 'replied' WHERE id = ?",
-      [owner_reply, req.params.id],
+      "UPDATE contacts SET owner_reply = ?, status = 'replied', lead_status = ? WHERE id = ?",
+      [owner_reply, nextLeadStatus, req.params.id],
     );
 
-    res.json({ message: "Phản hồi thành công" });
+    res.json({
+      message: "Phản hồi thành công",
+      lead_status: nextLeadStatus,
+    });
   } catch (err) {
     res.status(500).json({ message: "Lỗi server", error: err.message });
   }

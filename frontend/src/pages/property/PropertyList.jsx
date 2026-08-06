@@ -9,6 +9,7 @@ import SiteFooter from "../../components/SiteFooter";
 const EMPTY_FILTERS = {
   type: "",
   transaction_type: "",
+  keyword: "",
   city: "",
   district: "",
   ward: "",
@@ -109,6 +110,7 @@ export default function PropertyList() {
       ...prev,
       transaction_type: filter.transaction_type,
       type: filter.type,
+      keyword: filter.keyword,
       city: filter.city,
       district: filter.district,
       ward: filter.ward,
@@ -520,7 +522,7 @@ export default function PropertyList() {
 
           {/* CONTENT */}
           <div className="col-lg-9">
-            <div className="d-flex justify-content-between align-items-center mb-4">
+            <div className="d-flex justify-content-between align-items-center mb-4 gap-2 flex-wrap">
               <div>
                 <h3 className="fw-bold">Danh sách bất động sản</h3>
 
@@ -528,6 +530,19 @@ export default function PropertyList() {
                   Tìm thấy {pagination.total} tin đăng
                 </p>
               </div>
+
+              <input
+                className="form-control"
+                style={{ width: 320, maxWidth: "100%" }}
+                value={filters.keyword}
+                placeholder="Nhập từ khóa: nhà 2 tầng, 2 lầu..."
+                onChange={(e) =>
+                  handleFilterChange(
+                    { ...filters, keyword: e.target.value },
+                    { debounce: true },
+                  )
+                }
+              />
 
               <select
                 className="form-select"

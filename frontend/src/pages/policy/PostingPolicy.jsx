@@ -46,6 +46,16 @@ const POLICY_GROUPS = [
       "Tin đã duyệt vẫn có thể bị ẩn nếu phát hiện thông tin không đúng hoặc có phản ánh vi phạm.",
     ],
   },
+  {
+    title: "Nghiệp vụ nâng cao",
+    icon: "chart",
+    items: [
+      "Tin có giá/m² lệch mạnh so với nhóm tin tương đồng sẽ được admin kiểm tra kỹ trước khi duyệt.",
+      "Owner có nhiều tin bị xử lý sẽ bị giảm hạn mức tin chờ duyệt và bị hạn chế mua gói nổi bật.",
+      "Tin nổi bật được ưu tiên hiển thị nhưng hệ thống phân bổ theo owner để tránh một người chiếm toàn bộ vị trí đầu.",
+      "Nếu owner sửa tin đang nổi bật, thời gian chờ admin duyệt lại được bù vào hạn nổi bật khi tin được duyệt lại.",
+    ],
+  },
 ];
 
 export default function PostingPolicy() {

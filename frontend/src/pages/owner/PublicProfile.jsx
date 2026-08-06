@@ -17,6 +17,7 @@ function buildTrust(owner) {
   const approved = Number(owner?.approved_properties || 0);
   const sold = Number(owner?.sold_properties || 0);
   const rejected = Number(owner?.rejected_properties || 0);
+  const hidden = Number(owner?.hidden_properties || 0);
   const totalContacts = Number(owner?.total_contacts || 0);
   const repliedContacts = Number(owner?.replied_contacts || 0);
   const totalViews = Number(owner?.total_views || 0);
@@ -31,7 +32,8 @@ function buildTrust(owner) {
         Math.min(sold * 12, 30) +
         Math.min(responseRate * 0.2, 20) +
         Math.min(Math.floor(totalViews / 20), 10) -
-        Math.min(rejected * 8, 24),
+        Math.min(rejected * 8, 24) -
+        Math.min(hidden * 12, 36),
     ),
   );
 
@@ -40,6 +42,7 @@ function buildTrust(owner) {
     approved,
     sold,
     rejected,
+    hidden,
     totalContacts,
     totalViews,
     responseRate,
@@ -295,12 +298,18 @@ export default function PublicOwnerProfile() {
         <section
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(4, 1fr)",
+            gridTemplateColumns: "repeat(5, 1fr)",
             gap: 12,
             marginBottom: 18,
           }}>
           <StatBox icon="clipboard" label="Tin đã duyệt" value={trust.approved} />
           <StatBox icon="tag" label="Đã giao dịch" value={trust.sold} tone="#0f6e56" />
+          <StatBox
+            icon="alert"
+            label="Tin bị xử lý"
+            value={trust.rejected + trust.hidden}
+            tone="#ba1a1a"
+          />
           <StatBox icon="message" label="Tổng liên hệ" value={trust.totalContacts} tone="#2456a6" />
           <StatBox
             icon="reply"

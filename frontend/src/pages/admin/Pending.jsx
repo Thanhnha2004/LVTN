@@ -39,6 +39,14 @@ const ADMIN_REVIEW_POLICY = [
     title: "5. Nội dung bị từ chối ngay",
     text: "Từ chối nếu mô tả chứa số điện thoại, email, đường dẫn ngoài hệ thống, nội dung sai sự thật, ảnh không liên quan hoặc tin trùng với tin đang hoạt động.",
   },
+  {
+    title: "6. Giá bất thường",
+    text: "Nếu giá/m² lệch mạnh so với nhóm tin tương đồng đã duyệt, admin cần kiểm tra lại mô tả, vị trí, pháp lý hoặc yêu cầu owner bổ sung giải thích.",
+  },
+  {
+    title: "7. Owner vi phạm nhiều lần",
+    text: "Owner có nhiều tin bị admin xử lý sẽ bị giảm hạn mức tin chờ duyệt và bị hạn chế mua gói nổi bật cho đến khi cải thiện chất lượng tin.",
+  },
 ];
 
 const REJECT_REASON_TEMPLATES = [
@@ -64,6 +72,25 @@ const REJECT_REASON_TEMPLATES = [
   },
 ];
 
+const HIDE_REASON_TEMPLATES = [
+  {
+    label: "Bị báo cáo sai thông tin",
+    text: "Tin bị người dùng báo cáo sai thông tin về địa chỉ, giá hoặc tình trạng bất động sản. Cần owner kiểm tra và cập nhật lại trước khi hiển thị.",
+  },
+  {
+    label: "Ảnh không đúng thực tế",
+    text: "Tin có hình ảnh không đúng hoặc không thể hiện đúng bất động sản đang giao dịch. Cần owner thay ảnh thật, rõ ràng và liên quan trực tiếp.",
+  },
+  {
+    label: "Nghi vấn giao dịch ngoài",
+    text: "Nội dung tin có dấu hiệu dẫn người mua giao dịch ngoài hệ thống hoặc chứa thông tin liên hệ không phù hợp với chính sách.",
+  },
+  {
+    label: "Không còn giao dịch",
+    text: "Bất động sản có dấu hiệu đã giao dịch hoặc không còn khả dụng nhưng owner chưa cập nhật trạng thái tin.",
+  },
+];
+
 const TYPE_LABELS = {
   apartment: "Căn hộ",
   house: "Nhà phố",
@@ -77,6 +104,74 @@ const LEGAL_LABELS = {
   dangchoso: "Đang chờ sổ",
   other: "Khác",
 };
+
+function parseReportNote(note) {
+  const text = String(note || "");
+  const content = text.replace(/^Người dùng báo cáo tin:\s*/i, "").trim();
+  const [reason, ...rest] = content.split(". ");
+  return {
+    reason: reason || "Báo cáo tin đăng",
+    message: rest.join(". ") || content || "Không có nội dung chi tiết",
+  };
+}
+
+function getReportPolicy(reportCount) {
+  const count = Number(reportCount || 0);
+  if (count >= 5) {
+    return {
+      level: "critical",
+      label: "Nghiêm trọng",
+      action: "Ưu tiên xử lý ngay. Nếu nội dung báo cáo đúng, admin nên ẩn tin để bảo vệ người mua.",
+      bg: C.errorContainer,
+      border: "#f4b8b8",
+      color: C.error,
+    };
+  }
+  if (count >= 3) {
+    return {
+      level: "high",
+      label: "Ưu tiên cao",
+      action: "Cần kiểm tra nội dung, hình ảnh, địa chỉ và lịch sử người bán trước khi tiếp tục hiển thị.",
+      bg: "#fff4d6",
+      border: "#f0ce7a",
+      color: "#8a5a00",
+    };
+  }
+  if (count >= 1) {
+    return {
+      level: "watch",
+      label: "Cần xem xét",
+      action: "Ghi nhận phản ánh và đối chiếu khi admin kiểm tra tin.",
+      bg: "#e8f1ff",
+      border: "#b9cdf5",
+      color: "#2456a6",
+    };
+  }
+  return {
+    level: "none",
+    label: "Chưa có báo cáo",
+    action: "Tin chưa có phản ánh từ người dùng.",
+    bg: C.surfaceContainerLow,
+    border: C.borderSubtle,
+    color: C.textMuted,
+  };
+}
+
+function getReviewInsightSummary(insights) {
+  if (!insights) return null;
+  const qualityScore = Number(insights.quality_score || 0);
+  const priceRisk = insights.price_risk || {};
+  const problems = [];
+  if (qualityScore < 65) {
+    problems.push(`Điểm chất lượng thấp (${qualityScore}/100)`);
+  } else if (qualityScore < 85) {
+    problems.push(`Điểm chất lượng cần xem xét (${qualityScore}/100)`);
+  }
+  if (priceRisk.level === "warning") {
+    problems.push(priceRisk.label || "Giá có dấu hiệu bất thường");
+  }
+  return problems;
+}
 
 export default function PendingPage({ showToast }) {
   const { showToast: globalToast } = useToast();
@@ -98,8 +193,15 @@ export default function PendingPage({ showToast }) {
   const loadProperties = useCallback(async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams({ status: tab, page, limit: LIMIT });
-      const data = await apiFetch(`/api/admin/properties?${params}`);
+      const params =
+        tab === "reports"
+          ? new URLSearchParams({ page, limit: LIMIT })
+          : new URLSearchParams({ status: tab, page, limit: LIMIT });
+      const data = await apiFetch(
+        tab === "reports"
+          ? `/api/property/admin/reports?${params}`
+          : `/api/admin/properties?${params}`,
+      );
       const list = Array.isArray(data) ? data : data.data || [];
       setProperties(list);
       setTotal(data?.pagination?.total || list.length);
@@ -119,8 +221,15 @@ export default function PendingPage({ showToast }) {
     setDetailModal(prop);
     setDetailLoading(true);
     try {
-      const data = await apiFetch(`/api/property/${prop.id}`);
-      setDetailModal({ ...prop, ...data });
+      const [data, reportsData] = await Promise.all([
+        apiFetch(`/api/property/${prop.id}`),
+        apiFetch(`/api/property/admin/reports?property_id=${prop.id}`),
+      ]);
+      setDetailModal({
+        ...prop,
+        ...data,
+        reports: reportsData?.data || [],
+      });
     } catch (e) {
       notify(e.message, "error");
     } finally {
@@ -194,81 +303,32 @@ export default function PendingPage({ showToast }) {
     ];
   };
 
-  const getRiskItems = (prop) => {
-    const validationItems = getValidationItems(prop);
-    const failedCount = validationItems.filter((item) => !item.ok).length;
-    const descriptionLength = (prop?.description || "").trim().length;
-    const price = Number(prop?.price || 0);
-    const area = Number(prop?.area || 0);
-    const pricePerM2 = area > 0 ? price / area : 0;
-    const hasCoordinates = Boolean(prop?.latitude && prop?.longitude);
-    const hasImages =
-      (Array.isArray(prop?.images) && prop.images.length > 0) ||
-      Boolean(prop?.thumbnail);
-    const ownerRejected = Number(prop?.owner_rejected_properties || 0);
-    const ownerApproved = Number(prop?.owner_approved_properties || 0);
-
-    return [
-      {
-        label: "Mức độ đầy đủ hồ sơ",
-        level: failedCount >= 3 ? "high" : failedCount > 0 ? "medium" : "low",
-        detail:
-          failedCount === 0
-            ? "Các trường bắt buộc cơ bản đã đầy đủ."
-            : `Còn ${failedCount} tiêu chí chưa đạt, cần kiểm tra trước khi duyệt.`,
-      },
-      {
-        label: "Rủi ro giá và diện tích",
-        level:
-          price <= 0 ||
-          area <= 0 ||
-          (prop?.transaction_type === "sale" && pricePerM2 > 500000000) ||
-          (prop?.transaction_type === "rent" && pricePerM2 > 2000000)
-            ? "medium"
-            : "low",
-        detail:
-          price > 0 && area > 0
-            ? `Giá trung bình khoảng ${Math.round(pricePerM2).toLocaleString("vi-VN")} đ/m².`
-            : "Thiếu giá hoặc diện tích để đối chiếu.",
-      },
-      {
-        label: "Rủi ro nội dung",
-        level:
-          descriptionLength < 30 || !hasImages || !hasCoordinates
-            ? "medium"
-            : "low",
-        detail: [
-          descriptionLength < 30 && "mô tả còn ngắn",
-          !hasImages && "chưa có ảnh",
-          !hasCoordinates && "chưa có tọa độ bản đồ",
-        ]
-          .filter(Boolean)
-          .join(", ") || "Mô tả, ảnh và tọa độ đủ để người mua kiểm tra.",
-      },
-      {
-        label: "Lịch sử người bán",
-        level:
-          ownerRejected > 0 && ownerApproved === 0
-            ? "high"
-            : ownerRejected > 0
-              ? "medium"
-              : "low",
-        detail:
-          ownerApproved > 0 || ownerRejected > 0
-            ? `Người bán có ${ownerApproved} tin đã duyệt, ${ownerRejected} tin từng bị từ chối.`
-            : "Người bán chưa có nhiều lịch sử kiểm duyệt trên hệ thống.",
-      },
-    ];
-  };
-
   const handleApproveWithPolicy = async (prop) => {
     const failedItems = getValidationItems(prop).filter((item) => !item.ok);
-    if (failedItems.length > 0) {
+    const reportPolicy = getReportPolicy(prop?.reports?.length || prop?.report_count);
+    const insightProblems = getReviewInsightSummary(prop?.review_insights) || [];
+    if (
+      failedItems.length > 0 ||
+      insightProblems.length > 0 ||
+      reportPolicy.level === "high" ||
+      reportPolicy.level === "critical"
+    ) {
       const ok = await confirm({
-        title: "Tin còn tiêu chí chưa đạt",
-        message: `Tin này còn ${failedItems.length} tiêu chí chưa đạt: ${failedItems
-          .map((item) => item.label)
-          .join("; ")}. Bạn vẫn muốn duyệt tin?`,
+        title: "Tin cần kiểm tra kỹ trước khi duyệt",
+        message: [
+          failedItems.length > 0
+            ? `Tiêu chí chưa đạt: ${failedItems.map((item) => item.label).join("; ")}.`
+            : "",
+          insightProblems.length > 0
+            ? `Cảnh báo nghiệp vụ: ${insightProblems.join("; ")}.`
+            : "",
+          reportPolicy.level !== "none"
+            ? `Báo cáo: ${reportPolicy.label}. ${reportPolicy.action}`
+            : "",
+          "Bạn vẫn muốn duyệt tin?",
+        ]
+          .filter(Boolean)
+          .join(" "),
         confirmText: "Vẫn duyệt",
         danger: true,
       });
@@ -331,6 +391,7 @@ export default function PendingPage({ showToast }) {
 
   const tabs = [
     { key: "pending", label: "Chờ duyệt" },
+    { key: "reports", label: "Báo cáo" },
     { key: "approved", label: "Đã duyệt" },
     { key: "rejected", label: "Đã từ chối" },
     { key: "hidden", label: "Đã ẩn" },
@@ -350,9 +411,15 @@ export default function PendingPage({ showToast }) {
         <StatCard
           label={activeTab.label}
           value={total}
-          sub={tab === "pending" && total > 0 ? "Cần xem xét ngay" : ""}
+          sub={
+            tab === "pending" && total > 0
+              ? "Cần xem xét ngay"
+              : tab === "reports" && total > 0
+                ? "Tin được người dùng phản ánh"
+                : ""
+          }
           subColor={C.amber}
-          accent={tab === "pending" && total > 0}
+          accent={(tab === "pending" || tab === "reports") && total > 0}
         />
       </div>
 
@@ -402,7 +469,13 @@ export default function PendingPage({ showToast }) {
         {loading ? (
           <LoadingState />
         ) : properties.length === 0 ? (
-          <EmptyState msg="Không có tin đăng nào" />
+          <EmptyState
+            msg={
+              tab === "reports"
+                ? "Chưa có báo cáo tin đăng nào"
+                : "Không có tin đăng nào"
+            }
+          />
         ) : (
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -471,6 +544,32 @@ export default function PendingPage({ showToast }) {
                           <UiIcon name="location" size={12} style={{ verticalAlign: "-2px", marginRight: 3 }} />
                           {prop.city} · ID #{prop.id}
                         </div>
+                        {Number(prop.report_count || 0) > 0 && (
+                          (() => {
+                            const policy = getReportPolicy(prop.report_count);
+                            return (
+                              <div
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: 4,
+                                  marginTop: 6,
+                                  padding: tab === "reports" ? "3px 7px" : "2px 6px",
+                                  borderRadius: 999,
+                                  background: policy.bg,
+                                  color: policy.color,
+                                  border: `1px solid ${policy.border}`,
+                                  fontSize: tab === "reports" ? 11 : 10,
+                                  fontWeight: 800,
+                                  width: "fit-content",
+                                }}>
+                                <UiIcon name="alert" size={tab === "reports" ? 12 : 10} />
+                                {Number(prop.report_count || 0)} báo cáo
+                                {tab === "reports" ? ` · ${policy.label}` : ""}
+                              </div>
+                            );
+                          })()
+                        )}
                       </div>
                     </td>
                     <td style={tdStyle}>
@@ -517,8 +616,24 @@ export default function PendingPage({ showToast }) {
                     </td>
                     <td style={tdStyle}>
                       <span style={{ fontSize: 12, color: C.textMuted }}>
-                        {timeAgo(prop.created_at)}
+                        {tab === "reports"
+                          ? timeAgo(prop.latest_report_at)
+                          : timeAgo(prop.created_at)}
                       </span>
+                      {tab === "reports" && prop.latest_report_note && (
+                        <div
+                          style={{
+                            marginTop: 4,
+                            maxWidth: 220,
+                            fontSize: 11,
+                            color: C.secondary,
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                          }}>
+                          {parseReportNote(prop.latest_report_note).reason}
+                        </div>
+                      )}
                     </td>
                     <td style={tdStyle}>
                       <Badge status={prop.status} />
@@ -548,7 +663,10 @@ export default function PendingPage({ showToast }) {
                         {prop.status === "approved" && (
                           <button
                             disabled={actionLoading[prop.id]}
-                            onClick={() => handleStatus(prop.id, "hidden")}
+                            onClick={() => {
+                              setRejectModal({ ...prop, action: "hidden" });
+                              setRejectReason("");
+                            }}
                             style={{
                               padding: "5px 12px",
                               borderRadius: 6,
@@ -653,6 +771,7 @@ export default function PendingPage({ showToast }) {
                     gridTemplateColumns: "280px 1fr",
                     gap: 24,
                     alignItems: "start",
+                    minWidth: 0,
                   }}>
                   <div>
                     {(Array.isArray(detailModal.images) && detailModal.images[0]) || detailModal.thumbnail ? (
@@ -687,8 +806,15 @@ export default function PendingPage({ showToast }) {
                     </div>
                   </div>
 
-                  <div>
-                    <h3 style={{ margin: "0 0 10px", fontSize: 20, color: C.onSurface }}>
+                  <div style={{ minWidth: 0 }}>
+                    <h3
+                      style={{
+                        margin: "0 0 10px",
+                        fontSize: 20,
+                        color: C.onSurface,
+                        overflowWrap: "anywhere",
+                        wordBreak: "break-word",
+                      }}>
                       {detailModal.title}
                     </h3>
                     <div
@@ -712,11 +838,19 @@ export default function PendingPage({ showToast }) {
                             padding: "10px 12px",
                             background: C.surfaceContainerLow,
                             borderRadius: 8,
+                            minWidth: 0,
                           }}>
                           <div style={{ fontSize: 11, color: C.textMuted, marginBottom: 3 }}>
                             {label}
                           </div>
-                          <div style={{ fontSize: 13, fontWeight: 700, color: C.onSurface }}>
+                          <div
+                            style={{
+                              fontSize: 13,
+                              fontWeight: 700,
+                              color: C.onSurface,
+                              overflowWrap: "anywhere",
+                              wordBreak: "break-word",
+                            }}>
                             {value}
                           </div>
                         </div>
@@ -733,9 +867,267 @@ export default function PendingPage({ showToast }) {
                       <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>
                         Mô tả tin đăng
                       </div>
-                      <div style={{ fontSize: 13, color: C.secondary, lineHeight: 1.6 }}>
+                      <div
+                        style={{
+                          fontSize: 13,
+                          color: C.secondary,
+                          lineHeight: 1.6,
+                          overflowWrap: "anywhere",
+                          wordBreak: "break-word",
+                        }}>
                         {detailModal.description || "Chưa có mô tả"}
                       </div>
+                    </div>
+
+                    {detailModal.review_insights && (
+                      <div
+                        style={{
+                          padding: 14,
+                          borderRadius: 10,
+                          border: `1px solid ${
+                            detailModal.review_insights.quality_level === "risk" ||
+                            detailModal.review_insights.price_risk?.level === "warning"
+                              ? "#f0ce7a"
+                              : C.borderSubtle
+                          }`,
+                          background:
+                            detailModal.review_insights.quality_level === "risk" ||
+                            detailModal.review_insights.price_risk?.level === "warning"
+                              ? "#fff8e1"
+                              : C.surfaceContainerLow,
+                          marginBottom: 18,
+                        }}>
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            gap: 12,
+                            marginBottom: 10,
+                          }}>
+                          <div style={{ fontSize: 13, fontWeight: 800, color: C.onSurface }}>
+                            Đánh giá nghiệp vụ
+                          </div>
+                          <span
+                            style={{
+                              fontSize: 12,
+                              fontWeight: 900,
+                              color:
+                                detailModal.review_insights.quality_score >= 85
+                                  ? "#0f6e56"
+                                  : detailModal.review_insights.quality_score >= 65
+                                    ? "#8a5a00"
+                                    : C.error,
+                            }}>
+                            {detailModal.review_insights.quality_score}/100
+                          </span>
+                        </div>
+                        <div
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                            gap: 8,
+                            marginBottom: 10,
+                          }}>
+                          <div
+                            style={{
+                              padding: "9px 11px",
+                              borderRadius: 8,
+                              background: C.surfaceContainerLowest,
+                              border: `1px solid ${C.borderSubtle}`,
+                            }}>
+                            <div style={{ fontSize: 11, color: C.textMuted, marginBottom: 3 }}>
+                              Chất lượng tin
+                            </div>
+                            <div style={{ fontSize: 13, fontWeight: 800, color: C.onSurface }}>
+                              {detailModal.review_insights.quality_level === "good"
+                                ? "Đạt tốt"
+                                : detailModal.review_insights.quality_level === "watch"
+                                  ? "Cần xem xét"
+                                  : "Rủi ro"}
+                            </div>
+                          </div>
+                          <div
+                            style={{
+                              padding: "9px 11px",
+                              borderRadius: 8,
+                              background: C.surfaceContainerLowest,
+                              border: `1px solid ${C.borderSubtle}`,
+                            }}>
+                            <div style={{ fontSize: 11, color: C.textMuted, marginBottom: 3 }}>
+                              So sánh giá
+                            </div>
+                            <div
+                              style={{
+                                fontSize: 13,
+                                fontWeight: 800,
+                                color:
+                                  detailModal.review_insights.price_risk?.level === "warning"
+                                    ? "#8a5a00"
+                                    : C.onSurface,
+                              }}>
+                              {detailModal.review_insights.price_risk?.label ||
+                                "Chưa đủ dữ liệu"}
+                            </div>
+                          </div>
+                        </div>
+                        {detailModal.review_insights.price_risk?.reference_unit_price && (
+                          <div style={{ fontSize: 12, color: C.secondary, marginBottom: 8 }}>
+                            Giá/m² tin này:{" "}
+                            <strong>
+                              {formatPrice(
+                                detailModal.review_insights.price_risk.current_unit_price,
+                              )}
+                            </strong>
+                            {" · "}Khoảng tham khảo:{" "}
+                            <strong>
+                              {formatPrice(
+                                detailModal.review_insights.price_risk.reference_unit_price.low,
+                              )}
+                              {" - "}
+                              {formatPrice(
+                                detailModal.review_insights.price_risk.reference_unit_price.high,
+                              )}
+                            </strong>
+                            {" · "}Mẫu so sánh:{" "}
+                            {detailModal.review_insights.price_risk.sample_size}
+                          </div>
+                        )}
+                        {!detailModal.review_insights.price_risk?.reference_unit_price && (
+                          <div style={{ fontSize: 12, color: C.secondary, marginBottom: 8 }}>
+                            Phạm vi so sánh:{" "}
+                            <strong>
+                              {detailModal.review_insights.price_risk?.basis ||
+                                "Đang mở rộng dữ liệu"}
+                            </strong>
+                            {" · "}Mẫu tìm được:{" "}
+                            {detailModal.review_insights.price_risk?.sample_size || 0}
+                          </div>
+                        )}
+                        {detailModal.review_insights.failed_items?.length > 0 ? (
+                          <div style={{ fontSize: 12, color: C.secondary, lineHeight: 1.5 }}>
+                            Cần kiểm tra:{" "}
+                            {detailModal.review_insights.failed_items
+                              .map((item) => item.label)
+                              .join("; ")}
+                          </div>
+                        ) : (
+                          <div style={{ fontSize: 12, color: C.secondary }}>
+                            Tin đạt các tiêu chí chất lượng cơ bản.
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    <div
+                      style={{
+                        padding: 14,
+                        borderRadius: 10,
+                        border: `1px solid ${
+                          detailModal.reports?.length ? "#f4b8b8" : C.borderSubtle
+                        }`,
+                        background: detailModal.reports?.length
+                          ? "#fff7f6"
+                          : C.surfaceContainerLowest,
+                        marginBottom: 18,
+                      }}>
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          gap: 12,
+                          marginBottom: 10,
+                        }}>
+                        <div style={{ fontSize: 13, fontWeight: 800, color: C.onSurface }}>
+                          Báo cáo từ người dùng
+                        </div>
+                        <span
+                          style={{
+                            fontSize: 12,
+                            fontWeight: 800,
+                            color: detailModal.reports?.length ? C.error : C.textMuted,
+                          }}>
+                          {detailModal.reports?.length || 0} báo cáo
+                        </span>
+                      </div>
+
+                      {(() => {
+                        const policy = getReportPolicy(detailModal.reports?.length || 0);
+                        return (
+                          <div
+                            style={{
+                              border: `1px solid ${policy.border}`,
+                              background: policy.bg,
+                              color: policy.color,
+                              borderRadius: 8,
+                              padding: "9px 11px",
+                              marginBottom: 10,
+                              fontSize: 12,
+                              lineHeight: 1.45,
+                              fontWeight: 700,
+                            }}>
+                            Quy tắc xử lý: {policy.label}. {policy.action}
+                          </div>
+                        );
+                      })()}
+
+                      {detailModal.reports?.length ? (
+                        <div style={{ display: "grid", gap: 8 }}>
+                          {detailModal.reports.map((report) => {
+                            const parsed = parseReportNote(report.note);
+                            return (
+                              <div
+                                key={report.id}
+                                style={{
+                                  border: `1px solid ${C.borderSubtle}`,
+                                  borderRadius: 8,
+                                  background: C.surfaceContainerLowest,
+                                  padding: "10px 12px",
+                                }}>
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    justifyContent: "space-between",
+                                    gap: 12,
+                                    marginBottom: 5,
+                                  }}>
+                                  <strong style={{ fontSize: 12, color: C.error }}>
+                                    {parsed.reason}
+                                  </strong>
+                                  <span
+                                    style={{
+                                      fontSize: 11,
+                                      color: C.textMuted,
+                                      whiteSpace: "nowrap",
+                                    }}>
+                                    {timeAgo(report.created_at)}
+                                  </span>
+                                </div>
+                                <div
+                                  style={{
+                                    fontSize: 12,
+                                    color: C.secondary,
+                                    lineHeight: 1.45,
+                                    marginBottom: 6,
+                                  }}>
+                                  {parsed.message}
+                                </div>
+                                <div style={{ fontSize: 11, color: C.textMuted }}>
+                                  Người báo cáo: {report.reporter_name || "Người dùng"} ·{" "}
+                                  {report.reporter_role === "owner"
+                                    ? "Người bán"
+                                    : "Người mua"}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <div style={{ fontSize: 12, color: C.textMuted }}>
+                          Tin này chưa có báo cáo từ người dùng.
+                        </div>
+                      )}
                     </div>
 
                     <div
@@ -807,91 +1199,6 @@ export default function PendingPage({ showToast }) {
                           color: C.onSurface,
                           marginBottom: 10,
                         }}>
-                        Đánh giá rủi ro tin này
-                      </div>
-                      <div
-                        style={{
-                          display: "grid",
-                          gridTemplateColumns: "repeat(2, 1fr)",
-                          gap: 8,
-                          marginBottom: 16,
-                        }}>
-                        {getRiskItems(detailModal).map((item) => {
-                          const tone =
-                            item.level === "high"
-                              ? {
-                                  label: "Cao",
-                                  bg: C.errorContainer,
-                                  border: "#f4b8b8",
-                                  color: C.error,
-                                }
-                              : item.level === "medium"
-                                ? {
-                                    label: "Cần xem kỹ",
-                                    bg: "#fff8e1",
-                                    border: "#f0ce7a",
-                                    color: "#8a5a00",
-                                  }
-                                : {
-                                    label: "Thấp",
-                                    bg: "#e6f9f0",
-                                    border: "#b9dfd3",
-                                    color: "#0f6e56",
-                                  };
-                          return (
-                            <div
-                              key={item.label}
-                              style={{
-                                border: `1px solid ${tone.border}`,
-                                background: tone.bg,
-                                borderRadius: 8,
-                                padding: "10px 12px",
-                              }}>
-                              <div
-                                style={{
-                                  display: "flex",
-                                  justifyContent: "space-between",
-                                  alignItems: "center",
-                                  gap: 10,
-                                  marginBottom: 5,
-                                }}>
-                                <strong
-                                  style={{
-                                    fontSize: 12,
-                                    color: C.onSurface,
-                                  }}>
-                                  {item.label}
-                                </strong>
-                                <span
-                                  style={{
-                                    fontSize: 11,
-                                    fontWeight: 800,
-                                    color: tone.color,
-                                    whiteSpace: "nowrap",
-                                  }}>
-                                  {tone.label}
-                                </span>
-                              </div>
-                              <div
-                                style={{
-                                  fontSize: 12,
-                                  color: C.secondary,
-                                  lineHeight: 1.45,
-                                }}>
-                                {item.detail}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-
-                      <div
-                        style={{
-                          fontSize: 13,
-                          fontWeight: 800,
-                          color: C.onSurface,
-                          marginBottom: 10,
-                        }}>
                         Checklist kiểm tra tin này
                       </div>
                       <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 8 }}>
@@ -945,7 +1252,8 @@ export default function PendingPage({ showToast }) {
                     }}>
                     <button
                       onClick={() => {
-                        setRejectModal(detailModal);
+                        setRejectModal({ ...detailModal, action: "rejected" });
+                        setRejectReason("");
                         setDetailModal(null);
                       }}
                       style={{
@@ -992,7 +1300,11 @@ export default function PendingPage({ showToast }) {
                     }}>
                     <button
                       disabled={actionLoading[detailModal.id]}
-                      onClick={() => handleStatus(detailModal.id, "hidden")}
+                      onClick={() => {
+                        setRejectModal({ ...detailModal, action: "hidden" });
+                        setRejectReason("");
+                        setDetailModal(null);
+                      }}
                       style={{
                         padding: "9px 18px",
                         borderRadius: 8,
@@ -1039,6 +1351,22 @@ export default function PendingPage({ showToast }) {
               fontFamily: font.body,
             }}
             onClick={(e) => e.stopPropagation()}>
+            {(() => {
+              const action = rejectModal.action || "rejected";
+              const isHiddenAction = action === "hidden";
+              const templates = isHiddenAction
+                ? HIDE_REASON_TEMPLATES
+                : REJECT_REASON_TEMPLATES;
+              const title = isHiddenAction ? "Ẩn tin đăng" : "Từ chối tin đăng";
+              const label = isHiddenAction ? "Lý do ẩn tin" : "Lý do từ chối";
+              const placeholder = isHiddenAction
+                ? "Nêu rõ vấn đề khiến tin cần bị ẩn khỏi danh sách công khai..."
+                : "Nêu rõ tiêu chí chưa đạt và hướng sửa để owner gửi duyệt lại...";
+              const helpText = isHiddenAction
+                ? "Lý do cần tối thiểu 20 ký tự và phải nêu rõ vấn đề khiến tin bị ẩn."
+                : "Lý do cần tối thiểu 20 ký tự và phải nêu rõ tiêu chí chưa đạt.";
+              return (
+                <>
             <div
               style={{
                 fontFamily: font.headline,
@@ -1047,7 +1375,7 @@ export default function PendingPage({ showToast }) {
                 color: C.onSurface,
                 marginBottom: 8,
               }}>
-              Từ chối tin đăng
+              {title}
             </div>
             <div style={{ fontSize: 13, color: C.textMuted, marginBottom: 20 }}>
               {rejectModal.title}
@@ -1059,11 +1387,11 @@ export default function PendingPage({ showToast }) {
                   fontWeight: 700,
                   color: C.onSurface,
                   marginBottom: 8,
-                }}>
+              }}>
                 Mẫu lý do nhanh
               </div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                {REJECT_REASON_TEMPLATES.map((template) => (
+                {templates.map((template) => (
                   <button
                     key={template.label}
                     type="button"
@@ -1092,12 +1420,12 @@ export default function PendingPage({ showToast }) {
                 display: "block",
                 marginBottom: 8,
               }}>
-              Lý do từ chối
+              {label}
             </label>
             <textarea
               value={rejectReason}
               onChange={(e) => setRejectReason(e.target.value)}
-              placeholder="Nêu rõ tiêu chí chưa đạt và hướng sửa để owner gửi duyệt lại..."
+              placeholder={placeholder}
               rows={4}
               style={{
                 width: "100%",
@@ -1118,7 +1446,7 @@ export default function PendingPage({ showToast }) {
                   rejectReason.trim().length >= 20 ? C.textMuted : C.error,
                 marginTop: 6,
               }}>
-              Lý do cần tối thiểu 20 ký tự và phải nêu rõ tiêu chí chưa đạt.
+              {helpText}
             </div>
             <div
               style={{
@@ -1150,7 +1478,7 @@ export default function PendingPage({ showToast }) {
                   actionLoading[rejectModal.id]
                 }
                 onClick={() =>
-                  handleStatus(rejectModal.id, "rejected", rejectReason)
+                  handleStatus(rejectModal.id, action, rejectReason)
                 }
                 style={{
                   padding: "8px 20px",
@@ -1167,9 +1495,16 @@ export default function PendingPage({ showToast }) {
                       : "pointer",
                   fontFamily: font.body,
                 }}>
-                {actionLoading[rejectModal.id] ? "..." : "Xác nhận từ chối"}
+                {actionLoading[rejectModal.id]
+                  ? "..."
+                  : isHiddenAction
+                    ? "Xác nhận ẩn tin"
+                    : "Xác nhận từ chối"}
               </button>
             </div>
+                </>
+              );
+            })()}
           </div>
         </div>
       )}

@@ -189,7 +189,14 @@ router.get("/properties", authMiddleware, async (req, res) => {
     const [rows] = await pool.query(
       `
       SELECT p.id, p.title, p.type, p.transaction_type, p.price, p.city,
-             p.status, p.reject_reason, p.featured_until, p.created_at, u.full_name as owner_name, u.email as owner_email
+             p.status, p.reject_reason, p.featured_until, p.created_at,
+             u.full_name as owner_name, u.email as owner_email,
+             (
+               SELECT COUNT(*)
+               FROM property_status_history h
+               WHERE h.property_id = p.id
+                 AND h.note LIKE 'Người dùng báo cáo tin:%'
+             ) AS report_count
       FROM properties p
       JOIN users u ON p.owner_id = u.id
       ${where}

@@ -18,7 +18,7 @@ const TYPE_OPTIONS = [
 ];
 
 const TRANSACTION_OPTIONS = [
-  { value: "sale", label: "Mua bán" },
+  { value: "sale", label: "Bán" },
   { value: "rent", label: "Cho thuê" },
 ];
 
@@ -222,7 +222,7 @@ export default function Home() {
   const [featuredLoading, setFeaturedLoading] = useState(false);
   const [categoryCounts, setCategoryCounts] = useState(null);
 
-  const [activeTab, setActiveTab] = useState("sale");
+  const [activeTab, setActiveTab] = useState("");
   const [search, setSearch] = useState({
     keyword: "",
     city: "",
@@ -241,7 +241,7 @@ export default function Home() {
       : [];
 
   const [filter, setFilter] = useState({
-    transaction_type: "sale",
+    transaction_type: "",
     type: "",
     keyword: "",
     min_price: "",
@@ -339,8 +339,9 @@ export default function Home() {
   };
 
   const handleTabChange = (val) => {
-    setActiveTab(val);
-    setFilter((f) => ({ ...f, transaction_type: val, page: 1 }));
+    const nextValue = activeTab === val ? "" : val;
+    setActiveTab(nextValue);
+    setFilter((f) => ({ ...f, transaction_type: nextValue, page: 1 }));
   };
 
   const handleCategoryClick = (cat) => {
@@ -370,6 +371,7 @@ export default function Home() {
         .bar-anim { animation: growUp 0.8s ease forwards; }
         @media (max-width: 992px) {
           .home-search-grid { grid-template-columns: 1fr 1fr !important; }
+          .home-keyword-row { grid-template-columns: 1fr !important; }
           .home-search-button { min-height: 48px; justify-content: center; }
         }
         @media (max-width: 576px) {
@@ -438,7 +440,7 @@ export default function Home() {
               padding: "16px 16px 16px",
               boxShadow: "0 24px 64px rgba(0,0,0,0.18)",
             }}>
-            {/* Tabs */}
+            {/* Transaction Buttons */}
             <div
               style={{
                 display: "flex",
@@ -451,7 +453,7 @@ export default function Home() {
               className="hide-scrollbar">
               {TRANSACTION_OPTIONS.map((t) => (
                 <button
-                  key={t.label}
+                  key={t.value}
                   onClick={() => handleTabChange(t.value)}
                   style={{
                     whiteSpace: "nowrap",
@@ -471,12 +473,79 @@ export default function Home() {
               ))}
             </div>
 
-            {/* Inputs Row */}
+            {/* Keyword Row */}
+            <div
+              className="home-keyword-row"
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr auto",
+                gap: 10,
+                alignItems: "stretch",
+                marginBottom: 10,
+              }}>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  minHeight: 52,
+                  padding: "0 16px",
+                  border: "1px solid #E8E8E8",
+                  borderRadius: 12,
+                  background: "#fafafa",
+                }}>
+                <UiIcon name="search" size={18} color="#9a9a9a" />
+                <input
+                  value={search.keyword}
+                  placeholder="Bạn muốn tìm gì? Ví dụ: nhà 2 tầng, 2 lầu, gần chợ..."
+                  onChange={(e) =>
+                    setSearch({ ...search, keyword: e.target.value })
+                  }
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleSearch();
+                  }}
+                  style={{
+                    border: "none",
+                    width: "100%",
+                    fontSize: 15,
+                    background: "transparent",
+                    color: "#1a1c1c",
+                  }}
+                />
+              </div>
+
+              <button
+                className="home-search-button"
+                onClick={handleSearch}
+                style={{
+                  background: "#b51b17",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: 12,
+                  padding: "0 28px",
+                  fontWeight: 700,
+                  fontSize: 14,
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 8,
+                  whiteSpace: "nowrap",
+                  transition: "opacity 0.15s",
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.opacity = "0.9")}
+                onMouseLeave={(e) => (e.currentTarget.style.opacity = "1")}>
+                <UiIcon name="search" size={16} />
+                Tìm kiếm
+              </button>
+            </div>
+
+            {/* Filters Row */}
             <div
               className="home-search-grid"
               style={{
                 display: "grid",
-                gridTemplateColumns: "1.1fr 1fr 1fr 1fr 1fr auto",
+                gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
                 gap: 8,
               }}>
               {/* City */}
@@ -485,7 +554,8 @@ export default function Home() {
                   display: "flex",
                   alignItems: "center",
                   padding: "0 14px",
-                  borderRight: "1px solid #E8E8E8",
+                  border: "1px solid #E8E8E8",
+                  borderRadius: 10,
                   gap: 8,
                 }}>
                 <select
@@ -522,7 +592,8 @@ export default function Home() {
                   display: "flex",
                   alignItems: "center",
                   padding: "0 14px",
-                  borderRight: "1px solid #E8E8E8",
+                  border: "1px solid #E8E8E8",
+                  borderRadius: 10,
                   gap: 8,
                 }}>
                 <select
@@ -559,7 +630,8 @@ export default function Home() {
                   display: "flex",
                   alignItems: "center",
                   padding: "0 14px",
-                  borderRight: "1px solid #E8E8E8",
+                  border: "1px solid #E8E8E8",
+                  borderRadius: 10,
                   gap: 8,
                 }}>
                 <select
@@ -592,7 +664,8 @@ export default function Home() {
                   display: "flex",
                   alignItems: "center",
                   padding: "0 14px",
-                  borderRight: "1px solid #E8E8E8",
+                  border: "1px solid #E8E8E8",
+                  borderRadius: 10,
                   gap: 8,
                 }}>
                 <select
@@ -623,6 +696,8 @@ export default function Home() {
                   display: "flex",
                   alignItems: "center",
                   padding: "0 14px",
+                  border: "1px solid #E8E8E8",
+                  borderRadius: 10,
                   gap: 8,
                 }}>
                 <select
@@ -647,29 +722,6 @@ export default function Home() {
                 </select>
               </div>
 
-              {/* CTA */}
-              <button
-                className="home-search-button"
-                onClick={handleSearch}
-                style={{
-                  background: "#b51b17",
-                  color: "#fff",
-                  border: "none",
-                  borderRadius: 10,
-                  padding: "0 28px",
-                  fontWeight: 700,
-                  fontSize: 14,
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6,
-                  whiteSpace: "nowrap",
-                  transition: "opacity 0.15s",
-                }}
-                onMouseEnter={(e) => (e.currentTarget.style.opacity = "0.9")}
-                onMouseLeave={(e) => (e.currentTarget.style.opacity = "1")}>
-                Tìm kiếm
-              </button>
             </div>
           </div>
         </div>

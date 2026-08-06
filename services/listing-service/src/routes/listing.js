@@ -2,6 +2,41 @@ const express = require("express");
 const pool = require("../db");
 const router = express.Router();
 
+function normalizeKeyword(value) {
+  return String(value || "").trim().replace(/\s+/g, " ");
+}
+
+function getFloorKeywordIntent(keyword) {
+  const normalized = normalizeKeyword(keyword);
+  const match = normalized.match(/\b(\d{1,2})\s*(tầng|tang|lầu|lau)\b/i);
+  if (!match) return null;
+
+  const floor = Number(match[1]);
+  if (!Number.isInteger(floor) || floor <= 0) return null;
+
+  return {
+    raw: match[0],
+    patterns: [
+      `%${floor} tầng%`,
+      `%${floor} tang%`,
+      `%${floor} lầu%`,
+      `%${floor} lau%`,
+      `%${floor}tầng%`,
+      `%${floor}tang%`,
+      `%${floor}lầu%`,
+      `%${floor}lau%`,
+    ],
+  };
+}
+
+function addLooseKeywordCondition(conditions, params, token) {
+  conditions.push(
+    "(p.title LIKE ? OR p.description LIKE ? OR p.address LIKE ? OR p.city LIKE ? OR p.district LIKE ? OR p.ward LIKE ?)",
+  );
+  const kw = `%${token}%`;
+  params.push(kw, kw, kw, kw, kw, kw);
+}
+
 // GET /api/listing/category-counts - số tin đã duyệt theo loại bất động sản
 // Public API: dem so tin approved theo type de trang chu hien thi so luong thuc te theo danh muc.
 router.get("/category-counts", async (req, res) => {
@@ -165,15 +200,25 @@ router.get("/", async (req, res) => {
 
     // --- Từ khoá (tìm trong title, description, address) ---
     if (keyword && keyword.trim()) {
-      // Tach tu khoa thanh nhieu token de tim gan dung theo tung phan cua cum tu.
-      const tokens = keyword.trim().split(/\s+/).filter(Boolean).slice(0, 8);
-      tokens.forEach((token) => {
+      const normalizedKeyword = normalizeKeyword(keyword);
+      const floorIntent = getFloorKeywordIntent(normalizedKeyword);
+
+      if (floorIntent) {
+        // Cum "2 tang/2 lau" phai khop dung cum, tranh token "2" khop voi 2PN
+        // va token "tang" khop voi cac tin o tang 18.
         conditions.push(
-          "(p.title LIKE ? OR p.description LIKE ? OR p.address LIKE ? OR p.city LIKE ? OR p.district LIKE ? OR p.ward LIKE ?)",
+          `(${floorIntent.patterns
+            .map(() => "(p.title LIKE ? OR p.description LIKE ?)")
+            .join(" OR ")})`,
         );
-        const kw = `%${token}%`;
-        params.push(kw, kw, kw, kw, kw, kw);
-      });
+        floorIntent.patterns.forEach((pattern) => params.push(pattern, pattern));
+      }
+
+      const remainingKeyword = floorIntent
+        ? normalizedKeyword.replace(floorIntent.raw, " ")
+        : normalizedKeyword;
+      const tokens = remainingKeyword.split(/\s+/).filter(Boolean).slice(0, 8);
+      tokens.forEach((token) => addLooseKeywordCondition(conditions, params, token));
     }
     // --- Bounding box cho bản đồ ---
     // bbox=lat_min,lng_min,lat_max,lng_max
@@ -195,14 +240,14 @@ router.get("/", async (req, res) => {
     // Tin noi bat duoc uu tien theo nhom, sau do xoay thu tu theo ngay de cong bang
     // khi nhieu owner cung mua goi noi bat. Tin thuong van sap xep theo lua chon cua user.
     const featuredOrder =
-      "CASE WHEN p.featured_until > NOW() THEN 1 ELSE 0 END DESC, CASE WHEN p.featured_until > NOW() THEN MOD(CRC32(CONCAT(p.id, CURDATE())), 100000) ELSE NULL END ASC";
+      "CASE WHEN r.featured_until > NOW() AND r.owner_featured_rank <= 2 THEN 1 ELSE 0 END DESC, CASE WHEN r.featured_until > NOW() THEN 1 ELSE 0 END DESC, CASE WHEN r.featured_until > NOW() THEN MOD(CRC32(CONCAT(r.id, CURDATE())), 100000) ELSE NULL END ASC";
     const sortMap = {
-      newest: `${featuredOrder}, p.created_at DESC`,
-      oldest: `${featuredOrder}, p.created_at ASC`,
-      price_asc: `${featuredOrder}, p.price ASC, p.created_at DESC`,
-      price_desc: `${featuredOrder}, p.price DESC, p.created_at DESC`,
-      area_asc: `${featuredOrder}, p.area ASC`,
-      area_desc: `${featuredOrder}, p.area DESC`,
+      newest: `${featuredOrder}, r.created_at DESC`,
+      oldest: `${featuredOrder}, r.created_at ASC`,
+      price_asc: `${featuredOrder}, r.price ASC, r.created_at DESC`,
+      price_desc: `${featuredOrder}, r.price DESC, r.created_at DESC`,
+      area_asc: `${featuredOrder}, r.area ASC`,
+      area_desc: `${featuredOrder}, r.area DESC`,
     };
     const orderBy = sortMap[sort] || sortMap.newest;
 
@@ -218,25 +263,32 @@ router.get("/", async (req, res) => {
     // --- Query danh sách ---
     // Query danh sach dung parameter binding (?) de tranh noi chuoi gia tri nguoi dung vao SQL.
     const [rows] = await pool.query(
-      `SELECT
-         p.id, p.title, p.type, p.transaction_type,
-         p.price, p.area, p.bedrooms, p.bathrooms,
-         p.address, p.ward, p.district, p.city,
-         p.latitude, p.longitude,
-         p.direction, p.legal_status,
-         p.status,
-         p.owner_id,
-         p.featured_until,
-         p.created_at,
-         u.full_name AS owner_name,
-         (SELECT pi.url
-          FROM property_images pi
-          WHERE pi.property_id = p.id
-          ORDER BY pi.\`order\`
-          LIMIT 1) AS thumbnail
-       FROM properties p
-       JOIN users u ON p.owner_id = u.id
-       WHERE ${where}
+      `SELECT r.*
+       FROM (
+         SELECT
+           p.id, p.title, p.type, p.transaction_type,
+           p.price, p.area, p.bedrooms, p.bathrooms,
+           p.address, p.ward, p.district, p.city,
+           p.latitude, p.longitude,
+           p.direction, p.legal_status,
+           p.status,
+           p.owner_id,
+           p.featured_until,
+           p.created_at,
+           u.full_name AS owner_name,
+           ROW_NUMBER() OVER (
+             PARTITION BY p.owner_id, CASE WHEN p.featured_until > NOW() THEN 1 ELSE 0 END
+             ORDER BY MOD(CRC32(CONCAT(p.id, CURDATE())), 100000), p.created_at DESC
+           ) AS owner_featured_rank,
+           (SELECT pi.url
+            FROM property_images pi
+            WHERE pi.property_id = p.id
+            ORDER BY pi.\`order\`
+            LIMIT 1) AS thumbnail
+         FROM properties p
+         JOIN users u ON p.owner_id = u.id
+         WHERE ${where}
+       ) r
        ORDER BY ${orderBy}
        LIMIT ? OFFSET ?`,
       [...params, limitNum, offset],
@@ -298,6 +350,7 @@ router.get("/owners/:id", async (req, res) => {
          SUM(CASE WHEN p.status = 'approved' THEN 1 ELSE 0 END) AS approved_properties,
          SUM(CASE WHEN p.status = 'sold' THEN 1 ELSE 0 END) AS sold_properties,
          SUM(CASE WHEN p.status = 'rejected' THEN 1 ELSE 0 END) AS rejected_properties,
+         SUM(CASE WHEN p.status = 'hidden' THEN 1 ELSE 0 END) AS hidden_properties,
          COALESCE(SUM(p.view_count), 0) AS total_views,
          (SELECT COUNT(*)
           FROM contacts c
@@ -362,8 +415,11 @@ router.get("/:id", async (req, res) => {
           FROM properties op
           WHERE op.owner_id = p.owner_id AND op.status = 'sold') AS owner_sold_properties,
          (SELECT COUNT(*)
+         FROM properties op
+         WHERE op.owner_id = p.owner_id AND op.status = 'rejected') AS owner_rejected_properties,
+         (SELECT COUNT(*)
           FROM properties op
-          WHERE op.owner_id = p.owner_id AND op.status = 'rejected') AS owner_rejected_properties,
+          WHERE op.owner_id = p.owner_id AND op.status = 'hidden') AS owner_hidden_properties,
          (SELECT COALESCE(SUM(op.view_count), 0)
           FROM properties op
           WHERE op.owner_id = p.owner_id) AS owner_total_views,
@@ -407,6 +463,142 @@ router.get("/:id", async (req, res) => {
   }
 });
 
+// GET /api/listing/:id/price-estimate — định giá tham khảo từ tin tương đồng
+router.get("/:id/price-estimate", async (req, res) => {
+  try {
+    const [base] = await pool.query(
+      `SELECT id, type, transaction_type, city, district, price, area
+       FROM properties
+       WHERE id = ? AND status = 'approved'`,
+      [req.params.id],
+    );
+    if (base.length === 0)
+      return res.status(404).json({ message: "Không tìm thấy" });
+
+    const property = base[0];
+    const comparableStrategies = [
+      {
+        label: "Cùng quận/huyện, cùng loại và diện tích gần nhau",
+        cityPattern: `%${property.city}%`,
+        districtOnly: true,
+        areaMin: Number(property.area) * 0.7,
+        areaMax: Number(property.area) * 1.3,
+      },
+      {
+        label: "Cùng thành phố, cùng loại và diện tích gần nhau",
+        cityPattern: `%${property.city}%`,
+        districtOnly: false,
+        areaMin: Number(property.area) * 0.7,
+        areaMax: Number(property.area) * 1.3,
+      },
+      {
+        label: "Cùng thành phố, cùng loại và diện tích mở rộng",
+        cityPattern: `%${property.city}%`,
+        districtOnly: false,
+        areaMin: Number(property.area) * 0.5,
+        areaMax: Number(property.area) * 1.5,
+      },
+      {
+        label: "Cùng loại giao dịch, diện tích mở rộng trên toàn hệ thống",
+        cityPattern: "%%",
+        districtOnly: false,
+        areaMin: Number(property.area) * 0.5,
+        areaMax: Number(property.area) * 1.5,
+      },
+    ];
+
+    let comparables = [];
+    let strategyUsed = comparableStrategies[0];
+
+    for (const strategy of comparableStrategies) {
+      const [rows] = await pool.query(
+        `SELECT id, title, price, area, district, city,
+              ROUND(price / NULLIF(area, 0), 0) AS unit_price
+       FROM properties
+       WHERE status = 'approved'
+         AND id <> ?
+         AND type = ?
+         AND transaction_type = ?
+         AND city LIKE ?
+         ${strategy.districtOnly ? "AND district = ?" : ""}
+         AND area BETWEEN ? AND ?
+       ORDER BY
+         CASE WHEN district = ? THEN 0 ELSE 1 END,
+         ABS(price - ?)
+       LIMIT 8`,
+        [
+          property.id,
+          property.type,
+          property.transaction_type,
+          strategy.cityPattern,
+          ...(strategy.districtOnly ? [property.district] : []),
+          strategy.areaMin,
+          strategy.areaMax,
+          property.district,
+          property.price,
+        ],
+      );
+
+      comparables = rows;
+      strategyUsed = strategy;
+      if (rows.length >= 3) break;
+    }
+
+    const enoughForRange = comparables.length >= 2;
+    if (!enoughForRange) {
+      return res.json({
+        property_price: Number(property.price),
+        property_unit_price: Math.round(Number(property.price) / Number(property.area)),
+        sample_size: comparables.length,
+        confidence: "low",
+        basis: strategyUsed.label,
+        message:
+          "Chưa đủ tin tương đồng để đưa ra khoảng giá đáng tin cậy.",
+        comparables,
+      });
+    }
+
+    const unitPrices = comparables
+      .map((item) => Number(item.unit_price || 0))
+      .filter((value) => value > 0)
+      .sort((a, b) => a - b);
+    const avgUnitPrice = Math.round(
+      unitPrices.reduce((sum, value) => sum + value, 0) / unitPrices.length,
+    );
+    const lowUnitPrice = unitPrices[Math.floor(unitPrices.length * 0.25)];
+    const highUnitPrice = unitPrices[Math.ceil(unitPrices.length * 0.75) - 1];
+    const estimatedLow = Math.round(lowUnitPrice * Number(property.area));
+    const estimatedHigh = Math.round(highUnitPrice * Number(property.area));
+    const currentUnitPrice = Math.round(
+      Number(property.price) / Number(property.area),
+    );
+    const position =
+      currentUnitPrice < lowUnitPrice
+        ? "below_market"
+        : currentUnitPrice > highUnitPrice
+          ? "above_market"
+          : "within_market";
+
+    res.json({
+      property_price: Number(property.price),
+      property_unit_price: currentUnitPrice,
+      sample_size: comparables.length,
+      confidence: comparables.length >= 5 ? "medium" : "low",
+      basis: strategyUsed.label,
+      average_unit_price: avgUnitPrice,
+      estimated_range: {
+        low: estimatedLow,
+        high: estimatedHigh,
+      },
+      position,
+      comparables,
+    });
+  } catch (err) {
+    console.error("Price estimate error:", err);
+    res.status(500).json({ message: "Lỗi server", error: err.message });
+  }
+});
+
 // GET /api/listing/:id/similar — gợi ý tin tương tự
 // Cùng type + transaction_type + city, loại trừ tin hiện tại
 // Public API: goi y toi da 6 tin tuong tu dua tren type, transaction_type, city va khoang gia +-50%.
@@ -414,7 +606,9 @@ router.get("/:id/similar", async (req, res) => {
   try {
     // Lấy thông tin tin hiện tại
     const [base] = await pool.query(
-      "SELECT type, transaction_type, city, price FROM properties WHERE id = ? AND status = 'approved'",
+      `SELECT type, transaction_type, city, price
+       FROM properties
+       WHERE id = ? AND status = 'approved'`,
       [req.params.id],
     );
     if (base.length === 0)

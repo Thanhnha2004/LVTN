@@ -248,6 +248,28 @@ function formatDateTime(value) {
   });
 }
 
+function getPaymentDeadlineInfo(order) {
+  if (!order?.created_at) {
+    return {
+      createdAt: "—",
+      expiresAt: "—",
+      remainingText: "Không xác định",
+      expired: false,
+    };
+  }
+  const createdDate = new Date(order.created_at);
+  const expiresDate = new Date(createdDate.getTime() + 30 * 60 * 1000);
+  const remainingMs = expiresDate.getTime() - Date.now();
+  const remainingMinutes = Math.max(0, Math.ceil(remainingMs / 60000));
+  return {
+    createdAt: formatDateTime(createdDate),
+    expiresAt: formatDateTime(expiresDate),
+    remainingText:
+      remainingMs > 0 ? `Còn khoảng ${remainingMinutes} phút` : "Đã hết hạn",
+    expired: remainingMs <= 0,
+  };
+}
+
 const TABS = [
   { key: "all", label: "Tất cả" },
   { key: "active", label: "Đang hiển thị" },
@@ -340,24 +362,6 @@ function StatCard({ label, value, sub, subColor = "#5f5e5e" }) {
       )}
     </div>
   );
-}
-
-function getCompleteness(property) {
-  const checks = [
-    property.title && property.title.trim().length >= 10,
-    property.description && property.description.trim().length >= 30,
-    property.price && Number(property.price) > 0,
-    property.area && Number(property.area) >= 5,
-    property.city && property.district && property.address,
-    property.legal_status,
-    property.thumbnail,
-    property.latitude && property.longitude,
-  ];
-  const passed = checks.filter(Boolean).length;
-  const score = Math.round((passed / checks.length) * 100);
-  if (score >= 85) return { score, label: "Đầy đủ", color: "#0f6e56", bg: "#e6f9f0" };
-  if (score >= 65) return { score, label: "Cần bổ sung", color: "#8a5a00", bg: "#fff4d6" };
-  return { score, label: "Thiếu nhiều", color: "#a32d2d", bg: "#fcebeb" };
 }
 
 function PerformanceItem({ property, metric, icon, emptyText }) {
@@ -548,7 +552,8 @@ export default function OwnerDashboard() {
   const handleSold = async (id) => {
     const ok = await confirm({
       title: "Đánh dấu đã giao dịch?",
-      message: "Sau khi đánh dấu đã giao dịch, tin sẽ không thể chỉnh sửa như tin đang hiển thị.",
+      message:
+        "Chỉ nên đánh dấu khi tin đã có liên hệ/lead thật và giao dịch đã chốt. Sau khi đánh dấu, tin sẽ ngừng hiển thị công khai và không thể chỉnh sửa như tin đang hiển thị.",
       confirmText: "Đánh dấu",
     });
     if (!ok) return;
@@ -616,10 +621,22 @@ export default function OwnerDashboard() {
   };
 
   const openPaymentModal = (property) => {
+    const pendingOrder = featuredOrders.find(
+      (order) =>
+        Number(order.property_id) === Number(property.id) &&
+        order.status === "pending" &&
+        order.payment_url,
+    );
     setPaymentModal(property);
-    setSelectedPackageId(featuredPackages[0]?.id ? String(featuredPackages[0].id) : "");
-    setPaymentOrder(null);
-    setPaymentUrl("");
+    setSelectedPackageId(
+      pendingOrder?.package_id
+        ? String(pendingOrder.package_id)
+        : featuredPackages[0]?.id
+          ? String(featuredPackages[0].id)
+          : "",
+    );
+    setPaymentOrder(pendingOrder || null);
+    setPaymentUrl(pendingOrder?.payment_url || "");
   };
 
   const closePaymentModal = () => {
@@ -647,6 +664,12 @@ export default function OwnerDashboard() {
       );
       setPaymentOrder(res.data.order);
       setPaymentUrl(res.data.payment_url || "");
+      if (res.data.order) {
+        setFeaturedOrders((prev) => [
+          { ...res.data.order, payment_url: res.data.payment_url || "" },
+          ...prev,
+        ]);
+      }
       showToast("Đã tạo đơn thanh toán");
     } catch (err) {
       showToast(
@@ -1032,7 +1055,6 @@ export default function OwnerDashboard() {
                         "Ngày đăng",
                         "Trạng thái",
                         "Giá bán",
-                        "Hoàn thiện",
                         "Liên hệ",
                         "Hành động",
                       ].map((h, i) => (
@@ -1043,10 +1065,10 @@ export default function OwnerDashboard() {
                             fontSize: 12,
                             fontWeight: 500,
                             color: "#757575",
-                            textAlign: i === 6 ? "right" : "left",
+                            textAlign: i === 5 ? "right" : "left",
                             borderBottom: "0.5px solid #E8E8E8",
                             whiteSpace: "nowrap",
-                            width: i === 6 ? 260 : i === 1 ? 150 : "auto",
+                            width: i === 5 ? 260 : i === 1 ? 150 : "auto",
                             ...VN,
                           }}>
                           {h}
@@ -1056,7 +1078,6 @@ export default function OwnerDashboard() {
                   </thead>
                   <tbody>
                     {paginated.map((p) => {
-                      const completeness = getCompleteness(p);
                       return (
                       <tr
                         key={p.id}
@@ -1170,27 +1191,6 @@ export default function OwnerDashboard() {
                                   : "#b51b17",
                             }}>
                             {formatPrice(p.price)}
-                          </span>
-                        </td>
-
-                        {/* Hoàn thiện */}
-                        <td style={{ padding: "12px 16px" }}>
-                          <span
-                            title="Tính theo tiêu đề, mô tả, giá, diện tích, địa chỉ, pháp lý, ảnh và tọa độ"
-                            style={{
-                              display: "inline-flex",
-                              alignItems: "center",
-                              gap: 6,
-                              borderRadius: 999,
-                              padding: "4px 9px",
-                              background: completeness.bg,
-                              color: completeness.color,
-                              fontSize: 11,
-                              fontWeight: 800,
-                              whiteSpace: "nowrap",
-                              ...VN,
-                            }}>
-                            {completeness.score}%
                           </span>
                         </td>
 
@@ -1452,7 +1452,9 @@ export default function OwnerDashboard() {
                     )}
                     {isFeaturedActive(paymentModal)
                       ? "Gia hạn gói nổi bật"
-                      : "Mua gói nổi bật"}
+                      : paymentOrder
+                        ? "Tiếp tục thanh toán"
+                        : "Mua gói nổi bật"}
                   </div>
                   <div style={{ fontSize: 13, color: "#757575", marginTop: 4 }}>
                     {paymentModal.title}
@@ -1503,68 +1505,67 @@ export default function OwnerDashboard() {
                   Gói nổi bật giúp tin được ưu tiên trước tin thường. Nếu nhiều
                   tin cùng mua gói, hệ thống xếp trong nhóm nổi bật theo thời
                   hạn còn lại và thời gian đăng để tránh một tin chiếm vị trí cố
-                  định.
+                  định. Đơn thanh toán chưa hoàn tất chỉ được giữ trong 30 phút.
                 </div>
 
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
-                    gap: 10,
-                    marginBottom: 16,
-                  }}>
-                  {featuredPackages.map((pkg) => {
-                    const selected = String(pkg.id) === selectedPackageId;
-                    return (
-                      <button
-                        key={pkg.id}
-                        onClick={() => {
-                          setSelectedPackageId(String(pkg.id));
-                          setPaymentOrder(null);
-                        }}
-                        style={{
-                          textAlign: "left",
-                          border: selected
-                            ? "1px solid #b51b17"
-                            : "0.5px solid #E8E8E8",
-                          background: selected ? "#fff5f5" : "#fff",
-                          borderRadius: 10,
-                          padding: 12,
-                          cursor: "pointer",
-                          minHeight: 112,
-                          ...VN,
-                        }}>
-                        <div
+                {!paymentOrder && (
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
+                      gap: 10,
+                      marginBottom: 16,
+                    }}>
+                    {featuredPackages.map((pkg) => {
+                      const selected = String(pkg.id) === selectedPackageId;
+                      return (
+                        <button
+                          key={pkg.id}
+                          onClick={() => setSelectedPackageId(String(pkg.id))}
                           style={{
-                            fontSize: 14,
-                            fontWeight: 700,
-                            color: "#1a1c1c",
-                            marginBottom: 6,
+                            textAlign: "left",
+                            border: selected
+                              ? "1px solid #b51b17"
+                              : "0.5px solid #E8E8E8",
+                            background: selected ? "#fff5f5" : "#fff",
+                            borderRadius: 10,
+                            padding: 12,
+                            cursor: "pointer",
+                            minHeight: 112,
+                            ...VN,
                           }}>
-                          {pkg.name}
-                        </div>
-                        <div
-                          style={{
-                            fontSize: 12,
-                            color: "#757575",
-                            lineHeight: 1.45,
-                            minHeight: 34,
-                          }}>
-                          {pkg.description}
-                        </div>
-                        <div
-                          style={{
-                            marginTop: 10,
-                            fontSize: 15,
-                            fontWeight: 700,
-                            color: "#b51b17",
-                          }}>
-                          {formatCurrency(pkg.price)}
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
+                          <div
+                            style={{
+                              fontSize: 14,
+                              fontWeight: 700,
+                              color: "#1a1c1c",
+                              marginBottom: 6,
+                            }}>
+                            {pkg.name}
+                          </div>
+                          <div
+                            style={{
+                              fontSize: 12,
+                              color: "#757575",
+                              lineHeight: 1.45,
+                              minHeight: 34,
+                            }}>
+                            {pkg.description}
+                          </div>
+                          <div
+                            style={{
+                              marginTop: 10,
+                              fontSize: 15,
+                              fontWeight: 700,
+                              color: "#b51b17",
+                            }}>
+                            {formatCurrency(pkg.price)}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
 
                 {!paymentOrder ? (
                   <button
@@ -1586,6 +1587,9 @@ export default function OwnerDashboard() {
                     {paymentLoading ? "Đang tạo đơn..." : "Tạo đơn thanh toán"}
                   </button>
                 ) : (
+                  (() => {
+                    const deadline = getPaymentDeadlineInfo(paymentOrder);
+                    return (
                   <div
                     style={{
                       border: "0.5px solid #E8E8E8",
@@ -1607,9 +1611,17 @@ export default function OwnerDashboard() {
                       <div>Gói: <strong>{paymentOrder.package_name}</strong></div>
                       <div>Số tiền: <strong>{formatCurrency(paymentOrder.amount)}</strong></div>
                       <div>Phương thức: VNPay Sandbox</div>
+                      <div>Tạo lúc: <strong>{deadline.createdAt}</strong></div>
+                      <div>Hết hạn lúc: <strong>{deadline.expiresAt}</strong></div>
+                      <div>
+                        Thời gian còn lại:{" "}
+                        <strong style={{ color: deadline.expired ? "#a32d2d" : "#0f6e56" }}>
+                          {deadline.remainingText}
+                        </strong>
+                      </div>
                     </div>
                     <button
-                      disabled={paymentLoading || !paymentUrl}
+                      disabled={paymentLoading || !paymentUrl || deadline.expired}
                       onClick={payFeaturedOrder}
                       style={{
                         width: "100%",
@@ -1620,8 +1632,11 @@ export default function OwnerDashboard() {
                         color: "#fff",
                         fontSize: 14,
                         fontWeight: 700,
-                        cursor: paymentLoading ? "not-allowed" : "pointer",
-                        opacity: paymentLoading ? 0.7 : 1,
+                        cursor:
+                          paymentLoading || deadline.expired
+                            ? "not-allowed"
+                            : "pointer",
+                        opacity: paymentLoading || deadline.expired ? 0.7 : 1,
                         marginTop: 12,
                         display: "flex",
                         alignItems: "center",
@@ -1630,9 +1645,15 @@ export default function OwnerDashboard() {
                         ...VN,
                       }}>
                         <FaCreditCard />
-                      {paymentLoading ? "Đang xử lý..." : "Thanh toán qua VNPay"}
+                      {deadline.expired
+                        ? "Đơn đã hết hạn"
+                        : paymentLoading
+                          ? "Đang xử lý..."
+                          : "Thanh toán qua VNPay"}
                     </button>
                   </div>
+                    );
+                  })()
                 )}
 
                 {featuredOrders.length > 0 && (

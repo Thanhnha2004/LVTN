@@ -21,6 +21,14 @@ const LEAD_STATUS_LABEL = Object.fromEntries(
   LEAD_STATUS.map((item) => [item.value, item.label]),
 );
 
+const LEAD_TRANSITIONS = {
+  new: ["contacted"],
+  contacted: ["scheduled", "closed", "cancelled"],
+  scheduled: ["closed", "cancelled"],
+  closed: [],
+  cancelled: [],
+};
+
 const LEAD_HINTS = {
   new: {
     note: "Lead mới, owner nên phản hồi để xác nhận nhu cầu của khách.",
@@ -67,6 +75,41 @@ function formatAppointmentValue(value) {
   if (Number.isNaN(date.getTime())) return "";
   const offsetDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
   return offsetDate.toISOString().slice(0, 16);
+}
+
+function getMinAppointmentValue() {
+  const now = new Date();
+  now.setMinutes(now.getMinutes() + 1);
+  const offsetDate = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
+  return offsetDate.toISOString().slice(0, 16);
+}
+
+function parseAppointmentFromNote(note) {
+  const value = String(note || "");
+  const match = value.match(
+    /(?:lịch hẹn xem|lich hen xem)\s*:\s*(\d{1,2}):(\d{2})\s+(\d{1,2})\/(\d{1,2})\/(\d{4})/i,
+  );
+  if (!match) return "";
+
+  const [, hour, minute, day, month, year] = match;
+  return formatAppointmentValue(
+    new Date(
+      Number(year),
+      Number(month) - 1,
+      Number(day),
+      Number(hour),
+      Number(minute),
+    ),
+  );
+}
+
+function stripAppointmentFromNote(note) {
+  return String(note || "")
+    .replace(
+      /(?:lịch hẹn xem|lich hen xem)\s*:\s*\d{1,2}:\d{2}\s+\d{1,2}\/\d{1,2}\/\d{4}\.?\s*/i,
+      "",
+    )
+    .trim();
 }
 
 function hoursSince(value) {
@@ -130,8 +173,10 @@ function ReplyBox({ contactId, onSent, onCancel, showToast }) {
     setSending(true);
     setError("");
     try {
-      await api.patch(`/api/contact/${contactId}/reply`, { owner_reply: text });
-      onSent(contactId, text);
+      const res = await api.patch(`/api/contact/${contactId}/reply`, {
+        owner_reply: text,
+      });
+      onSent(contactId, text, res.data?.lead_status);
       showToast("Đã gửi phản hồi cho người mua");
     } catch (err) {
       const message = err.response?.data?.message || "Gửi thất bại, thử lại.";
@@ -255,22 +300,44 @@ function ReplyBox({ contactId, onSent, onCancel, showToast }) {
 function ContactCard({ contact, onReplied, onLeadUpdated, showToast }) {
   const [open, setOpen] = useState(false);
   const [leadStatus, setLeadStatus] = useState(contact.lead_status || "new");
-  const [ownerNote, setOwnerNote] = useState(contact.owner_note || "");
+  const [ownerNote, setOwnerNote] = useState(
+    stripAppointmentFromNote(contact.owner_note),
+  );
   const [appointmentAt, setAppointmentAt] = useState(
-    contact.appointment_at ? formatAppointmentValue(contact.appointment_at) : "",
+    contact.appointment_at
+      ? formatAppointmentValue(contact.appointment_at)
+      : parseAppointmentFromNote(contact.owner_note),
   );
   const [leadSaving, setLeadSaving] = useState(false);
   const [leadError, setLeadError] = useState("");
   const isPending = contact.status === "pending";
   const priority = contactPriority(contact);
   const leadHint = LEAD_HINTS[leadStatus] || LEAD_HINTS.new;
-
-  const bgColor = isPending ? "#ffdad5" : "#e4e2e1";
-  const textColor = isPending ? "#410001" : "#5f5e5e";
+  const currentLeadStatus = contact.lead_status || "new";
+  const availableLeadStatuses = LEAD_STATUS.filter(
+    (item) =>
+      item.value === currentLeadStatus ||
+      (LEAD_TRANSITIONS[currentLeadStatus] || []).includes(item.value),
+  );
 
   const saveLead = async () => {
     if (leadStatus === "scheduled" && !appointmentAt) {
       const message = "Vui lòng chọn ngày giờ hẹn xem";
+      setLeadError(message);
+      showToast(message, "error");
+      return;
+    }
+    if (leadStatus === "scheduled" && new Date(appointmentAt) <= new Date()) {
+      const message = "Lịch hẹn xem phải lớn hơn thời gian hiện tại";
+      setLeadError(message);
+      showToast(message, "error");
+      return;
+    }
+    if (
+      ["contacted", "closed", "cancelled"].includes(leadStatus) &&
+      ownerNote.trim().length < 10
+    ) {
+      const message = "Vui lòng nhập ghi chú kết quả tối thiểu 10 ký tự";
       setLeadError(message);
       showToast(message, "error");
       return;
@@ -293,10 +360,8 @@ function ContactCard({ contact, onReplied, onLeadUpdated, showToast }) {
         lead_status: leadStatus,
         owner_note: noteToSave,
       });
-      onLeadUpdated(contact.id, leadStatus, noteToSave);
-      if (leadStatus === "scheduled") {
-        setOwnerNote(noteToSave);
-      }
+      onLeadUpdated(contact.id, leadStatus, noteToSave, appointmentAt);
+      setOwnerNote(stripAppointmentFromNote(noteToSave));
       showToast("Đã lưu trạng thái chăm sóc khách hàng");
     } catch (err) {
       const message =
@@ -385,18 +450,6 @@ function ContactCard({ contact, onReplied, onLeadUpdated, showToast }) {
             }}>
             {contact.buyer_name}
           </h3>
-          <span
-            style={{
-              fontSize: 11,
-              fontWeight: 500,
-              padding: "3px 10px",
-              borderRadius: 20,
-              background: bgColor,
-              color: textColor,
-              whiteSpace: "nowrap",
-            }}>
-            {isPending ? "Chưa phản hồi" : "Đã phản hồi"}
-          </span>
           <span
             style={{
               fontSize: 11,
@@ -543,7 +596,7 @@ function ContactCard({ contact, onReplied, onLeadUpdated, showToast }) {
               color: "#1a1c1c",
               ...VN,
             }}>
-            {LEAD_STATUS.map((s) => (
+            {availableLeadStatuses.map((s) => (
               <option key={s.value} value={s.value}>
                 {s.label}
               </option>
@@ -553,6 +606,7 @@ function ContactCard({ contact, onReplied, onLeadUpdated, showToast }) {
             <input
               type="datetime-local"
               value={appointmentAt}
+              min={getMinAppointmentValue()}
               onChange={(e) => setAppointmentAt(e.target.value)}
               style={{
                 height: 36,
@@ -684,9 +738,10 @@ function ContactCard({ contact, onReplied, onLeadUpdated, showToast }) {
         {open && (
           <ReplyBox
             contactId={contact.id}
-            onSent={(id, text) => {
+            onSent={(id, text, leadStatusAfterReply) => {
               setOpen(false);
-              onReplied(id, text);
+              if (leadStatusAfterReply) setLeadStatus(leadStatusAfterReply);
+              onReplied(id, text, leadStatusAfterReply);
             }}
             onCancel={() => setOpen(false)}
             showToast={showToast}
@@ -701,7 +756,7 @@ function ContactCard({ contact, onReplied, onLeadUpdated, showToast }) {
 export default function OwnerContacts() {
   const [contacts, setContacts] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState("all");
+  const [activeTab, setActiveTab] = useState("pending");
   const [sort, setSort] = useState("newest");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
@@ -725,7 +780,7 @@ export default function OwnerContacts() {
     })();
   }, []);
 
-  const handleReplied = (id, text) => {
+  const handleReplied = (id, text, lead_status) => {
     setContacts((prev) =>
       prev.map((c) =>
         c.id === id
@@ -733,6 +788,7 @@ export default function OwnerContacts() {
               ...c,
               status: "replied",
               owner_reply: text,
+              lead_status: lead_status || c.lead_status,
               updated_at: new Date().toISOString(),
             }
           : c,
@@ -740,9 +796,11 @@ export default function OwnerContacts() {
     );
   };
 
-  const handleLeadUpdated = (id, lead_status, owner_note) => {
+  const handleLeadUpdated = (id, lead_status, owner_note, appointment_at) => {
     setContacts((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, lead_status, owner_note } : c)),
+      prev.map((c) =>
+        c.id === id ? { ...c, lead_status, owner_note, appointment_at } : c,
+      ),
     );
   };
 
@@ -751,12 +809,11 @@ export default function OwnerContacts() {
   const replied = contacts.filter((c) => c.status === "replied").length;
   const scheduled = contacts.filter((c) => c.lead_status === "scheduled").length;
   const closed = contacts.filter((c) => c.lead_status === "closed").length;
+  const cancelled = contacts.filter((c) => c.lead_status === "cancelled").length;
   const urgent = contacts.filter(
     (c) => c.status === "pending" && hoursSince(c.created_at) >= 24,
   ).length;
   const responseRate = total > 0 ? Math.round((replied / total) * 100) : 0;
-
-  const tabCount = { all: total, pending, replied };
 
   const filtered = contacts
     .filter((c) => {
@@ -764,6 +821,7 @@ export default function OwnerContacts() {
       if (activeTab === "replied") return c.status === "replied";
       if (activeTab === "scheduled") return c.lead_status === "scheduled";
       if (activeTab === "closed") return c.lead_status === "closed";
+      if (activeTab === "cancelled") return c.lead_status === "cancelled";
       return true;
     })
     .filter(
@@ -791,11 +849,11 @@ export default function OwnerContacts() {
   const paginated = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE);
 
   const TABS = [
-    { key: "all", label: `Tất cả (${total})` },
     { key: "pending", label: `Chưa phản hồi (${pending})` },
     { key: "replied", label: `Đã phản hồi (${replied})` },
     { key: "scheduled", label: `Đã hẹn (${scheduled})` },
     { key: "closed", label: `Đã chốt (${closed})` },
+    { key: "cancelled", label: `Đã hủy (${cancelled})` },
   ];
 
   return (

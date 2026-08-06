@@ -144,16 +144,37 @@ describe("contact-service", () => {
 
   test("owner can reply only to owned contact", async () => {
     global.mockUser = { id: 7, role: "owner" };
-    pool.query.mockResolvedValueOnce([[{ id: 5 }]]).mockResolvedValueOnce([{}]);
+    pool.query
+      .mockResolvedValueOnce([[{ id: 5, lead_status: "new" }]])
+      .mockResolvedValueOnce([{}]);
 
     const res = await request(app())
       .patch("/api/contact/5/reply")
       .send({ owner_reply: "Ban co the lien he so dien thoai nay" });
 
     expect(res.status).toBe(200);
+    expect(res.body.lead_status).toBe("contacted");
     expect(pool.query).toHaveBeenCalledWith(
-      "UPDATE contacts SET owner_reply = ?, status = 'replied' WHERE id = ?",
-      ["Ban co the lien he so dien thoai nay", "5"],
+      "UPDATE contacts SET owner_reply = ?, status = 'replied', lead_status = ? WHERE id = ?",
+      ["Ban co the lien he so dien thoai nay", "contacted", "5"],
+    );
+  });
+
+  test("owner reply keeps existing advanced lead status", async () => {
+    global.mockUser = { id: 7, role: "owner" };
+    pool.query
+      .mockResolvedValueOnce([[{ id: 5, lead_status: "scheduled" }]])
+      .mockResolvedValueOnce([{}]);
+
+    const res = await request(app())
+      .patch("/api/contact/5/reply")
+      .send({ owner_reply: "Da xac nhan lich hen xem" });
+
+    expect(res.status).toBe(200);
+    expect(res.body.lead_status).toBe("scheduled");
+    expect(pool.query).toHaveBeenCalledWith(
+      "UPDATE contacts SET owner_reply = ?, status = 'replied', lead_status = ? WHERE id = ?",
+      ["Da xac nhan lich hen xem", "scheduled", "5"],
     );
   });
 
@@ -190,7 +211,14 @@ describe("contact-service", () => {
   test("owner updates lead status for owned contact", async () => {
     global.mockUser = { id: 7, role: "owner" };
     mockConnection.query
-      .mockResolvedValueOnce([[{ id: 9, property_id: 3, property_status: "approved" }]])
+      .mockResolvedValueOnce([[
+        {
+          id: 9,
+          property_id: 3,
+          current_lead_status: "contacted",
+          property_status: "approved",
+        },
+      ]])
       .mockResolvedValueOnce([{}]);
 
     const res = await request(app())
@@ -218,10 +246,33 @@ describe("contact-service", () => {
     expect(pool.getConnection).not.toHaveBeenCalled();
   });
 
+  test("scheduled lead rejects past appointment time", async () => {
+    global.mockUser = { id: 7, role: "owner" };
+
+    const res = await request(app())
+      .patch("/api/contact/9/lead")
+      .send({
+        lead_status: "scheduled",
+        owner_note: "Lich hen xem: 09:30 01/01/2020. Hen tai sanh",
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body.message).toContain("Lịch hẹn xem");
+    expect(pool.getConnection).not.toHaveBeenCalled();
+  });
+
   test("closed lead marks approved property as sold", async () => {
     global.mockUser = { id: 7, role: "owner" };
     mockConnection.query
-      .mockResolvedValueOnce([[{ id: 9, property_id: 3, property_status: "approved" }]])
+      .mockResolvedValueOnce([[
+        {
+          id: 9,
+          property_id: 3,
+          current_lead_status: "scheduled",
+          property_status: "approved",
+        },
+      ]])
+      .mockResolvedValueOnce([{}])
       .mockResolvedValueOnce([{}])
       .mockResolvedValueOnce([{}])
       .mockResolvedValueOnce([{}]);
@@ -232,9 +283,47 @@ describe("contact-service", () => {
 
     expect(res.status).toBe(200);
     expect(mockConnection.query).toHaveBeenCalledWith(
-      "UPDATE properties SET status = 'sold', sold_at = NOW() WHERE id = ?",
+      "UPDATE properties SET status = 'sold', sold_at = NOW(), featured_until = NULL WHERE id = ?",
       [3],
     );
+  });
+
+  test("owner cannot skip lead process from new directly to closed", async () => {
+    global.mockUser = { id: 7, role: "owner" };
+    mockConnection.query.mockResolvedValueOnce([[
+      {
+        id: 9,
+        property_id: 3,
+        current_lead_status: "new",
+        property_status: "approved",
+      },
+    ]]);
+
+    const res = await request(app())
+      .patch("/api/contact/9/lead")
+      .send({ lead_status: "closed", owner_note: "Khach da dat coc" });
+
+    expect(res.status).toBe(400);
+    expect(mockConnection.rollback).toHaveBeenCalled();
+  });
+
+  test("owner cannot cancel a new lead before contacting buyer", async () => {
+    global.mockUser = { id: 7, role: "owner" };
+    mockConnection.query.mockResolvedValueOnce([[
+      {
+        id: 9,
+        property_id: 3,
+        current_lead_status: "new",
+        property_status: "approved",
+      },
+    ]]);
+
+    const res = await request(app())
+      .patch("/api/contact/9/lead")
+      .send({ lead_status: "cancelled", owner_note: "Khach khong phu hop" });
+
+    expect(res.status).toBe(400);
+    expect(mockConnection.rollback).toHaveBeenCalled();
   });
 
   test("buyer can list sent contacts and owner response information", async () => {

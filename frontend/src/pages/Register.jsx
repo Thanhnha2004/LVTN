@@ -134,6 +134,14 @@ export default function Register() {
         fontFamily: "'Inter', -apple-system, sans-serif",
         background: "#F7F6F3",
       }}>
+      <style>
+        {`
+          .register-password-input::-ms-reveal,
+          .register-password-input::-ms-clear {
+            display: none;
+          }
+        `}
+      </style>
       {/* Left Panel */}
       <div
         style={{
@@ -599,6 +607,7 @@ export default function Register() {
                     />
                   </svg>
                   <input
+                    className="register-password-input"
                     type={showPass ? "text" : "password"}
                     placeholder="Tối thiểu 6 ký tự"
                     value={form.password}
@@ -684,6 +693,7 @@ export default function Register() {
                     />
                   </svg>
                   <input
+                    className="register-password-input"
                     type={showConfirm ? "text" : "password"}
                     placeholder="••••••••"
                     value={form.confirm_password}

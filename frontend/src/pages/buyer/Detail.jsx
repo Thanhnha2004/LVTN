@@ -24,6 +24,7 @@ function buildOwnerTrust(property) {
   const approved = Number(property.owner_approved_properties || 0);
   const sold = Number(property.owner_sold_properties || 0);
   const rejected = Number(property.owner_rejected_properties || 0);
+  const hidden = Number(property.owner_hidden_properties || 0);
   const totalContacts = Number(property.owner_total_contacts || 0);
   const repliedContacts = Number(property.owner_replied_contacts || 0);
   const totalViews = Number(property.owner_total_views || 0);
@@ -38,7 +39,8 @@ function buildOwnerTrust(property) {
         Math.min(sold * 12, 30) +
         Math.min(responseRate * 0.2, 20) +
         Math.min(Math.floor(totalViews / 20), 10) -
-        Math.min(rejected * 8, 24),
+        Math.min(rejected * 8, 24) -
+        Math.min(hidden * 12, 36),
     ),
   );
 
@@ -52,6 +54,7 @@ function buildOwnerTrust(property) {
     approved,
     sold,
     rejected,
+    hidden,
     totalContacts,
     responseRate,
   };
@@ -79,6 +82,14 @@ export default function Detail() {
   const [contactLoading, setContactLoading] = useState(false);
   const [contactError, setContactError] = useState("");
   const [similar, setSimilar] = useState([]);
+  const [priceEstimate, setPriceEstimate] = useState(null);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportForm, setReportForm] = useState({
+    reason: "wrong_info",
+    message: "",
+  });
+  const [reportLoading, setReportLoading] = useState(false);
+  const [reportError, setReportError] = useState("");
   const [loadError, setLoadError] = useState("");
 
   useEffect(() => {
@@ -137,6 +148,12 @@ export default function Detail() {
             const simRes = await api.get(`/api/listing/${id}/similar`);
             setSimilar(simRes.data.data || []);
           } catch {}
+          try {
+            const estimateRes = await api.get(`/api/listing/${id}/price-estimate`);
+            setPriceEstimate(estimateRes.data);
+          } catch {
+            setPriceEstimate(null);
+          }
         }
       } catch (err) {
         setLoadError(
@@ -163,6 +180,25 @@ export default function Detail() {
       showToast(saved ? "Đã bỏ lưu tin quan tâm" : "Đã lưu tin quan tâm");
     } catch (err) {
       showToast(err.response?.data?.message || "Không thể cập nhật tin đã lưu", "error");
+    }
+  };
+
+  const handleReport = async (e) => {
+    e.preventDefault();
+    if (!user) return navigate("/login");
+    setReportLoading(true);
+    setReportError("");
+    try {
+      await api.post(`/api/property/${id}/report`, reportForm);
+      showToast("Đã gửi báo cáo tin đăng. Admin sẽ xem xét trong lịch sử kiểm tra.");
+      setReportOpen(false);
+      setReportForm({ reason: "wrong_info", message: "" });
+    } catch (err) {
+      const message = err.response?.data?.message || "Không thể gửi báo cáo";
+      setReportError(message);
+      showToast(message, "error");
+    } finally {
+      setReportLoading(false);
     }
   };
 
@@ -1268,6 +1304,12 @@ export default function Detail() {
                       : "Đang cập nhật",
                   ],
                   [
+                    "Tin bị xử lý",
+                    ownerTrust.hasTrustData
+                      ? `${ownerTrust.rejected + ownerTrust.hidden} tin`
+                      : "Đang cập nhật",
+                  ],
+                  [
                     "Tỷ lệ phản hồi",
                     !ownerTrust.hasTrustData
                       ? "Đang cập nhật"
@@ -1313,6 +1355,26 @@ export default function Detail() {
                   <UiIcon name="user" size={15} />
                   Xem hồ sơ người bán
                 </Link>
+              )}
+              {!canManageProperty && (
+                <button
+                  type="button"
+                  onClick={() => setReportOpen(true)}
+                  style={{
+                    width: "100%",
+                    marginTop: 10,
+                    padding: "10px 12px",
+                    borderRadius: 8,
+                    border: "1px solid #f0ce7a",
+                    background: "#fff8e1",
+                    color: "#8a5a00",
+                    fontFamily: "Inter, sans-serif",
+                    fontSize: 13,
+                    fontWeight: 700,
+                    cursor: "pointer",
+                  }}>
+                  Báo cáo tin đăng
+                </button>
               )}
             </div>
 
@@ -1369,6 +1431,65 @@ export default function Detail() {
                 ))}
               </div>
             </div>
+
+            {priceEstimate && (
+              <div
+                style={{
+                  background: "#fff",
+                  border: "1px solid #E8E8E8",
+                  borderRadius: 12,
+                  padding: "20px 24px",
+                  marginBottom: 16,
+                }}>
+                <h3
+                  style={{
+                    fontFamily: "Manrope, sans-serif",
+                    fontSize: 16,
+                    fontWeight: 700,
+                    color: "#1a1c1c",
+                    marginTop: 0,
+                    marginBottom: 12,
+                  }}>
+                  Định giá tham khảo
+                </h3>
+                {priceEstimate.sample_size >= 2 ? (
+                  <div style={{ display: "grid", gap: 9, fontFamily: "Inter, sans-serif" }}>
+                    <div
+                      style={{
+                        padding: "10px 12px",
+                        borderRadius: 10,
+                        background: "#e8f1ff",
+                        color: "#2456a6",
+                        fontSize: 13,
+                        lineHeight: 1.55,
+                        fontWeight: 700,
+                      }}>
+                      Khoảng giá tham khảo:{" "}
+                      {formatPrice(priceEstimate.estimated_range?.low)} -{" "}
+                      {formatPrice(priceEstimate.estimated_range?.high)}
+                    </div>
+                    <div style={{ fontSize: 13, color: "#5f5e5e", lineHeight: 1.55 }}>
+                      Dựa trên {priceEstimate.sample_size} tin tương đồng.{" "}
+                      {priceEstimate.basis || "Cùng loại, cùng giao dịch và diện tích gần tương đương."}
+                      {priceEstimate.confidence === "low"
+                        ? " Kết quả chỉ mang tính tham khảo vì mẫu so sánh còn ít."
+                        : ""}
+                    </div>
+                    <div style={{ fontSize: 13, color: "#1a1c1c", fontWeight: 700 }}>
+                      {priceEstimate.position === "below_market"
+                        ? "Giá tin này đang thấp hơn nhóm tham khảo."
+                        : priceEstimate.position === "above_market"
+                          ? "Giá tin này đang cao hơn nhóm tham khảo."
+                          : "Giá tin này nằm trong khoảng tham khảo."}
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ fontSize: 13, color: "#757575", lineHeight: 1.55 }}>
+                    {priceEstimate.message || "Chưa đủ dữ liệu định giá tham khảo."}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Contact form */}
             {canManageProperty ? (
@@ -1888,6 +2009,138 @@ export default function Detail() {
           </section>
         )}
       </div>
+
+      {reportOpen && (
+        <div
+          onClick={() => setReportOpen(false)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 2200,
+            background: "rgba(0,0,0,0.45)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 18,
+          }}>
+          <form
+            onSubmit={handleReport}
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: "100%",
+              maxWidth: 460,
+              background: "#fff",
+              borderRadius: 12,
+              padding: 22,
+              fontFamily: "Inter, sans-serif",
+              boxShadow: "0 16px 42px rgba(0,0,0,0.18)",
+            }}>
+            <h3
+              style={{
+                fontFamily: "Manrope, sans-serif",
+                fontSize: 18,
+                fontWeight: 800,
+                color: "#1a1c1c",
+                margin: "0 0 12px",
+              }}>
+              Báo cáo tin đăng
+            </h3>
+            {reportError && (
+              <div
+                style={{
+                  background: "#ffdad6",
+                  color: "#93000a",
+                  padding: "8px 10px",
+                  borderRadius: 8,
+                  fontSize: 13,
+                  marginBottom: 10,
+                }}>
+                {reportError}
+              </div>
+            )}
+            <label style={{ fontSize: 13, fontWeight: 700, marginBottom: 6, display: "block" }}>
+              Lý do
+            </label>
+            <select
+              value={reportForm.reason}
+              onChange={(e) =>
+                setReportForm((prev) => ({ ...prev, reason: e.target.value }))
+              }
+              style={{
+                width: "100%",
+                height: 40,
+                borderRadius: 8,
+                border: "1px solid #E8E8E8",
+                padding: "0 10px",
+                marginBottom: 12,
+              }}>
+              <option value="wrong_info">Thông tin sai</option>
+              <option value="fake_images">Hình ảnh không đúng</option>
+              <option value="duplicate">Tin trùng</option>
+              <option value="scam">Nghi ngờ lừa đảo</option>
+              <option value="unavailable">Bất động sản không còn giao dịch</option>
+              <option value="other">Khác</option>
+            </select>
+            <label style={{ fontSize: 13, fontWeight: 700, marginBottom: 6, display: "block" }}>
+              Mô tả vấn đề
+            </label>
+            <textarea
+              value={reportForm.message}
+              onChange={(e) =>
+                setReportForm((prev) => ({ ...prev, message: e.target.value }))
+              }
+              rows={4}
+              placeholder="Mô tả điểm sai hoặc dấu hiệu cần admin kiểm tra..."
+              required
+              style={{
+                width: "100%",
+                borderRadius: 8,
+                border: "1px solid #E8E8E8",
+                padding: "10px 12px",
+                resize: "vertical",
+                boxSizing: "border-box",
+                marginBottom: 14,
+              }}
+            />
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+              <button
+                type="button"
+                onClick={() => setReportOpen(false)}
+                style={{
+                  height: 38,
+                  padding: "0 14px",
+                  borderRadius: 8,
+                  border: "1px solid #E8E8E8",
+                  background: "#fff",
+                  cursor: "pointer",
+                }}>
+                Hủy
+              </button>
+              <button
+                type="submit"
+                disabled={reportLoading || reportForm.message.trim().length < 10}
+                style={{
+                  height: 38,
+                  padding: "0 16px",
+                  borderRadius: 8,
+                  border: "none",
+                  background:
+                    reportLoading || reportForm.message.trim().length < 10
+                      ? "#ccc"
+                      : "#b51b17",
+                  color: "#fff",
+                  fontWeight: 800,
+                  cursor:
+                    reportLoading || reportForm.message.trim().length < 10
+                      ? "not-allowed"
+                      : "pointer",
+                }}>
+                {reportLoading ? "Đang gửi..." : "Gửi báo cáo"}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
       <SiteFooter />
     </div>
   );

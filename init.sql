@@ -338,6 +338,11 @@ INSERT INTO property_status_history (property_id, old_status, new_status, actor_
 (10, 'pending', 'approved', 1, 'Admin duyệt tin đăng', DATE_SUB(NOW(), INTERVAL 22 DAY)),
 (10, 'approved', 'sold', 4, 'Owner đánh dấu đã giao dịch', DATE_SUB(NOW(), INTERVAL 3 DAY));
 
+INSERT INTO property_status_history (property_id, old_status, new_status, actor_id, note, created_at) VALUES
+(8, 'approved', 'approved', 3, 'Người dùng báo cáo tin: Thông tin sai. Người xem phản ánh địa chỉ hẹn xem không khớp với nội dung tin đăng.', DATE_SUB(NOW(), INTERVAL 2 DAY)),
+(8, 'approved', 'approved', 5, 'Người dùng báo cáo tin: Hình ảnh không đúng. Ảnh ngoại thất không giống bất động sản thực tế khi liên hệ xem.', DATE_SUB(NOW(), INTERVAL 1 DAY)),
+(9, 'approved', 'approved', 5, 'Người dùng báo cáo tin: Bất động sản không còn giao dịch. Chủ nhà báo đã cho thuê nhưng tin vẫn hiển thị.', DATE_SUB(NOW(), INTERVAL 12 HOUR));
+
 INSERT INTO featured_orders
   (property_id, owner_id, package_id, amount, payment_method, status, payment_code,
    paid_at, featured_start_at, featured_end_at, created_at)
@@ -348,6 +353,17 @@ VALUES
  DATE_SUB(NOW(), INTERVAL 2 DAY), DATE_SUB(NOW(), INTERVAL 2 DAY), DATE_ADD(NOW(), INTERVAL 15 DAY), DATE_SUB(NOW(), INTERVAL 2 DAY)),
 (8, 4, 3, 299000, 'vnpay', 'paid', 'VIP-SEED-0003',
  DATE_SUB(NOW(), INTERVAL 3 DAY), DATE_SUB(NOW(), INTERVAL 3 DAY), DATE_ADD(NOW(), INTERVAL 45 DAY), DATE_SUB(NOW(), INTERVAL 3 DAY));
+
+INSERT INTO featured_orders
+  (property_id, owner_id, package_id, amount, payment_method, status, payment_code,
+   paid_at, featured_start_at, featured_end_at, created_at)
+VALUES
+(2, 2, 1, 99000, 'vnpay', 'pending', 'VIP-SEED-PENDING-0002',
+ NULL, NULL, NULL, DATE_SUB(NOW(), INTERVAL 10 MINUTE)),
+(3, 2, 1, 99000, 'vnpay', 'failed', 'VIP-SEED-FAILED-0003',
+ NULL, NULL, NULL, DATE_SUB(NOW(), INTERVAL 2 HOUR)),
+(7, 2, 1, 99000, 'vnpay', 'cancelled', 'VIP-SEED-CANCELLED-0007',
+ NULL, NULL, NULL, DATE_SUB(NOW(), INTERVAL 1 DAY));
 
 INSERT INTO property_images (property_id, url, `order`) VALUES
 (1, 'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?w=1000&q=80', 1),
@@ -377,10 +393,10 @@ INSERT INTO contacts
   (property_id, buyer_id, message, phone_number, owner_reply, status, lead_status, owner_note)
 VALUES
 (1, 3, 'Tôi muốn xem căn hộ này vào cuối tuần, liên hệ giúp tôi nhé.', '0901000003', NULL, 'pending', 'new', NULL),
-(2, 3, 'Nhà còn không ạ? Tôi quan tâm muốn đặt lịch xem.', '0901000003', 'Nhà vẫn còn. Bạn có thể xem vào sáng thứ 7 tuần này nhé!', 'replied', 'scheduled', 'Đã hẹn xem lúc 9h sáng thứ 7.'),
+(2, 3, 'Nhà còn không ạ? Tôi quan tâm muốn đặt lịch xem.', '0901000003', 'Nhà vẫn còn. Bạn có thể xem vào sáng thứ 7 tuần này nhé!', 'replied', 'scheduled', 'Lịch hẹn xem: 09:00 22/08/2026. Đã hẹn xem tại nhà.'),
 (3, 5, 'Studio này còn trống không? Tôi cần thuê từ tháng sau.', '0901000005', NULL, 'pending', 'contacted', 'Đã gọi nhưng khách muốn xem thêm ảnh.'),
 (5, 5, 'Văn phòng có xuất hóa đơn và cho thuê tối thiểu bao lâu?', '0901000005', 'Bên em có xuất hóa đơn, hợp đồng tối thiểu 12 tháng.', 'replied', 'closed', 'Khách đồng ý đặt cọc giữ chỗ.'),
-(8, 3, 'Biệt thự có chỗ để ô tô không ạ? Cho tôi xem vào cuối tuần được không?', '0901000003', NULL, 'pending', 'scheduled', 'Chờ xác nhận lịch xem nhà chiều chủ nhật.'),
+(8, 3, 'Biệt thự có chỗ để ô tô không ạ? Cho tôi xem vào cuối tuần được không?', '0901000003', NULL, 'pending', 'scheduled', 'Lịch hẹn xem: 15:00 23/08/2026. Chờ xác nhận lịch xem nhà chiều chủ nhật.'),
 (9, 5, 'Nhà nguyên căn có cho nuôi thú cưng không?', '0901000005', 'Chủ nhà đồng ý nếu giữ vệ sinh và không ảnh hưởng hàng xóm.', 'replied', 'contacted', 'Khách đang cân nhắc chuyển vào đầu tháng sau.');
 
 INSERT INTO saved_properties (buyer_id, property_id) VALUES
@@ -495,12 +511,12 @@ INSERT INTO contacts
 VALUES
 (11, 5, 'Toi muon xem can ho vao chieu thu bay.', '0901000005', NULL, 'pending', 'new', NULL),
 (13, 9, 'Nha nay co thuong luong them khong?', '0902000003', 'Gia con thuong luong nhe, ban co the qua xem truoc.', 'replied', 'contacted', 'Da goi cho khach.'),
-(17, 10, 'Biet thu co san dau xe may oto khong?', '0902000004', NULL, 'pending', 'scheduled', 'Hen xem nha cuoi tuan.'),
+(17, 10, 'Biet thu co san dau xe may oto khong?', '0902000004', NULL, 'pending', 'scheduled', 'Lich hen xem: 14:30 24/08/2026. Hen xem nha cuoi tuan.'),
 (21, 11, 'Can ho co noi that nhu hinh khong?', '0902000005', 'Can ho ban giao day du noi that nhu hinh.', 'replied', 'closed', 'Khach quan tam dat coc.'),
 (23, 12, 'Nha mat tien hien co hop dong thue khong?', '0902000006', NULL, 'pending', 'new', NULL),
 (26, 3, 'Can ho quan 5 co cho nuoi meo khong?', '0901000003', 'Co the trao doi them voi chu nha ve vat nuoi.', 'replied', 'contacted', 'Khach dang can nhac.'),
 (28, 5, 'Van phong Binh Thanh con trong trong thang nay khong?', '0901000005', NULL, 'pending', 'new', NULL),
-(34, 9, 'Van phong Da Nang co xuat hoa don khong?', '0902000003', 'Ben em co xuat hoa don day du.', 'replied', 'scheduled', 'Hen trao doi hop dong.');
+(34, 9, 'Van phong Da Nang co xuat hoa don khong?', '0902000003', 'Ben em co xuat hoa don day du.', 'replied', 'scheduled', 'Lich hen xem: 10:00 25/08/2026. Hen trao doi hop dong.');
 
 INSERT IGNORE INTO saved_properties (buyer_id, property_id) VALUES
 (3, 11), (3, 13), (3, 17), (3, 21),
@@ -618,11 +634,11 @@ INSERT INTO property_images (property_id, url, `order`) VALUES
 INSERT INTO contacts
   (property_id, buyer_id, message, phone_number, owner_reply, status, lead_status, owner_note)
 VALUES
-(35, 15, 'Tôi muốn xem căn hộ Cầu Giấy vào cuối tuần này.', '0903000003', 'Bên em còn lịch chiều thứ bảy, anh/chị xác nhận giúp em.', 'replied', 'scheduled', 'Khách quan tâm vị trí gần công viên.'),
+(35, 15, 'Tôi muốn xem căn hộ Cầu Giấy vào cuối tuần này.', '0903000003', 'Bên em còn lịch chiều thứ bảy, anh/chị xác nhận giúp em.', 'replied', 'scheduled', 'Lịch hẹn xem: 16:00 22/08/2026. Khách quan tâm vị trí gần công viên.'),
 (37, 16, 'Nhà Thanh Xuân có thương lượng được thêm không?', '0903000004', NULL, 'pending', 'new', NULL),
 (40, 15, 'Căn hộ Sơn Trà có khai thác cho thuê theo ngày được không?', '0903000003', 'Khu này cho thuê ngắn hạn tốt, em sẽ gửi thêm bảng dòng tiền tham khảo.', 'replied', 'contacted', 'Khách hỏi về đầu tư nghỉ dưỡng.'),
 (44, 16, 'Nhà Thủ Dầu Một có hỗ trợ vay ngân hàng không?', '0903000004', NULL, 'pending', 'new', NULL),
-(48, 15, 'Biệt thự Biên Hòa có sân đậu xe mấy chiếc?', '0903000003', 'Sân có thể đậu 2 ô tô và vài xe máy.', 'replied', 'scheduled', 'Đã hẹn xem nhà sáng chủ nhật.'),
+(48, 15, 'Biệt thự Biên Hòa có sân đậu xe mấy chiếc?', '0903000003', 'Sân có thể đậu 2 ô tô và vài xe máy.', 'replied', 'scheduled', 'Lịch hẹn xem: 08:30 23/08/2026. Đã hẹn xem nhà sáng chủ nhật.'),
 (53, 16, 'Căn hộ Ninh Kiều có cho thuê lại được không?', '0903000004', NULL, 'pending', 'contacted', 'Khách cần tính dòng tiền.'),
 (55, 15, 'Căn hộ Nha Trang có phí quản lý bao nhiêu?', '0903000003', 'Phí quản lý khoảng 12.000đ/m2/tháng.', 'replied', 'closed', 'Khách muốn giữ chỗ.'),
 (60, 16, 'Nhà Huế đang ẩn thì khi nào xem được?', '0903000004', NULL, 'pending', 'new', NULL);

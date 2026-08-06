@@ -82,7 +82,20 @@ const VALID_DIRECTIONS = [
 const VALID_LEGAL_STATUSES = ["sohong", "sokhongdo", "dangchoso", "other"];
 const ROOM_REQUIRED_TYPES = ["apartment", "house"];
 const MAX_ACTIVE_FEATURED_PER_OWNER = 5;
+const MAX_PENDING_PROPERTIES_PER_OWNER = 10;
+const LIMITED_PENDING_PROPERTIES_PER_OWNER = 3;
+const MAX_PROCESSED_VIOLATIONS_FOR_POSTING = 5;
+const MAX_PROCESSED_VIOLATIONS_FOR_FEATURED = 3;
 const MIN_REJECT_REASON_LENGTH = 20;
+const FEATURED_PENDING_TIMEOUT_MINUTES = 30;
+const REPORT_REASONS = {
+  wrong_info: "Thông tin sai",
+  fake_images: "Hình ảnh không đúng",
+  duplicate: "Tin trùng",
+  scam: "Nghi ngờ lừa đảo",
+  unavailable: "Bất động sản không còn giao dịch",
+  other: "Khác",
+};
 const ADMIN_STATUS_TRANSITIONS = {
   pending: ["approved", "rejected", "hidden"],
   approved: ["hidden", "rejected"],
@@ -112,6 +125,219 @@ function isWeakRejectReason(reason) {
 function canAdminChangeStatus(from, to) {
   if (from === to) return false;
   return (ADMIN_STATUS_TRANSITIONS[from] || []).includes(to);
+}
+
+async function getOwnerProcessedViolationCount(ownerId) {
+  const [[{ violation_count }]] = await pool.query(
+    `SELECT COUNT(*) AS violation_count
+     FROM property_status_history h
+     JOIN properties p ON p.id = h.property_id
+     WHERE p.owner_id = ?
+       AND h.new_status IN ('rejected', 'hidden')
+       AND h.note NOT LIKE 'Owner %'`,
+    [ownerId],
+  );
+  return Number(violation_count || 0);
+}
+
+function buildPropertyQualityItems(property) {
+  const images = Array.isArray(property.images)
+    ? property.images
+    : property.images
+      ? String(property.images).split(",").filter(Boolean)
+      : [];
+  const description = normalizeText(property.description);
+  const hasExternalContact =
+    /(?:\+?84|0)\d{8,10}|[^\s@]+@[^\s@]+\.[^\s@]+|https?:\/\//i.test(
+      description,
+    );
+
+  return [
+    {
+      key: "title",
+      label: "Tiêu đề rõ ràng",
+      ok: property.title?.trim?.().length >= 10 && property.title.length <= 180,
+      weight: 12,
+    },
+    {
+      key: "description",
+      label: "Mô tả đủ thông tin",
+      ok: description.length >= 30 && description.length <= 3000,
+      weight: 14,
+    },
+    {
+      key: "price",
+      label: "Giá đạt ngưỡng nghiệp vụ",
+      ok:
+        property.transaction_type === "sale"
+          ? Number(property.price) >= 100000000
+          : Number(property.price) >= 500000,
+      weight: 12,
+    },
+    {
+      key: "area",
+      label: "Diện tích hợp lý",
+      ok: Number(property.area) >= 5 && Number(property.area) <= 100000,
+      weight: 10,
+    },
+    {
+      key: "address",
+      label: "Địa chỉ đủ cấp",
+      ok: Boolean(
+        property.city &&
+          property.district &&
+          property.address?.trim?.().length >= 5,
+      ),
+      weight: 14,
+    },
+    {
+      key: "legal",
+      label: "Có pháp lý",
+      ok: VALID_LEGAL_STATUSES.includes(property.legal_status),
+      weight: 10,
+    },
+    {
+      key: "images",
+      label: "Có hình ảnh",
+      ok: images.length > 0 || Boolean(property.thumbnail),
+      weight: 10,
+    },
+    {
+      key: "location",
+      label: "Tọa độ hợp lệ",
+      ok:
+        Number(property.latitude) >= 8 &&
+        Number(property.latitude) <= 24 &&
+        Number(property.longitude) >= 102 &&
+        Number(property.longitude) <= 110,
+      weight: 10,
+    },
+    {
+      key: "contact",
+      label: "Không chèn liên hệ ngoài",
+      ok: !hasExternalContact,
+      weight: 8,
+    },
+  ];
+}
+
+async function buildAdminReviewInsights(property) {
+  const qualityItems = buildPropertyQualityItems(property);
+  const score = qualityItems.reduce(
+    (sum, item) => sum + (item.ok ? item.weight : 0),
+    0,
+  );
+  const failedItems = qualityItems.filter((item) => !item.ok);
+
+  const area = Number(property.area || 0);
+  const strategies = [
+    {
+      label: "Cung thanh pho va dien tich gan nhau",
+      cityPattern: `%${property.city || ""}%`,
+      areaMin: area * 0.5,
+      areaMax: area * 1.5,
+    },
+    {
+      label: "Cung thanh pho va dien tich mo rong",
+      cityPattern: `%${property.city || ""}%`,
+      areaMin: area * 0.25,
+      areaMax: area * 2.5,
+    },
+    {
+      label: "Cung loai bat dong san tren toan he thong",
+      cityPattern: "%%",
+      areaMin: 0,
+      areaMax: 100000000,
+    },
+  ];
+
+  let comparables = [];
+  let strategyUsed = strategies[0];
+  for (const strategy of strategies) {
+    const [rows] = await pool.query(
+      `SELECT price, area, district, city,
+              ROUND(price / NULLIF(area, 0), 0) AS unit_price
+       FROM properties
+       WHERE status = 'approved'
+         AND id <> ?
+         AND type = ?
+         AND transaction_type = ?
+         AND city LIKE ?
+         AND area BETWEEN ? AND ?
+       ORDER BY
+         CASE WHEN district = ? THEN 0 ELSE 1 END,
+         CASE WHEN city LIKE ? THEN 0 ELSE 1 END,
+         ABS(area - ?),
+         ABS(price - ?)
+       LIMIT 12`,
+      [
+        property.id,
+        property.type,
+        property.transaction_type,
+        strategy.cityPattern,
+        strategy.areaMin,
+        strategy.areaMax,
+        property.district || "",
+        `%${property.city || ""}%`,
+        area,
+        property.price || 0,
+      ],
+    );
+    comparables = rows;
+    strategyUsed = strategy;
+    if (rows.length >= 3) break;
+  }
+
+  let priceRisk = {
+    level: "unknown",
+    label: "Chưa đủ dữ liệu so sánh giá",
+    sample_size: comparables.length,
+    basis: strategyUsed.label,
+  };
+
+  const unitPrices = comparables
+    .map((item) => Number(item.unit_price || 0))
+    .filter((value) => value > 0)
+    .sort((a, b) => a - b);
+  if (unitPrices.length >= 3 && Number(property.area) > 0) {
+    const currentUnitPrice = Math.round(
+      Number(property.price) / Number(property.area),
+    );
+    const lowUnitPrice = unitPrices[Math.floor(unitPrices.length * 0.25)];
+    const highUnitPrice = unitPrices[Math.ceil(unitPrices.length * 0.75) - 1];
+    const lowTolerance = lowUnitPrice * 0.75;
+    const highTolerance = highUnitPrice * 1.35;
+    const position =
+      currentUnitPrice < lowTolerance
+        ? "too_low"
+        : currentUnitPrice > highTolerance
+          ? "too_high"
+          : "normal";
+    priceRisk = {
+      level: position === "normal" ? "normal" : "warning",
+      position,
+      label:
+        position === "too_low"
+          ? "Giá thấp bất thường so với tin tương đồng"
+          : position === "too_high"
+            ? "Giá cao bất thường so với tin tương đồng"
+            : "Giá nằm trong vùng tham khảo",
+      sample_size: unitPrices.length,
+      basis: strategyUsed.label,
+      current_unit_price: currentUnitPrice,
+      reference_unit_price: {
+        low: Math.round(lowUnitPrice),
+        high: Math.round(highUnitPrice),
+      },
+    };
+  }
+
+  return {
+    quality_score: score,
+    quality_level: score >= 85 ? "good" : score >= 65 ? "watch" : "risk",
+    failed_items: failedItems.map(({ key, label }) => ({ key, label })),
+    price_risk: priceRisk,
+  };
 }
 
 function optionalNumber(value) {
@@ -585,6 +811,27 @@ router.post("/", authMiddleware, async (req, res) => {
       });
     }
 
+    const [[{ pending_count }]] = await pool.query(
+      "SELECT COUNT(*) AS pending_count FROM properties WHERE owner_id = ? AND status = 'pending'",
+      [req.user.id],
+    );
+    const violationCount = await getOwnerProcessedViolationCount(req.user.id);
+    if (violationCount >= MAX_PROCESSED_VIOLATIONS_FOR_POSTING) {
+      return res.status(400).json({
+        message:
+          "Tai khoan co nhieu tin bi admin xu ly. Vui long cai thien cac tin hien co hoac lien he admin truoc khi dang them tin moi.",
+      });
+    }
+    const pendingLimit =
+      violationCount >= MAX_PROCESSED_VIOLATIONS_FOR_FEATURED
+        ? LIMITED_PENDING_PROPERTIES_PER_OWNER
+        : MAX_PENDING_PROPERTIES_PER_OWNER;
+    if (Number(pending_count || 0) >= pendingLimit) {
+      return res.status(400).json({
+        message: `Bạn đang có ${pendingLimit} tin chờ duyệt. Vui lòng chờ admin xử lý trước khi đăng thêm.`,
+      });
+    }
+
     // Insert property khong set approved ngay; default status trong DB la pending.
     const [result] = await pool.query(
       `INSERT INTO properties
@@ -666,7 +913,24 @@ router.get("/owner/featured-orders", authMiddleware, async (req, res) => {
        LIMIT 20`,
       [req.user.id],
     );
-    res.json(orders);
+    const now = Date.now();
+    const ordersWithPaymentUrl = orders.map((order) => {
+      const isPending =
+        order.status === "pending" &&
+        new Date(order.created_at).getTime() >=
+          now - FEATURED_PENDING_TIMEOUT_MINUTES * 60 * 1000;
+      return {
+        ...order,
+        payment_url: isPending
+          ? createVnpayPaymentUrl({
+              orderId: order.id,
+              amount: order.amount,
+              orderInfo: `Thanh toan goi noi bat ${order.package_name} cho tin ${order.property_id}`,
+            })
+          : null,
+      };
+    });
+    res.json(ordersWithPaymentUrl);
   } catch (err) {
     res.status(500).json({ message: "Lỗi server", error: err.message });
   }
@@ -713,6 +977,24 @@ router.post("/:id/featured-orders", authMiddleware, async (req, res) => {
         .status(400)
         .json({ message: "Chỉ tin đã được duyệt mới có thể mua gói nổi bật" });
 
+    const violationCount = await getOwnerProcessedViolationCount(req.user.id);
+    if (violationCount >= MAX_PROCESSED_VIOLATIONS_FOR_FEATURED) {
+      return res.status(400).json({
+        message:
+          "Tài khoản có nhiều tin bị xử lý. Vui lòng cải thiện chất lượng tin trước khi mua gói nổi bật.",
+      });
+    }
+
+    await pool.query(
+      `UPDATE featured_orders
+       SET status = 'failed'
+       WHERE property_id = ?
+         AND owner_id = ?
+         AND status = 'pending'
+         AND created_at < DATE_SUB(NOW(), INTERVAL ${FEATURED_PENDING_TIMEOUT_MINUTES} MINUTE)`,
+      [property.id, req.user.id],
+    );
+
     const isRenewingActiveFeatured =
       property.featured_until && new Date(property.featured_until) > new Date();
     if (!isRenewingActiveFeatured) {
@@ -737,13 +1019,13 @@ router.post("/:id/featured-orders", authMiddleware, async (req, res) => {
        WHERE property_id = ?
          AND owner_id = ?
          AND status = 'pending'
-         AND created_at >= DATE_SUB(NOW(), INTERVAL 30 MINUTE)`,
+         AND created_at >= DATE_SUB(NOW(), INTERVAL ${FEATURED_PENDING_TIMEOUT_MINUTES} MINUTE)`,
       [property.id, req.user.id],
     );
     if (Number(pending_order_count) > 0) {
       return res.status(400).json({
         message:
-          "Tin này đang có đơn thanh toán gói nổi bật chưa hoàn tất. Vui lòng thanh toán hoặc đợi đơn hết hạn trước khi tạo đơn mới.",
+          `Tin này đang có đơn thanh toán gói nổi bật chưa hoàn tất. Vui lòng thanh toán hoặc đợi đơn hết hạn sau ${FEATURED_PENDING_TIMEOUT_MINUTES} phút trước khi tạo đơn mới.`,
       });
     }
 
@@ -884,6 +1166,22 @@ router.get("/vnpay-return", async (req, res) => {
       });
     }
 
+    if (
+      new Date(order.created_at) <
+      new Date(Date.now() - FEATURED_PENDING_TIMEOUT_MINUTES * 60 * 1000)
+    ) {
+      await connection.query(
+        "UPDATE featured_orders SET status = 'failed' WHERE id = ? AND status = 'pending'",
+        [order.id],
+      );
+      await connection.commit();
+      return res.status(400).json({
+        success: false,
+        message: "Đơn thanh toán đã quá hạn xử lý. Vui lòng tạo đơn mới.",
+        order_id: order.id,
+      });
+    }
+
     if (order.property_status !== "approved") {
       await connection.rollback();
       return res.status(400).json({
@@ -931,6 +1229,97 @@ router.get("/vnpay-return", async (req, res) => {
   }
 });
 
+// GET /api/property/admin/reports — admin xem cac tin bi nguoi dung bao cao.
+// Khong tao bang moi: lay cac su kien report da ghi trong property_status_history.
+router.get("/admin/reports", authMiddleware, async (req, res) => {
+  if (req.user.role !== "admin")
+    return res.status(403).json({ message: "Không có quyền" });
+
+  const page = Math.max(1, Number(req.query.page) || 1);
+  const limit = Math.min(50, Math.max(1, Number(req.query.limit) || 10));
+  const offset = (page - 1) * limit;
+  const propertyId = req.query.property_id ? Number(req.query.property_id) : null;
+
+  if (req.query.property_id && !Number.isInteger(propertyId)) {
+    return res.status(400).json({ message: "Mã tin không hợp lệ" });
+  }
+
+  const reportWhere = "h.note LIKE 'Người dùng báo cáo tin:%'";
+  const params = propertyId ? [propertyId] : [];
+  const propertyFilter = propertyId ? " AND h.property_id = ?" : "";
+
+  try {
+    if (propertyId) {
+      const [reports] = await pool.query(
+        `SELECT h.id, h.property_id, h.actor_id, h.note, h.created_at,
+                u.full_name AS reporter_name, u.email AS reporter_email, u.role AS reporter_role
+         FROM property_status_history h
+         LEFT JOIN users u ON u.id = h.actor_id
+         WHERE ${reportWhere}${propertyFilter}
+         ORDER BY h.created_at DESC`,
+        params,
+      );
+      return res.json({ data: reports });
+    }
+
+    const [[{ total }]] = await pool.query(
+      `SELECT COUNT(*) AS total
+       FROM (
+         SELECT h.property_id
+         FROM property_status_history h
+         WHERE ${reportWhere}
+         GROUP BY h.property_id
+       ) reported_properties`,
+    );
+
+    const [rows] = await pool.query(
+      `SELECT
+         p.id, p.title, p.status, p.price, p.type, p.transaction_type,
+         p.city, p.district, p.created_at, p.owner_id,
+         owner.full_name AS owner_name, owner.email AS owner_email,
+         COUNT(h.id) AS report_count,
+         CASE
+           WHEN COUNT(h.id) >= 5 THEN 'critical'
+           WHEN COUNT(h.id) >= 3 THEN 'high'
+           WHEN COUNT(h.id) >= 1 THEN 'watch'
+           ELSE 'none'
+         END AS report_level,
+         MAX(h.created_at) AS latest_report_at,
+         SUBSTRING_INDEX(
+           GROUP_CONCAT(h.note ORDER BY h.created_at DESC SEPARATOR '|||'),
+           '|||',
+           1
+         ) AS latest_report_note,
+         SUBSTRING_INDEX(
+           GROUP_CONCAT(COALESCE(reporter.full_name, 'Người dùng') ORDER BY h.created_at DESC SEPARATOR '|||'),
+           '|||',
+           1
+         ) AS latest_reporter_name
+       FROM property_status_history h
+       JOIN properties p ON p.id = h.property_id
+       JOIN users owner ON owner.id = p.owner_id
+       LEFT JOIN users reporter ON reporter.id = h.actor_id
+       WHERE ${reportWhere}
+       GROUP BY p.id
+       ORDER BY latest_report_at DESC
+       LIMIT ? OFFSET ?`,
+      [limit, offset],
+    );
+
+    res.json({
+      data: rows,
+      pagination: {
+        page,
+        limit,
+        total,
+        total_pages: Math.ceil(total / limit) || 1,
+      },
+    });
+  } catch (err) {
+    res.status(500).json({ message: "Lỗi server", error: err.message });
+  }
+});
+
 // GET /api/property/:id — chi tiết tin (owner/admin, kể cả pending)
 // Owner/Admin API: xem chi tiet noi bo cua tin, ke ca tin pending/rejected/hidden.
 // Buyer khong dung API nay; buyer xem chi tiet public qua listing-service.
@@ -949,6 +1338,9 @@ router.get("/:id", authMiddleware, async (req, res) => {
        (SELECT COUNT(*)
         FROM properties op
         WHERE op.owner_id = p.owner_id AND op.status = 'rejected') AS owner_rejected_properties,
+       (SELECT COUNT(*)
+        FROM properties op
+        WHERE op.owner_id = p.owner_id AND op.status = 'hidden') AS owner_hidden_properties,
        (SELECT COALESCE(SUM(op.view_count), 0)
         FROM properties op
         WHERE op.owner_id = p.owner_id) AS owner_total_views,
@@ -978,6 +1370,9 @@ router.get("/:id", authMiddleware, async (req, res) => {
     }
 
     property.images = property.images ? property.images.split(",") : [];
+    if (req.user.role === "admin") {
+      property.review_insights = await buildAdminReviewInsights(property);
+    }
     res.json(property);
   } catch (err) {
     res.status(500).json({ message: "Lỗi server", error: err.message });
@@ -1008,7 +1403,45 @@ router.put("/:id", authMiddleware, async (req, res) => {
         .json({ message: "Tin đã bán/cho thuê, không thể chỉnh sửa" });
     }
 
+    const [duplicateRows] = await pool.query(
+      `SELECT id, status FROM properties
+       WHERE owner_id = ?
+         AND id <> ?
+         AND LOWER(title) = LOWER(?)
+         AND type = ?
+         AND transaction_type = ?
+         AND city = ?
+         AND district <=> ?
+         AND address = ?
+         AND ABS(price - ?) <= GREATEST(? * 0.02, 1000000)
+         AND ABS(area - ?) <= GREATEST(? * 0.02, 1)
+         AND status <> 'sold'
+       LIMIT 1`,
+      [
+        req.user.id,
+        req.params.id,
+        property.title,
+        property.type,
+        property.transaction_type,
+        property.city,
+        property.district || null,
+        property.address,
+        property.price,
+        property.price,
+        property.area,
+        property.area,
+      ],
+    );
+    if (duplicateRows.length > 0) {
+      return res.status(409).json({
+        message:
+          "Tin chỉnh sửa có dấu hiệu trùng với một tin khác đang tồn tại. Vui lòng cập nhật tin cũ hoặc thay đổi thông tin cho rõ ràng.",
+        existing_id: duplicateRows[0].id,
+      });
+    }
+
     // Moi lan owner sua tin, status ve pending va xoa ly do tu choi cu de admin duyet lai ban moi.
+    // Neu tin dang co goi noi bat da thanh toan, giu featured_until de khi duyet lai van con quyen loi neu chua het han.
     await pool.query(
       `UPDATE properties
       SET title=?, description=?, type=?, transaction_type=?,
@@ -1037,6 +1470,10 @@ router.put("/:id", authMiddleware, async (req, res) => {
         property.longitude,
         req.params.id,
       ],
+    );
+    await pool.query(
+      "UPDATE featured_orders SET status = 'cancelled' WHERE property_id = ? AND status = 'pending'",
+      [req.params.id],
     );
     await addStatusHistory(
       req.params.id,
@@ -1103,23 +1540,33 @@ router.patch("/:id/status", authMiddleware, async (req, res) => {
   if (!valid.includes(status))
     return res.status(400).json({ message: "Trạng thái không hợp lệ" });
 
-  const reason = status === "rejected" ? normalizeText(reject_reason) : null;
-  if (status === "rejected" && !reason)
-    return res.status(400).json({ message: "Vui lòng nhập lý do từ chối" });
+  const reason = ["rejected", "hidden"].includes(status)
+    ? normalizeText(reject_reason)
+    : null;
+  if (["rejected", "hidden"].includes(status) && !reason) {
+    return res.status(400).json({
+      message:
+        status === "hidden"
+          ? "Vui lòng nhập lý do ẩn tin"
+          : "Vui lòng nhập lý do từ chối",
+    });
+  }
   if (
-    status === "rejected" &&
+    ["rejected", "hidden"].includes(status) &&
     (reason.length < MIN_REJECT_REASON_LENGTH || isWeakRejectReason(reason))
   ) {
     return res.status(400).json({
       message:
-        "Lý do từ chối cần cụ thể hơn, nêu rõ tiêu chí chưa đạt để owner có thể sửa tin.",
+        status === "hidden"
+          ? "Lý do ẩn tin cần cụ thể hơn, nêu rõ vấn đề để owner có thể kiểm tra và chỉnh sửa."
+          : "Lý do từ chối cần cụ thể hơn, nêu rõ tiêu chí chưa đạt để owner có thể sửa tin.",
     });
   }
 
   try {
     // Kiểm tra tin tồn tại
     const [rows] = await pool.query(
-      "SELECT id, owner_id, title, status FROM properties WHERE id = ?",
+      "SELECT id, owner_id, title, status, featured_until FROM properties WHERE id = ?",
       [req.params.id],
     );
     if (rows.length === 0)
@@ -1138,10 +1585,63 @@ router.patch("/:id/status", authMiddleware, async (req, res) => {
            reject_reason = ?,
            approved_at = IF(? = 'approved', NOW(), approved_at),
            rejected_at = IF(? = 'rejected', NOW(), rejected_at),
-           hidden_at = IF(? = 'hidden', NOW(), hidden_at)
+           hidden_at = IF(? = 'hidden', NOW(), hidden_at),
+           featured_until = IF(? IN ('rejected', 'hidden'), NULL, featured_until)
        WHERE id = ?`,
-      [status, reason, status, status, status, req.params.id],
+      [status, reason, status, status, status, status, req.params.id],
     );
+
+    if (
+      status === "approved" &&
+      property.status === "pending" &&
+      property.featured_until
+    ) {
+      const [pauseRows] = await pool.query(
+        `SELECT created_at
+         FROM property_status_history
+         WHERE property_id = ?
+           AND old_status = 'approved'
+           AND new_status = 'pending'
+           AND actor_id = ?
+           AND created_at > DATE_SUB(NOW(), INTERVAL 90 DAY)
+         ORDER BY created_at DESC
+         LIMIT 1`,
+        [req.params.id, property.owner_id],
+      );
+
+      const pauseStartedAt = pauseRows[0]?.created_at;
+      if (
+        pauseStartedAt &&
+        new Date(property.featured_until) > new Date(pauseStartedAt)
+      ) {
+        const [[{ paused_minutes }]] = await pool.query(
+          "SELECT GREATEST(0, TIMESTAMPDIFF(MINUTE, ?, NOW())) AS paused_minutes",
+          [pauseStartedAt],
+        );
+        if (Number(paused_minutes || 0) > 0) {
+          await pool.query(
+            `UPDATE properties
+             SET featured_until = DATE_ADD(featured_until, INTERVAL ? MINUTE)
+             WHERE id = ?`,
+            [Number(paused_minutes), req.params.id],
+          );
+          await addStatusHistory(
+            req.params.id,
+            "approved",
+            "approved",
+            req.user.id,
+            `Admin duyet lai va bu ${Number(paused_minutes)} phut goi noi bat do tin cho kiem duyet`,
+          );
+        }
+      }
+    }
+
+    if (["rejected", "hidden"].includes(status)) {
+      await pool.query(
+        "UPDATE featured_orders SET status = 'cancelled' WHERE property_id = ? AND status = 'pending'",
+        [req.params.id],
+      );
+    }
 
     await addStatusHistory(
       req.params.id,
@@ -1152,7 +1652,7 @@ router.patch("/:id/status", authMiddleware, async (req, res) => {
         ? reason
         : status === "approved"
           ? "Admin duyệt tin đăng"
-          : "Admin ẩn tin đăng",
+          : reason,
     );
 
     res.json({ message: "Cập nhật trạng thái thành công" });
@@ -1189,6 +1689,80 @@ router.get("/:id/history", authMiddleware, async (req, res) => {
   }
 });
 
+// POST /api/property/:id/report — người dùng báo cáo tin xấu
+// Không tạo bảng mới: ghi sự kiện báo cáo vào property_status_history để admin/owner truy vết.
+router.post("/:id/report", authMiddleware, async (req, res) => {
+  if (!["buyer", "owner"].includes(req.user.role)) {
+    return res.status(403).json({ message: "Không có quyền báo cáo tin" });
+  }
+
+  const reason = String(req.body.reason || "").trim();
+  const message = normalizeText(req.body.message);
+  if (!REPORT_REASONS[reason]) {
+    return res.status(400).json({ message: "Lý do báo cáo không hợp lệ" });
+  }
+  if (message.length < 10) {
+    return res
+      .status(400)
+      .json({ message: "Nội dung báo cáo phải có ít nhất 10 ký tự" });
+  }
+  if (message.length > 500) {
+    return res
+      .status(400)
+      .json({ message: "Nội dung báo cáo không được vượt quá 500 ký tự" });
+  }
+
+  try {
+    const [rows] = await pool.query(
+      "SELECT id, owner_id, status FROM properties WHERE id = ?",
+      [req.params.id],
+    );
+    if (rows.length === 0)
+      return res.status(404).json({ message: "Không tìm thấy tin đăng" });
+    const property = rows[0];
+    if (Number(property.owner_id) === Number(req.user.id)) {
+      return res
+        .status(400)
+        .json({ message: "Bạn không thể báo cáo tin của chính mình" });
+    }
+    if (property.status !== "approved") {
+      return res
+        .status(400)
+        .json({ message: "Chỉ có thể báo cáo tin đang hiển thị" });
+    }
+
+    const [existingReports] = await pool.query(
+      `SELECT id
+       FROM property_status_history
+       WHERE property_id = ?
+         AND actor_id = ?
+         AND note LIKE 'Người dùng báo cáo tin:%'
+       LIMIT 1`,
+      [req.params.id, req.user.id],
+    );
+    if (existingReports.length > 0) {
+      return res
+        .status(400)
+        .json({ message: "Bạn đã báo cáo tin này rồi. Admin sẽ xem xét báo cáo đã gửi." });
+    }
+
+    await addStatusHistory(
+      req.params.id,
+      property.status,
+      property.status,
+      req.user.id,
+      `Người dùng báo cáo tin: ${REPORT_REASONS[reason]}. ${message}`,
+    );
+
+    res.status(201).json({
+      message:
+        "Đã ghi nhận báo cáo. Admin sẽ xem xét trong lịch sử kiểm tra tin.",
+    });
+  } catch (err) {
+    res.status(500).json({ message: "Lỗi server", error: err.message });
+  }
+});
+
 // PATCH /api/property/:id/hide — Owner tự ẩn tin
 // Owner API: owner tu an tin dang dang approved.
 // Tin hidden khong hien thi tren listing public.
@@ -1212,7 +1786,11 @@ router.patch("/:id/hide", authMiddleware, async (req, res) => {
     }
 
     await pool.query(
-      "UPDATE properties SET status = 'hidden', hidden_at = NOW() WHERE id = ?",
+      "UPDATE properties SET status = 'hidden', hidden_at = NOW(), featured_until = NULL WHERE id = ?",
+      [req.params.id],
+    );
+    await pool.query(
+      "UPDATE featured_orders SET status = 'cancelled' WHERE property_id = ? AND status = 'pending'",
       [req.params.id],
     );
     await addStatusHistory(
@@ -1249,8 +1827,23 @@ router.patch("/:id/sold", authMiddleware, async (req, res) => {
       });
     }
 
+    const [[{ contact_count }]] = await pool.query(
+      "SELECT COUNT(*) AS contact_count FROM contacts WHERE property_id = ?",
+      [req.params.id],
+    );
+    if (Number(contact_count || 0) === 0) {
+      return res.status(400).json({
+        message:
+          "Chỉ có thể đánh dấu đã giao dịch khi tin đã có ít nhất một liên hệ từ người mua",
+      });
+    }
+
     await pool.query(
-      "UPDATE properties SET status = 'sold', sold_at = NOW() WHERE id = ?",
+      "UPDATE properties SET status = 'sold', sold_at = NOW(), featured_until = NULL WHERE id = ?",
+      [req.params.id],
+    );
+    await pool.query(
+      "UPDATE featured_orders SET status = 'cancelled' WHERE property_id = ? AND status = 'pending'",
       [req.params.id],
     );
     await addStatusHistory(

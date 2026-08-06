@@ -29,6 +29,7 @@ function getRequestFallback(error) {
   if (/\/api\/property\/owner\/stats$/.test(path)) return "Không thể tải thống kê tin đăng.";
   if (/\/api\/property\/owner\/list$/.test(path)) return "Không thể tải danh sách tin của bạn.";
   if (/\/api\/property\/owner\/featured-orders$/.test(path)) return "Không thể tải lịch sử thanh toán gói nổi bật.";
+  if (/\/api\/property\/admin\/reports$/.test(path)) return "Không thể tải danh sách báo cáo tin đăng.";
   if (/\/api\/property\/featured-packages$/.test(path)) return "Không thể tải danh sách gói nổi bật.";
   if (/\/api\/property\/featured-orders$/.test(path) && method === "POST") return "Không thể tạo đơn thanh toán gói nổi bật.";
   if (/\/api\/property\/vnpay-return$/.test(path)) return "Không thể xác nhận kết quả thanh toán VNPay.";
@@ -36,6 +37,7 @@ function getRequestFallback(error) {
   if (/\/api\/property\/[^/]+\/status$/.test(path)) return "Không thể cập nhật trạng thái tin đăng.";
   if (/\/api\/property\/[^/]+\/hide$/.test(path)) return "Không thể ẩn tin đăng.";
   if (/\/api\/property\/[^/]+\/unhide$/.test(path)) return "Không thể gửi lại tin đăng.";
+  if (/\/api\/property\/[^/]+\/report$/.test(path)) return "Không thể gửi báo cáo tin đăng.";
   if (/\/api\/property\/[^/]+\/sold$/.test(path)) return "Không thể đánh dấu tin đã giao dịch.";
   if (/\/api\/property\/[^/]+\/history$/.test(path)) return "Không thể tải lịch sử trạng thái tin.";
   if (/\/api\/property\/[^/]+$/.test(path) && method === "GET") return "Không thể tải thông tin tin đăng.";
@@ -46,6 +48,7 @@ function getRequestFallback(error) {
   if (/\/api\/listing\/category-counts$/.test(path)) return "Không thể tải số lượng tin theo danh mục.";
   if (/\/api\/listing\/owners\/[^/]+$/.test(path)) return "Không thể tải hồ sơ người bán.";
   if (/\/api\/listing\/[^/]+\/similar$/.test(path)) return "Không thể tải tin tương tự.";
+  if (/\/api\/listing\/[^/]+\/price-estimate$/.test(path)) return "Không thể tải định giá tham khảo.";
   if (/\/api\/listing\/[^/]+$/.test(path)) return "Không thể tải chi tiết bất động sản.";
   if (/\/api\/listing$/.test(path)) return "Không thể tải danh sách bất động sản.";
 

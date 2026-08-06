@@ -40,6 +40,24 @@ describe("listing-service", () => {
     );
   });
 
+  test("searches floor keyword as a phrase instead of loose tokens", async () => {
+    pool.query
+      .mockResolvedValueOnce([[{ id: 2, title: "Nha pho 2 tang" }]])
+      .mockResolvedValueOnce([[{ total: 1 }]]);
+
+    const res = await request(app()).get(
+      "/api/listing?keyword=nha%202%20tang&page=1&limit=8",
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.body.data).toHaveLength(1);
+    expect(pool.query.mock.calls[0][0]).toContain("p.title LIKE ?");
+    expect(pool.query.mock.calls[0][1]).toContain("%2 tang%");
+    expect(pool.query.mock.calls[0][1]).toContain("%nha%");
+    expect(pool.query.mock.calls[0][1]).not.toContain("%2%");
+    expect(pool.query.mock.calls[0][1]).not.toContain("%tang%");
+  });
+
   test("returns listing detail and increments view_count", async () => {
     pool.query
       .mockResolvedValueOnce([
@@ -74,6 +92,7 @@ describe("listing-service", () => {
             full_name: "Owner Demo",
             email_verified: 1,
             approved_properties: 3,
+            hidden_properties: 1,
           },
         ],
       ])
@@ -83,8 +102,10 @@ describe("listing-service", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.owner.full_name).toBe("Owner Demo");
+    expect(res.body.owner.hidden_properties).toBe(1);
     expect(res.body.properties).toHaveLength(1);
     expect(pool.query.mock.calls[0][0]).toContain("u.role = 'owner'");
+    expect(pool.query.mock.calls[0][0]).toContain("hidden_properties");
     expect(pool.query.mock.calls[1][0]).toContain("p.status = 'approved'");
   });
 
@@ -121,6 +142,69 @@ describe("listing-service", () => {
       1500000000,
       4500000000,
     ]);
+  });
+
+  test("returns price estimate from comparable listings", async () => {
+    pool.query
+      .mockResolvedValueOnce([
+        [
+          {
+            id: 1,
+            type: "apartment",
+            transaction_type: "sale",
+            city: "TP.HCM",
+            district: "Quan 1",
+            price: 3000000000,
+            area: 60,
+          },
+        ],
+      ])
+      .mockResolvedValueOnce([
+        [
+          { id: 2, price: 2800000000, area: 58, unit_price: 48275862 },
+          { id: 3, price: 3100000000, area: 62, unit_price: 50000000 },
+          { id: 4, price: 3300000000, area: 64, unit_price: 51562500 },
+        ],
+      ]);
+
+    const res = await request(app()).get("/api/listing/1/price-estimate");
+
+    expect(res.status).toBe(200);
+    expect(res.body.sample_size).toBe(3);
+    expect(res.body.estimated_range.low).toBeTruthy();
+  });
+
+  test("price estimate broadens comparable scope when strict match is sparse", async () => {
+    pool.query
+      .mockResolvedValueOnce([
+        [
+          {
+            id: 1,
+            type: "house",
+            transaction_type: "sale",
+            city: "TP.HCM",
+            district: "Quan 1",
+            price: 7000000000,
+            area: 80,
+          },
+        ],
+      ])
+      .mockResolvedValueOnce([[{ id: 2, price: 6900000000, area: 82, unit_price: 84146341 }]])
+      .mockResolvedValueOnce([[{ id: 2, price: 6900000000, area: 82, unit_price: 84146341 }]])
+      .mockResolvedValueOnce([
+        [
+          { id: 2, price: 6900000000, area: 82, unit_price: 84146341 },
+          { id: 3, price: 7200000000, area: 88, unit_price: 81818182 },
+          { id: 4, price: 6500000000, area: 75, unit_price: 86666667 },
+        ],
+      ]);
+
+    const res = await request(app()).get("/api/listing/1/price-estimate");
+
+    expect(res.status).toBe(200);
+    expect(res.body.sample_size).toBe(3);
+    expect(res.body.basis).toBe("Cùng thành phố, cùng loại và diện tích mở rộng");
+    expect(pool.query).toHaveBeenCalledTimes(4);
   });
 
   test("similar listings returns 404 when base property is not approved", async () => {
