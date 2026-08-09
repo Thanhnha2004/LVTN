@@ -32,6 +32,24 @@ function normalizeMessage(value) {
     .replace(/\s+/g, " ");
 }
 
+function parsePagination(
+  query,
+  { defaultLimit = 10, maxLimit = 100, maxPage = 1_000_000 } = {},
+) {
+  const parsedPage = Number(query.page);
+  const parsedLimit = Number(query.limit);
+  const requestedPage =
+    Number.isSafeInteger(parsedPage) && parsedPage > 0 ? parsedPage : 1;
+  const page = Math.min(requestedPage, maxPage);
+  const requestedLimit =
+    Number.isSafeInteger(parsedLimit) && parsedLimit > 0
+      ? parsedLimit
+      : defaultLimit;
+  const limit = Math.min(requestedLimit, maxLimit);
+
+  return { page, limit, offset: (page - 1) * limit };
+}
+
 const LEAD_TRANSITIONS = {
   new: ["contacted"],
   contacted: ["scheduled", "closed", "cancelled"],
@@ -119,6 +137,10 @@ router.post("/", authMiddleware, async (req, res) => {
 
     res.status(201).json({ message: "Gửi yêu cầu thành công" });
   } catch (err) {
+    if (err.code === "ER_DUP_ENTRY")
+      return res
+        .status(409)
+        .json({ message: "Bạn đã gửi yêu cầu liên hệ cho tin này rồi" });
     res.status(500).json({ message: "Lỗi server", error: err.message });
   }
 });
@@ -130,8 +152,8 @@ router.get("/owner", authMiddleware, async (req, res) => {
   if (req.user.role !== "owner" && req.user.role !== "admin")
     return res.status(403).json({ message: "Không có quyền" });
 
-  const { page = 1, limit = 10, lead_status } = req.query;
-  const offset = (parseInt(page) - 1) * parseInt(limit);
+  const { lead_status } = req.query;
+  const { page, limit, offset } = parsePagination(req.query);
   // Owner chi xem lead cua cac property do minh so huu; dieu kien nay la hang rao phan quyen theo du lieu.
   const conditions = ["p.owner_id = ?"];
   const params = [req.user.id];
@@ -157,7 +179,7 @@ router.get("/owner", authMiddleware, async (req, res) => {
         ORDER BY c.created_at DESC
         LIMIT ? OFFSET ?
       `,
-      [...params, parseInt(limit), offset],
+      [...params, limit, offset],
     );
 
     const [[{ total }]] = await pool.query(
@@ -173,8 +195,8 @@ router.get("/owner", authMiddleware, async (req, res) => {
       data: rows,
       pagination: {
         total,
-        page: parseInt(page),
-        limit: parseInt(limit),
+        page,
+        limit,
         total_pages: Math.ceil(total / limit),
       },
     });
@@ -359,14 +381,15 @@ router.get("/buyer", authMiddleware, async (req, res) => {
   if (!["buyer", "owner"].includes(req.user.role))
     return res.status(403).json({ message: "Không có quyền" });
 
-  const { page = 1, limit = 10 } = req.query;
-  const offset = (parseInt(page) - 1) * parseInt(limit);
+  const { page, limit, offset } = parsePagination(req.query);
 
   try {
     // Phan hoi cung phai kiem tra ownership de owner khong tra loi contact cua owner khac.
     const [rows] = await pool.query(
       `
-        SELECT c.*, p.title as property_title, p.city, p.price, p.owner_id,
+        SELECT c.id, c.property_id, c.message, c.owner_reply,
+              c.status, c.lead_status, c.created_at,
+              p.title as property_title, p.city, p.price, p.owner_id,
               o.full_name as owner_name, o.phone_number as owner_phone,
               o.email as owner_email,
               (SELECT pi.url FROM property_images pi
@@ -378,7 +401,7 @@ router.get("/buyer", authMiddleware, async (req, res) => {
         ORDER BY c.created_at DESC
         LIMIT ? OFFSET ?
       `,
-      [req.user.id, parseInt(limit), offset],
+      [req.user.id, limit, offset],
     );
 
     const [[{ total }]] = await pool.query(
@@ -390,8 +413,8 @@ router.get("/buyer", authMiddleware, async (req, res) => {
       data: rows,
       pagination: {
         total,
-        page: parseInt(page),
-        limit: parseInt(limit),
+        page,
+        limit,
         total_pages: Math.ceil(total / limit),
       },
     });
@@ -433,6 +456,9 @@ router.post("/saved", authMiddleware, async (req, res) => {
 // DELETE /api/contact/saved/:id — Buyer bỏ lưu
 // Buyer API: bo luu mot tin yeu thich cua chinh buyer dang dang nhap.
 router.delete("/saved/:property_id", authMiddleware, async (req, res) => {
+  if (req.user.role !== "buyer")
+    return res.status(403).json({ message: "Chỉ buyer mới được bỏ lưu tin" });
+
   try {
     await pool.query(
       "DELETE FROM saved_properties WHERE buyer_id = ? AND property_id = ?",
@@ -447,16 +473,22 @@ router.delete("/saved/:property_id", authMiddleware, async (req, res) => {
 // GET /api/contact/saved — Buyer xem danh sách tin đã lưu
 // Buyer API: lay danh sach tin da luu, kem owner, thumbnail va thoi diem luu.
 router.get("/saved", authMiddleware, async (req, res) => {
+  if (req.user.role !== "buyer")
+    return res.status(403).json({ message: "Chỉ buyer mới được xem tin đã lưu" });
+
   try {
     const [rows] = await pool.query(
       `
-        SELECT p.*, u.full_name as owner_name,
-          (SELECT pi.url FROM property_images pi WHERE pi.property_id = p.id ORDER BY pi.order LIMIT 1) as thumbnail,
+        SELECT p.id, p.owner_id, p.title, p.type, p.transaction_type,
+          p.price, p.area, p.bedrooms, p.bathrooms,
+          p.district, p.city, p.featured_until, p.created_at,
+          u.full_name as owner_name,
+          (SELECT pi.url FROM property_images pi WHERE pi.property_id = p.id ORDER BY pi.\`order\` LIMIT 1) as thumbnail,
           sp.created_at as saved_at
         FROM saved_properties sp
         JOIN properties p ON sp.property_id = p.id
         JOIN users u ON p.owner_id = u.id
-        WHERE sp.buyer_id = ?
+        WHERE sp.buyer_id = ? AND p.status = 'approved'
         ORDER BY sp.created_at DESC
       `,
       [req.user.id],

@@ -147,7 +147,9 @@ export default function Detail() {
           try {
             const simRes = await api.get(`/api/listing/${id}/similar`);
             setSimilar(simRes.data.data || []);
-          } catch {}
+          } catch {
+            setSimilar([]);
+          }
           try {
             const estimateRes = await api.get(`/api/listing/${id}/price-estimate`);
             setPriceEstimate(estimateRes.data);
@@ -1800,6 +1802,8 @@ export default function Detail() {
                     rows={4}
                     placeholder="Tôi quan tâm đến bất động sản này..."
                     required
+                    minLength={10}
+                    maxLength={1000}
                     style={{
                       borderRadius: 8,
                       marginBottom: 12,
@@ -2092,6 +2096,8 @@ export default function Detail() {
               rows={4}
               placeholder="Mô tả điểm sai hoặc dấu hiệu cần admin kiểm tra..."
               required
+              minLength={10}
+              maxLength={500}
               style={{
                 width: "100%",
                 borderRadius: 8,

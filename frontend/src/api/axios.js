@@ -1,8 +1,9 @@
 import axios from "axios";
 import { getApiErrorMessage } from "./errorMessage";
+import { API_BASE_URL } from "./config";
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || "http://localhost:3000",
+  baseURL: API_BASE_URL,
 });
 
 function getPendingCount() {
@@ -47,6 +48,9 @@ api.interceptors.response.use(
   },
   (error) => {
     stopLoading();
+    if (error.response?.status === 401 && typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("app:unauthorized"));
+    }
     const message = getApiErrorMessage(error);
     error.normalizedMessage = message;
     error.message = message;

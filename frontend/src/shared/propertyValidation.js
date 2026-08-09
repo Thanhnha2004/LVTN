@@ -58,8 +58,8 @@ export function validatePropertyForm(form, options = {}) {
       return { ok: false, message: "Tiêu đề phải có ít nhất 10 ký tự." };
     if (values.title.length > 180)
       return { ok: false, message: "Tiêu đề không được vượt quá 180 ký tự." };
-    if (shouldValidateDescription && values.description.length < 20)
-      return { ok: false, message: "Mô tả phải có ít nhất 20 ký tự." };
+    if (shouldValidateDescription && values.description.length < 30)
+      return { ok: false, message: "Mô tả phải có ít nhất 30 ký tự." };
     if (shouldValidateDescription && values.description.length > 3000)
       return { ok: false, message: "Mô tả không được vượt quá 3000 ký tự." };
     if (!VALID_TYPES.has(values.type))

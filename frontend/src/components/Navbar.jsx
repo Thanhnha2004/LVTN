@@ -119,6 +119,7 @@ export default function Navbar() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const handleLogout = () => {
     logout();
@@ -146,12 +147,19 @@ export default function Navbar() {
       <button
         className="navbar-toggler border-0"
         type="button"
-        data-bs-toggle="collapse"
-        data-bs-target="#navMain">
+        aria-controls="navMain"
+        aria-expanded={menuOpen}
+        aria-label={menuOpen ? "Đóng menu điều hướng" : "Mở menu điều hướng"}
+        onClick={() => setMenuOpen((open) => !open)}>
         <span className="navbar-toggler-icon" />
       </button>
 
-      <div className="collapse navbar-collapse" id="navMain">
+      <div
+        className={`collapse navbar-collapse${menuOpen ? " show" : ""}`}
+        id="navMain"
+        onClickCapture={(event) => {
+          if (event.target.closest?.("a")) setMenuOpen(false);
+        }}>
         {/* Menu loại hình — luôn hiện */}
         <ul className="navbar-nav me-auto gap-1">
           {[

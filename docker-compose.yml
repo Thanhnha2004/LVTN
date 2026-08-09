@@ -1,3 +1,4 @@
+# Development-only Compose stack. Do not expose demo data or credentials publicly.
 services:
   mysql:
     image: mysql:8.0
@@ -9,7 +10,7 @@ services:
       MYSQL_DATABASE: ${DB_NAME}
       MYSQL_CHARSET: utf8mb4
     ports:
-      - "3307:3306"
+      - "127.0.0.1:3307:3306"
     volumes:
       - mysql_data:/var/lib/mysql
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql
@@ -27,7 +28,7 @@ services:
     build: ./api-gateway
     container_name: bds-gateway
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     environment:
       FRONTEND_URL: ${FRONTEND_URL}
     depends_on:
@@ -49,9 +50,13 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       MAIL_USER: ${MAIL_USER}
       MAIL_PASS: ${MAIL_PASS}
+      CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME}
+      CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY}
+      CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET}
+      ALLOW_DEMO_ADMIN_LOGIN: ${ALLOW_DEMO_ADMIN_LOGIN:-false}
       PORT: 3001
-    ports:
-      - "3001:3001"
+    expose:
+      - "3001"
 
     depends_on:
       mysql:
@@ -76,9 +81,10 @@ services:
       VNPAY_HASH_SECRET: ${VNPAY_HASH_SECRET}
       VNPAY_PAYMENT_URL: ${VNPAY_PAYMENT_URL}
       VNPAY_RETURN_URL: ${VNPAY_RETURN_URL}
+      ALLOW_DEMO_ADMIN_LOGIN: ${ALLOW_DEMO_ADMIN_LOGIN:-false}
       PORT: 3002
-    ports:
-      - "3002:3002"
+    expose:
+      - "3002"
     depends_on:
       mysql:
         condition: service_healthy
@@ -95,8 +101,8 @@ services:
       DB_PASS: ${DB_PASS}
       DB_NAME: ${DB_NAME}
       PORT: 3003
-    ports:
-      - "3003:3003"
+    expose:
+      - "3003"
     depends_on:
       mysql:
         condition: service_healthy
@@ -115,9 +121,10 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       MAIL_USER: ${MAIL_USER}
       MAIL_PASS: ${MAIL_PASS}
+      ALLOW_DEMO_ADMIN_LOGIN: ${ALLOW_DEMO_ADMIN_LOGIN:-false}
       PORT: 3004
-    ports:
-      - "3004:3004"
+    expose:
+      - "3004"
     depends_on:
       mysql:
         condition: service_healthy

@@ -36,9 +36,10 @@ async function addStatusHistory(
   newStatus,
   actorId,
   note,
+  database = pool,
 ) {
   // Moi lan status cua property thay doi se ghi vao bang history de truy vet ai da thao tac.
-  await pool.query(
+  await database.query(
     `INSERT INTO property_status_history
       (property_id, old_status, new_status, actor_id, note)
      VALUES (?, ?, ?, ?, ?)`,
@@ -88,6 +89,8 @@ const MAX_PROCESSED_VIOLATIONS_FOR_POSTING = 5;
 const MAX_PROCESSED_VIOLATIONS_FOR_FEATURED = 3;
 const MIN_REJECT_REASON_LENGTH = 20;
 const FEATURED_PENDING_TIMEOUT_MINUTES = 30;
+const MAX_IMAGES_PER_UPLOAD = 5;
+const MAX_IMAGES_PER_PROPERTY = 5;
 const REPORT_REASONS = {
   wrong_info: "Thông tin sai",
   fake_images: "Hình ảnh không đúng",
@@ -127,8 +130,8 @@ function canAdminChangeStatus(from, to) {
   return (ADMIN_STATUS_TRANSITIONS[from] || []).includes(to);
 }
 
-async function getOwnerProcessedViolationCount(ownerId) {
-  const [[{ violation_count }]] = await pool.query(
+async function getOwnerProcessedViolationCount(ownerId, database = pool) {
+  const [[{ violation_count }]] = await database.query(
     `SELECT COUNT(*) AS violation_count
      FROM property_status_history h
      JOIN properties p ON p.id = h.property_id
@@ -542,7 +545,19 @@ function verifyVnpayReturn(query) {
     .update(Buffer.from(signData, "utf-8"))
     .digest("hex");
 
-  return secureHash === signed;
+  if (
+    typeof secureHash !== "string" ||
+    !/^[a-fA-F0-9]{128}$/.test(secureHash)
+  ) {
+    return false;
+  }
+
+  const receivedHash = Buffer.from(secureHash.toLowerCase(), "hex");
+  const expectedHash = Buffer.from(signed, "hex");
+  return (
+    receivedHash.length === expectedHash.length &&
+    crypto.timingSafeEqual(receivedHash, expectedHash)
+  );
 }
 
 // GET /api/property/owner/list — danh sách tin của Owner
@@ -552,8 +567,18 @@ router.get("/owner/list", authMiddleware, async (req, res) => {
   if (req.user.role !== "owner")
     return res.status(403).json({ message: "Không có quyền" });
 
-  const { status, page = 1, limit = 10 } = req.query;
-  const offset = (parseInt(page) - 1) * parseInt(limit);
+  const { status } = req.query;
+  const requestedPage = Number(req.query.page);
+  const requestedLimit = Number(req.query.limit);
+  const page =
+    Number.isSafeInteger(requestedPage) && requestedPage > 0
+      ? Math.min(requestedPage, 1_000_000)
+      : 1;
+  const limit =
+    Number.isSafeInteger(requestedLimit) && requestedLimit > 0
+      ? Math.min(requestedLimit, 50)
+      : 10;
+  const offset = (page - 1) * limit;
 
   // Luon rang buoc owner_id = req.user.id de owner khong xem duoc tin cua nguoi khac.
   let conditions = ["p.owner_id = ?"];
@@ -578,7 +603,7 @@ router.get("/owner/list", authMiddleware, async (req, res) => {
       ORDER BY p.created_at DESC
       LIMIT ? OFFSET ?
       `,
-      [...params, parseInt(limit), offset],
+      [...params, limit, offset],
     );
 
     const [[{ total }]] = await pool.query(
@@ -590,8 +615,8 @@ router.get("/owner/list", authMiddleware, async (req, res) => {
       data: rows,
       pagination: {
         total,
-        page: parseInt(page),
-        limit: parseInt(limit),
+        page,
+        limit,
         total_pages: Math.ceil(total / limit),
       },
     });
@@ -784,8 +809,26 @@ router.post("/", authMiddleware, async (req, res) => {
     return res.status(400).json({ message: validation.error });
   const property = validation.values;
 
+  let connection;
   try {
-    const [duplicateRows] = await pool.query(
+    connection = await pool.getConnection();
+    await connection.beginTransaction();
+    const fail = async (status, payload) => {
+      await connection.rollback();
+      return res.status(status).json(payload);
+    };
+
+    // Serialize create requests of one owner so duplicate and pending quota
+    // checks remain true until the insert is committed.
+    const [[owner]] = await connection.query(
+      "SELECT id FROM users WHERE id = ? FOR UPDATE",
+      [req.user.id],
+    );
+    if (!owner) {
+      return fail(401, { message: "Tài khoản không còn tồn tại" });
+    }
+
+    const [duplicateRows] = await connection.query(
       `SELECT id, status FROM properties
        WHERE owner_id = ?
          AND LOWER(TRIM(title)) = LOWER(TRIM(?))
@@ -804,20 +847,23 @@ router.post("/", authMiddleware, async (req, res) => {
     );
 
     if (duplicateRows.length > 0) {
-      return res.status(409).json({
+      return fail(409, {
         message:
           "Tin đăng này đã tồn tại. Vui lòng chỉnh sửa tin cũ hoặc thay đổi thông tin nếu đây là bất động sản khác.",
         existing_id: duplicateRows[0].id,
       });
     }
 
-    const [[{ pending_count }]] = await pool.query(
+    const [[{ pending_count }]] = await connection.query(
       "SELECT COUNT(*) AS pending_count FROM properties WHERE owner_id = ? AND status = 'pending'",
       [req.user.id],
     );
-    const violationCount = await getOwnerProcessedViolationCount(req.user.id);
+    const violationCount = await getOwnerProcessedViolationCount(
+      req.user.id,
+      connection,
+    );
     if (violationCount >= MAX_PROCESSED_VIOLATIONS_FOR_POSTING) {
-      return res.status(400).json({
+      return fail(400, {
         message:
           "Tai khoan co nhieu tin bi admin xu ly. Vui long cai thien cac tin hien co hoac lien he admin truoc khi dang them tin moi.",
       });
@@ -827,13 +873,13 @@ router.post("/", authMiddleware, async (req, res) => {
         ? LIMITED_PENDING_PROPERTIES_PER_OWNER
         : MAX_PENDING_PROPERTIES_PER_OWNER;
     if (Number(pending_count || 0) >= pendingLimit) {
-      return res.status(400).json({
+      return fail(400, {
         message: `Bạn đang có ${pendingLimit} tin chờ duyệt. Vui lòng chờ admin xử lý trước khi đăng thêm.`,
       });
     }
 
     // Insert property khong set approved ngay; default status trong DB la pending.
-    const [result] = await pool.query(
+    const [result] = await connection.query(
       `INSERT INTO properties
         (owner_id, title, description, type, transaction_type,
          price, area, address, ward, district, city,
@@ -865,13 +911,18 @@ router.post("/", authMiddleware, async (req, res) => {
       "pending",
       req.user.id,
       "Owner tạo tin đăng",
+      connection,
     );
-    res.status(201).json({
+    await connection.commit();
+    return res.status(201).json({
       message: "Tạo tin thành công. Tin đang chờ admin duyệt.",
       id: result.insertId,
     });
   } catch (err) {
-    res.status(500).json({ message: "Lỗi server", error: err.message });
+    if (connection) await connection.rollback();
+    return res.status(500).json({ message: "Lỗi server", error: err.message });
+  } finally {
+    if (connection) connection.release();
   }
 });
 
@@ -957,35 +1008,54 @@ router.post("/:id/featured-orders", authMiddleware, async (req, res) => {
       .json({ message: "Phương thức thanh toán không hợp lệ" });
   }
 
+  let connection;
   try {
-    // Kiem tra property truoc khi tao don: phai ton tai, thuoc owner hien tai va da approved.
-    const [[property]] = await pool.query(
+    connection = await pool.getConnection();
+    await connection.beginTransaction();
+    const fail = async (status, payload) => {
+      await connection.rollback();
+      return res.status(status).json(payload);
+    };
+
+    // Khoa owner truoc de serialize moi yeu cau tao don cua cung mot owner.
+    // Nho do gioi han tong tin noi bat va check pending khong bi race condition.
+    const [[owner]] = await connection.query(
+      "SELECT id FROM users WHERE id = ? FOR UPDATE",
+      [req.user.id],
+    );
+    if (!owner) {
+      return fail(401, { message: "Tài khoản không còn tồn tại" });
+    }
+
+    const [[property]] = await connection.query(
       `SELECT id, owner_id, title, status, featured_until
        FROM properties
-       WHERE id = ?`,
+       WHERE id = ?
+       FOR UPDATE`,
       [req.params.id],
     );
 
     if (!property)
-      return res.status(404).json({ message: "Không tìm thấy tin đăng" });
+      return fail(404, { message: "Không tìm thấy tin đăng" });
     if (property.owner_id !== req.user.id)
-      return res
-        .status(403)
-        .json({ message: "Không có quyền mua gói cho tin này" });
+      return fail(403, { message: "Không có quyền mua gói cho tin này" });
     if (property.status !== "approved")
-      return res
-        .status(400)
-        .json({ message: "Chỉ tin đã được duyệt mới có thể mua gói nổi bật" });
+      return fail(400, {
+        message: "Chỉ tin đã được duyệt mới có thể mua gói nổi bật",
+      });
 
-    const violationCount = await getOwnerProcessedViolationCount(req.user.id);
+    const violationCount = await getOwnerProcessedViolationCount(
+      req.user.id,
+      connection,
+    );
     if (violationCount >= MAX_PROCESSED_VIOLATIONS_FOR_FEATURED) {
-      return res.status(400).json({
+      return fail(400, {
         message:
           "Tài khoản có nhiều tin bị xử lý. Vui lòng cải thiện chất lượng tin trước khi mua gói nổi bật.",
       });
     }
 
-    await pool.query(
+    await connection.query(
       `UPDATE featured_orders
        SET status = 'failed'
        WHERE property_id = ?
@@ -998,7 +1068,7 @@ router.post("/:id/featured-orders", authMiddleware, async (req, res) => {
     const isRenewingActiveFeatured =
       property.featured_until && new Date(property.featured_until) > new Date();
     if (!isRenewingActiveFeatured) {
-      const [[{ active_featured_count }]] = await pool.query(
+      const [[{ active_featured_count }]] = await connection.query(
         `SELECT COUNT(*) AS active_featured_count
          FROM properties
          WHERE owner_id = ?
@@ -1007,13 +1077,13 @@ router.post("/:id/featured-orders", authMiddleware, async (req, res) => {
         [req.user.id],
       );
       if (Number(active_featured_count) >= MAX_ACTIVE_FEATURED_PER_OWNER) {
-        return res.status(400).json({
+        return fail(400, {
           message: `Mỗi owner chỉ được có tối đa ${MAX_ACTIVE_FEATURED_PER_OWNER} tin nổi bật đang chạy. Vui lòng chờ gói cũ hết hạn hoặc gia hạn tin đang nổi bật.`,
         });
       }
     }
 
-    const [[{ pending_order_count }]] = await pool.query(
+    const [[{ pending_order_count }]] = await connection.query(
       `SELECT COUNT(*) AS pending_order_count
        FROM featured_orders
        WHERE property_id = ?
@@ -1023,13 +1093,13 @@ router.post("/:id/featured-orders", authMiddleware, async (req, res) => {
       [property.id, req.user.id],
     );
     if (Number(pending_order_count) > 0) {
-      return res.status(400).json({
+      return fail(400, {
         message:
           `Tin này đang có đơn thanh toán gói nổi bật chưa hoàn tất. Vui lòng thanh toán hoặc đợi đơn hết hạn sau ${FEATURED_PENDING_TIMEOUT_MINUTES} phút trước khi tạo đơn mới.`,
       });
     }
 
-    const [[pkg]] = await pool.query(
+    const [[pkg]] = await connection.query(
       `SELECT id, name, price, duration_days
        FROM featured_packages
        WHERE id = ? AND is_active = 1`,
@@ -1037,11 +1107,11 @@ router.post("/:id/featured-orders", authMiddleware, async (req, res) => {
     );
 
     if (!pkg)
-      return res.status(404).json({ message: "Không tìm thấy gói nổi bật" });
+      return fail(404, { message: "Không tìm thấy gói nổi bật" });
 
     // paymentCode la ma noi bo de owner/admin doi chieu don thanh toan.
     const paymentCode = generatePaymentCode();
-    const [result] = await pool.query(
+    const [result] = await connection.query(
       `INSERT INTO featured_orders
         (property_id, owner_id, package_id, amount, payment_method, status, payment_code)
        VALUES (?, ?, ?, ?, ?, 'pending', ?)`,
@@ -1075,54 +1145,58 @@ router.post("/:id/featured-orders", authMiddleware, async (req, res) => {
           })
         : null;
 
-    res.status(201).json({
+    await connection.commit();
+    return res.status(201).json({
       message: "Đã tạo đơn thanh toán gói nổi bật",
       order,
       payment_url: paymentUrl,
     });
   } catch (err) {
-    res.status(500).json({ message: "Lỗi server", error: err.message });
+    if (connection) await connection.rollback();
+    return res.status(500).json({ message: "Lỗi server", error: err.message });
+  } finally {
+    if (connection) connection.release();
   }
 });
 
-// GET /api/property/vnpay-return — xác thực kết quả thanh toán VNPay sandbox
-// VNPay return API: VNPay redirect ve day sau khi thanh toan.
-// Backend kiem tra chu ky, response code, sau do update featured_orders va properties.featured_until trong transaction.
-router.get("/vnpay-return", async (req, res) => {
+async function processVnpayCallback(query) {
   let connection;
   try {
-    if (!verifyVnpayReturn(req.query)) {
-      return res.status(400).json({
-        success: false,
-        message: "Chữ ký VNPay không hợp lệ",
-      });
+    if (!verifyVnpayReturn(query)) {
+      return {
+        httpStatus: 400,
+        ipnCode: "97",
+        body: { success: false, message: "Chữ ký VNPay không hợp lệ" },
+      };
     }
 
-    const orderId = parseInt(req.query.vnp_TxnRef, 10);
-    const responseCode = req.query.vnp_ResponseCode;
-
-    if (!orderId) {
-      return res.status(400).json({
-        success: false,
-        message: "Mã đơn thanh toán không hợp lệ",
-      });
+    const vnpayConfig = getVnpayConfig();
+    if (String(query.vnp_TmnCode || "") !== vnpayConfig.tmnCode) {
+      return {
+        httpStatus: 400,
+        ipnCode: "97",
+        body: { success: false, message: "Mã website VNPay không hợp lệ" },
+      };
     }
 
-    if (responseCode !== "00") {
-      await pool.query(
-        "UPDATE featured_orders SET status = 'failed' WHERE id = ? AND status = 'pending'",
-        [orderId],
-      );
-      return res.json({
-        success: false,
-        message: "Thanh toán VNPay không thành công",
-        response_code: responseCode,
-        order_id: orderId,
-      });
+    const transactionRef = String(query.vnp_TxnRef || "");
+    const callbackAmountText = String(query.vnp_Amount || "");
+    if (!/^\d+$/.test(transactionRef) || Number(transactionRef) <= 0) {
+      return {
+        httpStatus: 400,
+        ipnCode: "01",
+        body: { success: false, message: "Mã đơn thanh toán không hợp lệ" },
+      };
     }
+    if (!/^\d+$/.test(callbackAmountText)) {
+      return {
+        httpStatus: 400,
+        ipnCode: "04",
+        body: { success: false, message: "Số tiền thanh toán không hợp lệ" },
+      };
+    }
+    const orderId = Number(transactionRef);
 
-    // Dung transaction vi thanh toan can update 2 bang: featured_orders va properties.
-    // Neu mot update loi thi rollback de du lieu khong bi lech.
     connection = await pool.getConnection();
     await connection.beginTransaction();
 
@@ -1137,33 +1211,78 @@ router.get("/vnpay-return", async (req, res) => {
       [orderId],
     );
 
-    // FOR UPDATE khoa dong order trong transaction de tranh VNPay return bi xu ly trung dong thoi.
     if (!order) {
       await connection.rollback();
-      return res.status(404).json({
-        success: false,
-        message: "Không tìm thấy đơn thanh toán",
-      });
+      return {
+        httpStatus: 404,
+        ipnCode: "01",
+        body: { success: false, message: "Không tìm thấy đơn thanh toán" },
+      };
     }
 
-    // Neu user refresh trang return, order co the da paid; tra success idempotent thay vi cong han them lan nua.
+    const expectedAmount = Math.round(Number(order.amount) * 100);
+    const callbackAmount = Number(callbackAmountText);
+    if (
+      !Number.isSafeInteger(expectedAmount) ||
+      !Number.isSafeInteger(callbackAmount) ||
+      callbackAmount !== expectedAmount
+    ) {
+      await connection.rollback();
+      return {
+        httpStatus: 400,
+        ipnCode: "04",
+        body: {
+          success: false,
+          message: "Số tiền thanh toán không khớp với đơn hàng",
+          order_id: order.id,
+        },
+      };
+    }
+
     if (order.status === "paid") {
       await connection.commit();
-      return res.json({
-        success: true,
-        message: "Đơn thanh toán đã được xử lý trước đó",
-        order_id: order.id,
-        property_id: order.property_id,
-        featured_until: order.featured_end_at,
-      });
+      return {
+        httpStatus: 200,
+        ipnCode: "02",
+        body: {
+          success: true,
+          idempotent: true,
+          message: "Đơn thanh toán đã được xử lý trước đó",
+          order_id: order.id,
+          property_id: order.property_id,
+          featured_until: order.featured_end_at,
+        },
+      };
     }
 
     if (order.status !== "pending" || order.payment_method !== "vnpay") {
       await connection.rollback();
-      return res.status(400).json({
-        success: false,
-        message: "Đơn thanh toán không hợp lệ",
-      });
+      return {
+        httpStatus: 400,
+        ipnCode: "02",
+        body: { success: false, message: "Đơn thanh toán không hợp lệ" },
+      };
+    }
+
+    const responseCode = String(query.vnp_ResponseCode || "");
+    const transactionStatus = String(query.vnp_TransactionStatus || "");
+    if (responseCode !== "00" || transactionStatus !== "00") {
+      await connection.query(
+        "UPDATE featured_orders SET status = 'failed' WHERE id = ? AND status = 'pending'",
+        [order.id],
+      );
+      await connection.commit();
+      return {
+        httpStatus: 200,
+        ipnCode: "00",
+        body: {
+          success: false,
+          message: "Thanh toán VNPay không thành công",
+          response_code: responseCode,
+          transaction_status: transactionStatus,
+          order_id: order.id,
+        },
+      };
     }
 
     if (
@@ -1175,19 +1294,27 @@ router.get("/vnpay-return", async (req, res) => {
         [order.id],
       );
       await connection.commit();
-      return res.status(400).json({
-        success: false,
-        message: "Đơn thanh toán đã quá hạn xử lý. Vui lòng tạo đơn mới.",
-        order_id: order.id,
-      });
+      return {
+        httpStatus: 400,
+        ipnCode: "02",
+        body: {
+          success: false,
+          message: "Đơn thanh toán đã quá hạn xử lý. Vui lòng tạo đơn mới.",
+          order_id: order.id,
+        },
+      };
     }
 
     if (order.property_status !== "approved") {
       await connection.rollback();
-      return res.status(400).json({
-        success: false,
-        message: "Tin không còn ở trạng thái được duyệt",
-      });
+      return {
+        httpStatus: 409,
+        ipnCode: "02",
+        body: {
+          success: false,
+          message: "Tin không còn ở trạng thái được duyệt",
+        },
+      };
     }
 
     // Tinh han featured dua tren featured_until hien tai de mua nhieu goi se duoc cong don thoi gian.
@@ -1210,22 +1337,51 @@ router.get("/vnpay-return", async (req, res) => {
 
     await connection.commit();
 
-    res.json({
-      success: true,
-      message: "Thanh toán VNPay thành công. Tin đã được kích hoạt nổi bật.",
-      order_id: order.id,
-      property_id: order.property_id,
-      featured_until: endDate,
-    });
+    return {
+      httpStatus: 200,
+      ipnCode: "00",
+      body: {
+        success: true,
+        message:
+          "Thanh toán VNPay thành công. Tin đã được kích hoạt nổi bật.",
+        order_id: order.id,
+        property_id: order.property_id,
+        featured_until: endDate,
+      },
+    };
   } catch (err) {
     if (connection) await connection.rollback();
-    res.status(500).json({
-      success: false,
-      message: "Lỗi server",
-      error: err.message,
-    });
+    throw err;
   } finally {
     if (connection) connection.release();
+  }
+}
+
+// Return URL phục vụ trình duyệt; IPN bên dưới dùng cùng quy trình
+// xử lý để callback đồng thời vẫn idempotent và không cộng hạn hai lần.
+router.get("/vnpay-return", async (req, res) => {
+  try {
+    const result = await processVnpayCallback(req.query);
+    return res.status(result.httpStatus).json(result.body);
+  } catch (err) {
+    console.error("VNPay return error:", err.message);
+    return res.status(500).json({ success: false, message: "Lỗi server" });
+  }
+});
+
+// URL này cần được khai báo làm IPN URL trong cổng VNPay.
+// VNPay yêu cầu phản hồi RspCode kể cả khi callback không hợp lệ.
+router.get("/vnpay-ipn", async (req, res) => {
+  try {
+    const result = await processVnpayCallback(req.query);
+    return res.json({
+      RspCode: result.ipnCode,
+      Message:
+        result.ipnCode === "00" ? "Confirm Success" : result.body.message,
+    });
+  } catch (err) {
+    console.error("VNPay IPN error:", err.message);
+    return res.json({ RspCode: "99", Message: "Unknown error" });
   }
 });
 
@@ -1316,7 +1472,10 @@ router.get("/admin/reports", authMiddleware, async (req, res) => {
       },
     });
   } catch (err) {
-    res.status(500).json({ message: "Lỗi server", error: err.message });
+    if (connection) await connection.rollback();
+    return res.status(500).json({ message: "Lỗi server", error: err.message });
+  } finally {
+    if (connection) connection.release();
   }
 });
 
@@ -1674,15 +1833,28 @@ router.get("/:id/history", authMiddleware, async (req, res) => {
     if (req.user.role !== "admin" && props[0].owner_id !== req.user.id)
       return res.status(403).json({ message: "Không có quyền" });
 
-    // LEFT JOIN users de van xem duoc history ngay ca khi actor_id null hoac user da bi xoa.
-    const [history] = await pool.query(
-      `SELECT h.*, u.full_name AS actor_name, u.role AS actor_role
-       FROM property_status_history h
-       LEFT JOIN users u ON h.actor_id = u.id
-       WHERE h.property_id = ?
-       ORDER BY h.created_at DESC`,
-      [req.params.id],
-    );
+    // Admin can xem day du actor de xu ly bao cao. Owner khong duoc nhan su kien
+    // report hoac actor_id cua nguoi report, tranh lo danh tinh nguoi phan anh.
+    const isAdmin = req.user.role === "admin";
+    const historySql = isAdmin
+      ? `SELECT h.*, u.full_name AS actor_name, u.role AS actor_role
+         FROM property_status_history h
+         LEFT JOIN users u ON h.actor_id = u.id
+         WHERE h.property_id = ?
+         ORDER BY h.created_at DESC`
+      : `SELECT h.id, h.property_id, h.old_status, h.new_status, h.note,
+                h.created_at,
+                CASE WHEN u.role = 'admin' THEN u.full_name ELSE NULL END AS actor_name,
+                CASE WHEN u.role = 'admin' THEN u.role ELSE NULL END AS actor_role
+         FROM property_status_history h
+         LEFT JOIN users u ON h.actor_id = u.id
+         WHERE h.property_id = ?
+           AND (h.note IS NULL OR h.note NOT LIKE ?)
+         ORDER BY h.created_at DESC`;
+    const historyParams = isAdmin
+      ? [req.params.id]
+      : [req.params.id, "Người dùng báo cáo tin:%"];
+    const [history] = await pool.query(historySql, historyParams);
     res.json(history);
   } catch (err) {
     res.status(500).json({ message: "Lỗi server", error: err.message });
@@ -1712,26 +1884,35 @@ router.post("/:id/report", authMiddleware, async (req, res) => {
       .json({ message: "Nội dung báo cáo không được vượt quá 500 ký tự" });
   }
 
+  let connection;
   try {
-    const [rows] = await pool.query(
-      "SELECT id, owner_id, status FROM properties WHERE id = ?",
+    connection = await pool.getConnection();
+    await connection.beginTransaction();
+    // Khoa property de hai request dong thoi cua cung reporter khong the
+    // cung vuot qua buoc kiem tra duplicate roi chen hai report.
+    const [rows] = await connection.query(
+      "SELECT id, owner_id, status FROM properties WHERE id = ? FOR UPDATE",
       [req.params.id],
     );
-    if (rows.length === 0)
+    if (rows.length === 0) {
+      await connection.rollback();
       return res.status(404).json({ message: "Không tìm thấy tin đăng" });
+    }
     const property = rows[0];
     if (Number(property.owner_id) === Number(req.user.id)) {
+      await connection.rollback();
       return res
         .status(400)
         .json({ message: "Bạn không thể báo cáo tin của chính mình" });
     }
     if (property.status !== "approved") {
+      await connection.rollback();
       return res
         .status(400)
         .json({ message: "Chỉ có thể báo cáo tin đang hiển thị" });
     }
 
-    const [existingReports] = await pool.query(
+    const [existingReports] = await connection.query(
       `SELECT id
        FROM property_status_history
        WHERE property_id = ?
@@ -1741,6 +1922,7 @@ router.post("/:id/report", authMiddleware, async (req, res) => {
       [req.params.id, req.user.id],
     );
     if (existingReports.length > 0) {
+      await connection.rollback();
       return res
         .status(400)
         .json({ message: "Bạn đã báo cáo tin này rồi. Admin sẽ xem xét báo cáo đã gửi." });
@@ -1752,14 +1934,19 @@ router.post("/:id/report", authMiddleware, async (req, res) => {
       property.status,
       req.user.id,
       `Người dùng báo cáo tin: ${REPORT_REASONS[reason]}. ${message}`,
+      connection,
     );
 
-    res.status(201).json({
+    await connection.commit();
+    return res.status(201).json({
       message:
         "Đã ghi nhận báo cáo. Admin sẽ xem xét trong lịch sử kiểm tra tin.",
     });
   } catch (err) {
-    res.status(500).json({ message: "Lỗi server", error: err.message });
+    if (connection) await connection.rollback();
+    return res.status(500).json({ message: "Lỗi server", error: err.message });
+  } finally {
+    if (connection) connection.release();
   }
 });
 
@@ -1864,71 +2051,237 @@ router.patch("/:id/sold", authMiddleware, async (req, res) => {
 router.patch("/:id/unhide", authMiddleware, async (req, res) => {
   if (req.user.role !== "owner")
     return res.status(403).json({ message: "Không có quyền" });
+  let connection;
   try {
-    const [rows] = await pool.query(
-      "SELECT owner_id, status FROM properties WHERE id = ?",
+    connection = await pool.getConnection();
+    await connection.beginTransaction();
+    const [rows] = await connection.query(
+      "SELECT owner_id, status FROM properties WHERE id = ? FOR UPDATE",
       [req.params.id],
     );
-    if (rows.length === 0)
+    if (rows.length === 0) {
+      await connection.rollback();
       return res.status(404).json({ message: "Không tìm thấy" });
-    if (rows[0].owner_id !== req.user.id)
+    }
+    if (rows[0].owner_id !== req.user.id) {
+      await connection.rollback();
       return res.status(403).json({ message: "Không có quyền" });
+    }
+    if (rows[0].status !== "hidden") {
+      await connection.rollback();
+      return res.status(409).json({
+        message: "Chỉ có thể gửi duyệt lại tin đang bị ẩn",
+      });
+    }
 
-    await pool.query(
+    const [updateResult] = await connection.query(
       "UPDATE properties SET status = 'pending', reject_reason = NULL, hidden_at = NULL WHERE id = ? AND status = 'hidden'",
       [req.params.id],
     );
+    if (updateResult.affectedRows !== 1) {
+      await connection.rollback();
+      return res.status(409).json({
+        message: "Trạng thái tin đã thay đổi, vui lòng tải lại trang",
+      });
+    }
     await addStatusHistory(
       req.params.id,
       rows[0].status,
       "pending",
       req.user.id,
       "Owner gửi lại tin để chờ duyệt",
+      connection,
     );
-    res.json({ message: "Đã gửi lại tin để chờ duyệt" });
+    await connection.commit();
+    return res.json({ message: "Đã gửi lại tin để chờ duyệt" });
   } catch (err) {
-    res.status(500).json({ message: "Lỗi server", error: err.message });
+    if (connection) await connection.rollback();
+    return res.status(500).json({ message: "Lỗi server", error: err.message });
+  } finally {
+    if (connection) connection.release();
   }
 });
 
-// POST /api/property/:id/images — upload ảnh lên Cloudinary
+function getUploadedImagePublicId(file) {
+  if (file?.filename) return file.filename;
+  if (!file?.path) return null;
+  try {
+    const filename = new URL(file.path).pathname.split("/").pop();
+    if (!filename) return null;
+    return `bds-platform/${filename.replace(/\.[^.]+$/, "")}`;
+  } catch {
+    return null;
+  }
+}
+
+async function cleanupUploadedImages(files) {
+  const publicIds = (files || [])
+    .map(getUploadedImagePublicId)
+    .filter(Boolean);
+  await Promise.allSettled(
+    publicIds.map((publicId) => cloudinary.uploader.destroy(publicId)),
+  );
+}
+
+async function authorizePropertyImageUpload(req, res, next) {
+  if (req.user.role !== "owner") {
+    return res.status(403).json({ message: "Chỉ owner mới được tải ảnh" });
+  }
+
+  try {
+    const [rows] = await pool.query(
+      `SELECT p.owner_id, p.status, COUNT(pi.id) AS image_count
+       FROM properties p
+       LEFT JOIN property_images pi ON pi.property_id = p.id
+       WHERE p.id = ?
+       GROUP BY p.id, p.owner_id, p.status`,
+      [req.params.id],
+    );
+    if (rows.length === 0) {
+      return res.status(404).json({ message: "Không tìm thấy tin đăng" });
+    }
+    if (rows[0].owner_id !== req.user.id) {
+      return res.status(403).json({ message: "Không có quyền" });
+    }
+    if (rows[0].status === "sold") {
+      return res.status(400).json({ message: "Không thể thêm ảnh cho tin đã giao dịch" });
+    }
+    if (Number(rows[0].image_count) >= MAX_IMAGES_PER_PROPERTY) {
+      return res.status(400).json({
+        message: `Mỗi tin chỉ được có tối đa ${MAX_IMAGES_PER_PROPERTY} ảnh`,
+      });
+    }
+    return next();
+  } catch (err) {
+    return res.status(500).json({ message: "Lỗi kiểm tra quyền tải ảnh" });
+  }
+}
+
+const receivePropertyImages = upload.array("images", MAX_IMAGES_PER_UPLOAD);
+function handlePropertyImageUpload(req, res, next) {
+  receivePropertyImages(req, res, async (err) => {
+    if (!err) return next();
+
+    await cleanupUploadedImages(req.files);
+    const isTooLarge = err.code === "LIMIT_FILE_SIZE";
+    const messages = {
+      LIMIT_FILE_SIZE: "Mỗi ảnh không được vượt quá 5 MB",
+      LIMIT_FILE_COUNT: `Mỗi lần chỉ được tải tối đa ${MAX_IMAGES_PER_UPLOAD} ảnh`,
+      LIMIT_UNEXPECTED_FILE: "Trường tải ảnh không hợp lệ",
+      INVALID_IMAGE_TYPE: "Chỉ chấp nhận ảnh JPG, PNG hoặc WEBP",
+    };
+    return res.status(isTooLarge ? 413 : 400).json({
+      message: messages[err.code] || "File ảnh không hợp lệ",
+    });
+  });
+}
+
+// Kiểm tra quyền và quota trước khi middleware gửi file lên Cloudinary.
 router.post(
   "/:id/images",
   authMiddleware,
-  // Multer/Cloudinary middleware nhan field images va gioi han toi da 5 file.
-  upload.array("images", 5),
+  authorizePropertyImageUpload,
+  handlePropertyImageUpload,
   async (req, res) => {
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({ message: "Không có file nào được upload" });
+    }
+
+    let connection;
+    let committed = false;
     try {
-      const [rows] = await pool.query(
-        "SELECT owner_id FROM properties WHERE id = ?",
+      connection = await pool.getConnection();
+      await connection.beginTransaction();
+
+      const [rows] = await connection.query(
+        "SELECT owner_id, status FROM properties WHERE id = ? FOR UPDATE",
         [req.params.id],
       );
-      if (rows.length === 0)
-        return res.status(404).json({ message: "Không tìm thấy" });
-      if (rows[0].owner_id !== req.user.id)
+      if (rows.length === 0) {
+        await connection.rollback();
+        await cleanupUploadedImages(req.files);
+        return res.status(404).json({ message: "Không tìm thấy tin đăng" });
+      }
+      if (rows[0].owner_id !== req.user.id) {
+        await connection.rollback();
+        await cleanupUploadedImages(req.files);
         return res.status(403).json({ message: "Không có quyền" });
-      if (!req.files || req.files.length === 0)
+      }
+      if (rows[0].status === "sold") {
+        await connection.rollback();
+        await cleanupUploadedImages(req.files);
         return res
           .status(400)
-          .json({ message: "Không có file nào được upload" });
+          .json({ message: "Không thể thêm ảnh cho tin đã giao dịch" });
+      }
 
-      // Cloudinary tra file.path la URL public; order giu thu tu anh frontend da upload.
+      const [[imageStats]] = await connection.query(
+        "SELECT COUNT(*) AS image_count, COALESCE(MAX(`order`), 0) AS max_order FROM property_images WHERE property_id = ?",
+        [req.params.id],
+      );
+      const imageCount = Number(imageStats.image_count || 0);
+      if (imageCount + req.files.length > MAX_IMAGES_PER_PROPERTY) {
+        await connection.rollback();
+        await cleanupUploadedImages(req.files);
+        return res.status(400).json({
+          message: `Mỗi tin chỉ được có tối đa ${MAX_IMAGES_PER_PROPERTY} ảnh`,
+        });
+      }
+
+      const firstOrder = Number(imageStats.max_order || 0) + 1;
       const images = req.files.map((file, index) => ({
         url: file.path,
-        order: index + 1,
+        order: firstOrder + index,
       }));
-
-      for (const img of images) {
-        await pool.query(
+      for (const image of images) {
+        await connection.query(
           "INSERT INTO property_images (property_id, url, `order`) VALUES (?, ?, ?)",
-          [req.params.id, img.url, img.order],
+          [req.params.id, image.url, image.order],
         );
       }
 
-      res.json({ message: "Upload thành công", count: images.length, images });
+      const requiresModeration = rows[0].status === "approved";
+      if (requiresModeration) {
+        const [statusResult] = await connection.query(
+          `UPDATE properties
+           SET status = 'pending', approved_at = NULL, reject_reason = NULL
+           WHERE id = ? AND status = 'approved'`,
+          [req.params.id],
+        );
+        if (statusResult.affectedRows !== 1) {
+          throw new Error("Property status changed during image upload");
+        }
+        await connection.query(
+          "UPDATE featured_orders SET status = 'cancelled' WHERE property_id = ? AND status = 'pending'",
+          [req.params.id],
+        );
+        await addStatusHistory(
+          req.params.id,
+          "approved",
+          "pending",
+          req.user.id,
+          "Owner thêm ảnh và gửi duyệt lại",
+          connection,
+        );
+      }
+
+      await connection.commit();
+      committed = true;
+      return res.json({
+        message: requiresModeration
+          ? "Upload thành công. Tin đã chuyển về chờ duyệt."
+          : "Upload thành công",
+        count: images.length,
+        images,
+        requires_moderation: requiresModeration,
+      });
     } catch (err) {
-      console.error("Upload error:", err);
-      res.status(500).json({ message: "Lỗi upload", error: err.message });
+      if (connection && !committed) await connection.rollback();
+      if (!committed) await cleanupUploadedImages(req.files);
+      console.error("Upload error:", err.message);
+      return res.status(500).json({ message: "Lỗi upload" });
+    } finally {
+      if (connection) connection.release();
     }
   },
 );

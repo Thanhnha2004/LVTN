@@ -2,13 +2,15 @@
 
 ## 1. Mục tiêu
 
-CI/CD được bổ sung để tự động kiểm tra mã nguồn mỗi khi có thay đổi được đẩy lên GitHub. Mục tiêu là phát hiện lỗi sớm, bảo đảm frontend có thể build thành công và backend không có lỗi cú pháp cơ bản trước khi triển khai.
+Pipeline CI tự động kiểm tra mã nguồn mỗi khi có thay đổi được đẩy lên GitHub. Mục tiêu là phát hiện lỗi sớm, bảo đảm frontend lint/build thành công, backend vượt qua kiểm tra cú pháp và test, các kịch bản UI hoạt động, đồng thời cấu hình Docker vẫn build được. Dự án chưa có bước CD/deploy tự động.
 
 ## 2. Công cụ sử dụng
 
 - GitHub: quản lý mã nguồn.
 - GitHub Actions: tự động chạy pipeline.
-- Node.js 20: môi trường kiểm tra frontend và backend.
+- Node.js 22: môi trường kiểm tra frontend và backend.
+- Jest, Supertest: kiểm thử route/unit backend với các phụ thuộc được mock.
+- Playwright: chạy 5 kịch bản UI với API được mock.
 - Docker Compose: kiểm tra cấu hình triển khai các service.
 
 ## 3. Pipeline hiện tại
@@ -17,7 +19,7 @@ Pipeline được đặt tại:
 
 `.github/workflows/ci.yml`
 
-Pipeline gồm 4 job chính:
+Pipeline gồm 5 job chính:
 
 ### 3.1. Frontend build
 
@@ -28,11 +30,12 @@ Các bước xử lý:
 1. Checkout source code.
 2. Cài đặt Node.js.
 3. Cài thư viện bằng `npm ci`.
-4. Build giao diện bằng `npm run build`.
+4. Lint các module frontend trọng yếu bằng `npm run lint:ci`.
+5. Build giao diện bằng `npm run build`.
 
 Kết quả mong muốn: frontend build thành công, không phát sinh lỗi biên dịch.
 
-### 3.2. Backend syntax check
+### 3.2. Backend checks
 
 Job này chạy lần lượt cho các service:
 
@@ -48,8 +51,9 @@ Các bước xử lý:
 2. Cài đặt Node.js.
 3. Cài thư viện bằng `npm ci`.
 4. Kiểm tra cú pháp toàn bộ file `.js` bằng `node --check`.
+5. Chạy Jest cho bốn microservice; API Gateway hiện chỉ được kiểm tra cú pháp.
 
-Kết quả mong muốn: các service backend không có lỗi cú pháp JavaScript.
+Kết quả mong muốn: backend không có lỗi cú pháp và 99 test hiện có đều đạt.
 
 ### 3.3. Docker Compose config
 
@@ -63,7 +67,17 @@ docker compose config
 
 Kết quả mong muốn: cấu hình Docker Compose hợp lệ và có thể dùng để khởi động toàn bộ hệ thống.
 
-### 3.4. Docker Compose build
+### 3.4. Playwright UI scenarios
+
+Job này cài Chromium và chạy:
+
+```bash
+npm run test:system
+```
+
+Hiện có 5 kịch bản UI. Các request API được mock, vì vậy đây là kiểm thử hành vi giao diện, không phải kiểm thử full-stack với MySQL/VNPay thật.
+
+### 3.5. Docker Compose build
 
 Job này kiểm tra việc build Docker image cho các service trong hệ thống.
 
@@ -92,8 +106,9 @@ Pipeline tự động chạy khi:
 | Tự động kiểm tra backend | Đã làm |
 | Kiểm tra cấu hình Docker Compose | Đã làm |
 | Tự động build Docker image | Đã làm |
-| Unit Test / Integration Test tự động | Chưa hoàn thiện |
-| Playwright system test | Hướng phát triển |
+| Route/unit test backend tự động | Đã làm (99 test) |
+| Playwright UI test | Đã làm (5 kịch bản, API mock) |
+| Integration test với MySQL thật | Hướng phát triển |
 | Stress test | Hướng phát triển |
 | Deploy lên cloud | Hướng phát triển |
 
@@ -101,8 +116,9 @@ Pipeline tự động chạy khi:
 
 Trong giai đoạn tiếp theo, CI/CD có thể mở rộng thêm các bước:
 
-- Viết Unit Test và Integration Test cho từng service.
-- Thêm Playwright để kiểm thử các luồng nghiệp vụ chính trên giao diện.
+- Bổ sung integration test chạy với MySQL thật và kiểm thử full-stack không mock API.
+- Bổ sung quality gate cho toàn bộ ESLint frontend, thay vì chỉ các module trọng yếu.
+- Kiểm thử callback/IPN bằng tài khoản VNPay Sandbox thật trong môi trường staging.
 - Thêm stress test để đánh giá hiệu năng API.
 - Build Docker image và push lên Docker Hub hoặc GitHub Container Registry.
 - Deploy tự động lên cloud sau khi pipeline chạy thành công.

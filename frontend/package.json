@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
+    "lint:ci": "eslint src/main.jsx src/api src/components/Navbar.jsx src/components/ToastProvider.jsx src/context/AuthContext.jsx src/pages/Login.jsx src/pages/admin/adminShared.js src/pages/admin/Users.jsx src/pages/buyer/Detail.jsx src/pages/owner/CreateProperty.jsx src/pages/owner/Dashboard.jsx src/pages/owner/EditProperty.jsx src/pages/profile/Profile.jsx src/shared",
     "preview": "vite preview"
   },
   "dependencies": {

@@ -24,17 +24,6 @@ const STEPS = [
 ];
 
 
-const POSTING_POLICY = [
-  "Tài khoản đăng tin phải có email đã xác minh và đang hoạt động.",
-  "Tin đăng cần có tiêu đề rõ ràng, mô tả đúng thực tế và tối thiểu 30 ký tự.",
-  "Giá, diện tích, loại hình và hình thức giao dịch phải hợp lý, không nhập sai lệch để câu view.",
-  "Địa chỉ cần đủ tỉnh/thành, quận/huyện, phường/xã và địa chỉ cụ thể; tọa độ bản đồ giúp người mua xác định vị trí.",
-  "Hình ảnh phải là ảnh thật hoặc ảnh phù hợp với bất động sản, không dùng ảnh sai nội dung.",
-  "Thông tin pháp lý cần khai báo rõ: sổ hồng, sổ đỏ, đang chờ sổ hoặc loại khác.",
-  "Không chèn số điện thoại, email, đường dẫn ngoài hệ thống trong phần mô tả.",
-  "Không đăng nhiều tin giống nhau cùng địa chỉ, loại hình và hình thức giao dịch.",
-];
-
 const DETAILED_POSTING_POLICY = [
   "Tiêu đề: từ 10 đến 180 ký tự, không viết chung chung như \"bán nhà đẹp\".",
   "Mô tả: từ 30 đến 3000 ký tự, nêu vị trí, hiện trạng, tiện ích, pháp lý và điều kiện giao dịch.",
@@ -46,10 +35,9 @@ const DETAILED_POSTING_POLICY = [
   "Nội dung bị từ chối: mô tả có số điện thoại, email, link ngoài hệ thống, ảnh sai nội dung hoặc tin trùng.",
 ];
 
-const sectionTitle = (icon, text) => (
+const sectionTitle = (text) => (
   <div
     style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 24 }}>
-    <span style={{ fontSize: 20 }}>{icon}</span>
     <h2
       style={{
         fontFamily: "Manrope, sans-serif",
@@ -71,7 +59,7 @@ export default function CreateProperty() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
-  const [newPropertyId, setNewPropertyId] = useState(null);
+  const [imageUploadWarning, setImageUploadWarning] = useState("");
 
   const [form, setForm] = useState({
     title: "",
@@ -173,6 +161,7 @@ export default function CreateProperty() {
     }
     const values = validation.values;
     setLoading(true);
+    setImageUploadWarning("");
     try {
       // 1. Create property
       const res = await api.post("/api/property", {
@@ -195,19 +184,29 @@ export default function CreateProperty() {
       });
 
       const propId = res.data.id;
-      setNewPropertyId(propId);
+      let uploadWarning = "";
 
       // 2. Upload images if any
       if (images.length > 0) {
         const fd = new FormData();
         images.forEach((f) => fd.append("images", f));
-        await api.post(`/api/property/${propId}/images`, fd, {
-          headers: { "Content-Type": "multipart/form-data" },
-        });
+        try {
+          await api.post(`/api/property/${propId}/images`, fd, {
+            headers: { "Content-Type": "multipart/form-data" },
+          });
+        } catch (imageError) {
+          const reason =
+            imageError.response?.data?.message || "dịch vụ tải ảnh tạm thời lỗi";
+          uploadWarning = `Tin đã được tạo nhưng ảnh chưa tải lên được: ${reason}. Hãy mở tin trong Dashboard để tải ảnh lại; không cần đăng lại tin mới.`;
+          setImageUploadWarning(uploadWarning);
+          showToast(uploadWarning, "error");
+        }
       }
 
       setSuccess(true);
-      showToast("Đăng tin thành công. Tin đang chờ admin duyệt.");
+      if (!uploadWarning) {
+        showToast("Đăng tin thành công. Tin đang chờ admin duyệt.");
+      }
     } catch (err) {
       console.error("Create property failed:", err.response?.data || err);
       const message =
@@ -261,6 +260,18 @@ export default function CreateProperty() {
               }}>
               Tin đăng của bạn đã được gửi và đang chờ quản trị viên duyệt.
             </p>
+            {imageUploadWarning && (
+              <p
+                style={{
+                  fontFamily: "Inter, sans-serif",
+                  fontSize: 14,
+                  color: "#9a6700",
+                  lineHeight: 1.6,
+                  marginBottom: 12,
+                }}>
+                {imageUploadWarning}
+              </p>
+            )}
             <p
               style={{
                 fontFamily: "Inter, sans-serif",

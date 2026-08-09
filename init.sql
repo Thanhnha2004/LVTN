@@ -1,8 +1,5 @@
-CREATE DATABASE IF NOT EXISTS lvtn
-  CHARACTER SET utf8mb4
-  COLLATE utf8mb4_unicode_ci;
-USE lvtn;
-
+-- Chọn database đích ở MySQL client trước khi chạy file này.
+-- Docker Compose truyền DB_NAME qua MYSQL_DATABASE, tránh hard-code tên schema.
 SET NAMES utf8mb4;
 SET CHARACTER SET utf8mb4;
 
@@ -31,6 +28,8 @@ CREATE TABLE users (
   role           ENUM('buyer','owner','admin') NOT NULL DEFAULT 'buyer',
   status         ENUM('active','banned')       NOT NULL DEFAULT 'active',
   email_verified TINYINT(1)    NOT NULL DEFAULT 0,
+  token_version  INT UNSIGNED  NOT NULL DEFAULT 0,
+  is_demo_account TINYINT(1)   NOT NULL DEFAULT 0,
   created_at     TIMESTAMP     DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -44,6 +43,7 @@ CREATE TABLE otp_codes (
   type       ENUM('email_verify','reset_password') NOT NULL DEFAULT 'email_verify',
   expires_at DATETIME    NOT NULL,
   used       TINYINT(1)  NOT NULL DEFAULT 0,
+  attempt_count INT      NOT NULL DEFAULT 0,
   created_at TIMESTAMP   DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
   INDEX idx_otp_user    (user_id),
@@ -154,13 +154,17 @@ CREATE TABLE featured_orders (
   paid_at           DATETIME DEFAULT NULL,
   featured_start_at DATETIME DEFAULT NULL,
   featured_end_at   DATETIME DEFAULT NULL,
+  pending_guard     TINYINT GENERATED ALWAYS AS (
+    CASE WHEN status = 'pending' THEN 1 ELSE NULL END
+  ) STORED,
   created_at        TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (property_id) REFERENCES properties(id) ON DELETE CASCADE,
   FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE CASCADE,
   FOREIGN KEY (package_id) REFERENCES featured_packages(id),
   INDEX idx_featured_order_owner (owner_id),
   INDEX idx_featured_order_property (property_id),
-  INDEX idx_featured_order_status (status)
+  INDEX idx_featured_order_status (status),
+  UNIQUE KEY unique_pending_featured_order (property_id, owner_id, pending_guard)
 );
 
 -- =============================================
@@ -172,7 +176,8 @@ CREATE TABLE property_images (
   url         VARCHAR(500) NOT NULL,
   `order`     INT          DEFAULT 0,
   FOREIGN KEY (property_id) REFERENCES properties(id) ON DELETE CASCADE,
-  INDEX idx_img_property (property_id)
+  INDEX idx_img_property (property_id),
+  UNIQUE KEY unique_property_image_order (property_id, `order`)
 );
 
 -- =============================================
@@ -191,6 +196,7 @@ CREATE TABLE contacts (
   created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (property_id) REFERENCES properties(id) ON DELETE CASCADE,
   FOREIGN KEY (buyer_id)    REFERENCES users(id)      ON DELETE CASCADE,
+  UNIQUE KEY unique_contact_request (property_id, buyer_id),
   INDEX idx_contact_property (property_id),
   INDEX idx_contact_buyer    (buyer_id),
   INDEX idx_contact_status   (status),
@@ -223,6 +229,12 @@ INSERT INTO users (full_name, email, password_hash, phone_number, role, status, 
 ('Lê Hoàng Nam',          'owner2@bds.com', '$2b$10$nvgzofSTXqsU4CssCm..8eCx4WAN.biG8CFnpbfyQULMwF.Wq9l8y', '0901000004', 'owner', 'active', 1),
 ('Phạm Thị Mai',          'buyer2@bds.com', '$2b$10$nvgzofSTXqsU4CssCm..8eCx4WAN.biG8CFnpbfyQULMwF.Wq9l8y', '0901000005', 'buyer', 'active', 1),
 ('Tài khoản bị khóa',     'banned@bds.com', '$2b$10$nvgzofSTXqsU4CssCm..8eCx4WAN.biG8CFnpbfyQULMwF.Wq9l8y', '0901000006', 'buyer', 'banned', 1);
+
+-- Admin mẫu bị khóa đăng nhập mặc định ở Auth Service. Chỉ bật rõ ràng
+-- ALLOW_DEMO_ADMIN_LOGIN=true khi trình diễn trong môi trường local.
+UPDATE users
+SET is_demo_account = 1, token_version = 1
+WHERE email = 'admin@bds.com' AND role = 'admin';
 
 INSERT INTO featured_packages (name, description, price, duration_days, priority, is_active) VALUES
 ('Gói nổi bật 7 ngày', 'Tin được ưu tiên hiển thị trong danh sách tìm kiếm trong 7 ngày.', 99000, 7, 1, 1),

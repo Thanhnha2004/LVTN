@@ -4,6 +4,13 @@ const cors = require("cors");
 require("dotenv").config();
 
 const app = express();
+app.disable("x-powered-by");
+
+function handleProxyError(err, req, res) {
+  console.error(`Proxy error for ${req.method} ${req.originalUrl}:`, err.message);
+  if (res.headersSent) return res.end();
+  return res.status(502).json({ message: "Dịch vụ tạm thời không khả dụng" });
+}
 
 app.use(
   cors({
@@ -67,9 +74,7 @@ app.use(
     proxyTimeout: 5000,
     parseReqBody: false,
     on: {
-      error: (err, req, res) => {
-        res.status(502).json({ message: err.message });
-      },
+      error: handleProxyError,
       proxyReq: (proxyReq, req) => {
         console.log(`→ ${req.method} /api/auth${req.url}`);
       },
@@ -89,7 +94,7 @@ app.use(
     proxyTimeout: 5000,
     parseReqBody: false,
     on: {
-      error: (err, req, res) => res.status(502).json({ message: err.message }),
+      error: handleProxyError,
     },
   }),
 );
@@ -106,7 +111,7 @@ app.use(
     proxyTimeout: 5000,
     parseReqBody: false,
     on: {
-      error: (err, req, res) => res.status(502).json({ message: err.message }),
+      error: handleProxyError,
     },
   }),
 );
@@ -123,7 +128,7 @@ app.use(
     proxyTimeout: 5000,
     parseReqBody: false,
     on: {
-      error: (err, req, res) => res.status(502).json({ message: err.message }),
+      error: handleProxyError,
     },
   }),
 );
@@ -138,7 +143,7 @@ app.use(
     pathRewrite: (path) => `/api/admin${path}`,
     proxyTimeout: 5000,
     on: {
-      error: (err, req, res) => res.status(502).json({ message: err.message }),
+      error: handleProxyError,
     },
   }),
 );

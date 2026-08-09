@@ -272,7 +272,7 @@ export default function Login() {
 
           {/* Form */}
           <form onSubmit={handleSubmit}>
-            {/* Email or Phone */}
+            {/* Email */}
             <div style={{ marginBottom: 16 }}>
               <label
                 style={{
@@ -282,7 +282,7 @@ export default function Login() {
                   color: "#333",
                   marginBottom: 7,
                 }}>
-                Số điện thoại hoặc Email
+                Email
               </label>
               <div style={{ position: "relative" }}>
                 <svg
@@ -311,8 +311,8 @@ export default function Login() {
                   />
                 </svg>
                 <input
-                  type="text"
-                  placeholder="name@email.com hoặc 09xx"
+                  type="email"
+                  placeholder="name@email.com"
                   required
                   value={form.email}
                   onChange={(e) => setForm({ ...form, email: e.target.value })}

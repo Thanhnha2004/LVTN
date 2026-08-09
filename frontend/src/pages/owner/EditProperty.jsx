@@ -63,12 +63,9 @@ function SectionCard({ icon, title, children }) {
 }
 
 // ─── ImageCard ────────────────────────────────────────────────────────────────
-function ImageCard({ url, isFirst, onDelete }) {
-  const [hovered, setHovered] = useState(false);
+function ImageCard({ url, isFirst }) {
   return (
     <div
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
       style={{
         position: "relative",
         borderRadius: 10,
@@ -103,35 +100,6 @@ function ImageCard({ url, isFirst, onDelete }) {
           ẢNH CHÍNH
         </div>
       )}
-      {hovered && (
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            background: "rgba(0,0,0,0.45)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}>
-          <button
-            onClick={onDelete}
-            style={{
-              width: 36,
-              height: 36,
-              borderRadius: "50%",
-              background: "#fff",
-              border: "none",
-              cursor: "pointer",
-              fontSize: 16,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              color: "#b51b17",
-            }}>
-            <UiIcon name="trash" size={17} />
-          </button>
-        </div>
-      )}
     </div>
   );
 }
@@ -147,8 +115,7 @@ export default function EditProperty() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
-  const [deleteConfirm, setDeleteConfirm] = useState(false);
-
+  const [imageUploadWarning, setImageUploadWarning] = useState("");
   const [existingImages, setExistingImages] = useState([]);
   const [newFiles, setNewFiles] = useState([]);
   const [newPreviews, setNewPreviews] = useState([]);
@@ -226,7 +193,7 @@ export default function EditProperty() {
         setLoading(false);
       }
     })();
-  }, [id]);
+  }, [id, navigate, showToast]);
 
   const set = (field) => (e) =>
     setForm((f) => ({ ...f, [field]: e.target.value }));
@@ -234,7 +201,8 @@ export default function EditProperty() {
 
   // ── Handle new file selection ─────────────────────────────────────────────
   const handleFiles = (files) => {
-    const arr = Array.from(files).slice(0, 5 - existingImages.length);
+    const remainingSlots = Math.max(0, 5 - existingImages.length);
+    const arr = Array.from(files).slice(0, remainingSlots);
     setNewFiles(arr);
     setNewPreviews(arr.map((f) => URL.createObjectURL(f)));
   };
@@ -255,6 +223,7 @@ export default function EditProperty() {
     const values = validation.values;
 
     setError("");
+    setImageUploadWarning("");
     setSaving(true);
 
     try {
@@ -277,19 +246,33 @@ export default function EditProperty() {
         longitude: values.longitude ?? undefined,
       });
 
-      // Upload new images if any
+      let uploadWarning = "";
+
+      // The property content is already saved here. Keep an image failure
+      // separate so the owner does not retry and create conflicting edits.
       if (newFiles.length > 0) {
         setUploadingImages(true);
         const fd = new FormData();
         newFiles.forEach((f) => fd.append("images", f));
-        await api.post(`/api/property/${id}/images`, fd, {
-          headers: { "Content-Type": "multipart/form-data" },
-        });
-        setUploadingImages(false);
+        try {
+          await api.post(`/api/property/${id}/images`, fd, {
+            headers: { "Content-Type": "multipart/form-data" },
+          });
+        } catch (imageError) {
+          const reason =
+            imageError.response?.data?.message || "dịch vụ tải ảnh tạm thời lỗi";
+          uploadWarning = `Thông tin đã được lưu nhưng ảnh mới chưa tải lên được: ${reason}. Bạn có thể mở lại tin và thử tải ảnh lần nữa.`;
+          setImageUploadWarning(uploadWarning);
+          showToast(uploadWarning, "error");
+        } finally {
+          setUploadingImages(false);
+        }
       }
 
       setSuccess(true);
-      showToast("Cập nhật tin thành công. Tin đang chờ duyệt lại.");
+      if (!uploadWarning) {
+        showToast("Cập nhật tin thành công. Tin đang chờ duyệt lại.");
+      }
     } catch (err) {
       const message =
         err.response?.data?.message || "Lưu thất bại, vui lòng thử lại.";
@@ -365,6 +348,17 @@ export default function EditProperty() {
               Thông tin bất động sản đã được cập nhật. Tin đang chờ Admin duyệt
               lại trước khi hiển thị công khai.
             </p>
+            {imageUploadWarning && (
+              <p
+                style={{
+                  fontSize: 14,
+                  color: "#9a6700",
+                  lineHeight: 1.6,
+                  marginBottom: 20,
+                }}>
+                {imageUploadWarning}
+              </p>
+            )}
             <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
               <button
                 onClick={() => navigate("/owner/dashboard")}
@@ -1048,6 +1042,9 @@ export default function EditProperty() {
                     }}>
                     Ảnh hiện tại
                   </p>
+                  <p style={{ fontSize: 12, color: "#757575", marginTop: -4 }}>
+                    Ảnh hiện tại sẽ được giữ nguyên khi lưu thay đổi.
+                  </p>
                   <div
                     style={{
                       display: "grid",
@@ -1055,16 +1052,7 @@ export default function EditProperty() {
                       gap: 10,
                     }}>
                     {existingImages.map((url, i) => (
-                      <ImageCard
-                        key={url}
-                        url={url}
-                        isFirst={i === 0}
-                        onDelete={() =>
-                          setExistingImages((prev) =>
-                            prev.filter((u) => u !== url),
-                          )
-                        }
-                      />
+                      <ImageCard key={url} url={url} isFirst={i === 0} />
                     ))}
                   </div>
                 </div>

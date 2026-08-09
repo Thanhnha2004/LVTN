@@ -3,6 +3,20 @@ const pool = require("../db");
 const authMiddleware = require("../middleware/auth");
 const router = express.Router();
 
+function parsePagination(query) {
+  const requestedPage = Number(query.page);
+  const requestedLimit = Number(query.limit);
+  const page =
+    Number.isSafeInteger(requestedPage) && requestedPage > 0
+      ? Math.min(requestedPage, 1_000_000)
+      : 1;
+  const limit =
+    Number.isSafeInteger(requestedLimit) && requestedLimit > 0
+      ? Math.min(requestedLimit, 50)
+      : 10;
+  return { page, limit, offset: (page - 1) * limit };
+}
+
 // GET /api/admin/stats — thống kê tổng quan
 // Admin API: tong hop so lieu dashboard nhu user, tin dang, lien he, top owner va top tin xem nhieu.
 router.get("/stats", authMiddleware, async (req, res) => {
@@ -106,11 +120,11 @@ router.get("/users", authMiddleware, async (req, res) => {
   if (req.user.role !== "admin")
     return res.status(403).json({ message: "Không có quyền" });
 
-  const { page = 1, limit = 10, search } = req.query;
-  const offset = (parseInt(page) - 1) * parseInt(limit);
+  const { search, role, status } = req.query;
+  const { page, limit, offset } = parsePagination(req.query);
 
-  let where = "";
-  let params = [];
+  const conditions = [];
+  const params = [];
   // Search duoc dua vao params LIKE ? thay vi noi chuoi truc tiep de tranh SQL injection.
   if (search && search.trim()) {
     const clauses = [];
@@ -120,24 +134,50 @@ router.get("/users", authMiddleware, async (req, res) => {
       const kw = `%${token}%`;
       params.push(kw, kw);
     });
-    where = `WHERE ${clauses.join(" AND ")}`;
+    conditions.push(`(${clauses.join(" AND ")})`);
   }
+  if (role && !["buyer", "owner", "admin"].includes(role))
+    return res.status(400).json({ message: "Vai trò không hợp lệ" });
+  if (status && !["active", "banned"].includes(status))
+    return res.status(400).json({ message: "Trạng thái không hợp lệ" });
+  if (role) {
+    conditions.push("role = ?");
+    params.push(role);
+  }
+  if (status) {
+    conditions.push("status = ?");
+    params.push(status);
+  }
+  const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
 
   try {
     const [rows] = await pool.query(
       `SELECT id, full_name, email, role, status, created_at FROM users ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`,
-      [...params, parseInt(limit), offset],
+      [...params, limit, offset],
     );
     const [[{ total }]] = await pool.query(
       `SELECT COUNT(*) as total FROM users ${where}`,
       params,
     );
+    const [[summary]] = await pool.query(
+      `SELECT COUNT(*) AS total,
+              SUM(role = 'owner') AS owners,
+              SUM(role = 'buyer') AS buyers,
+              SUM(status = 'banned') AS banned
+       FROM users`,
+    );
     res.json({
       data: rows,
+      summary: {
+        total: Number(summary.total || 0),
+        owners: Number(summary.owners || 0),
+        buyers: Number(summary.buyers || 0),
+        banned: Number(summary.banned || 0),
+      },
       pagination: {
         total,
-        page: parseInt(page),
-        limit: parseInt(limit),
+        page,
+        limit,
         total_pages: Math.ceil(total / limit),
       },
     });
@@ -156,12 +196,18 @@ router.patch("/users/:id/status", authMiddleware, async (req, res) => {
   const { status } = req.body;
   if (!["active", "banned"].includes(status))
     return res.status(400).json({ message: "Trạng thái không hợp lệ" });
+  if (Number(req.params.id) === Number(req.user.id) && status === "banned")
+    return res
+      .status(400)
+      .json({ message: "Admin không thể tự vô hiệu hóa tài khoản của mình" });
 
   try {
-    await pool.query("UPDATE users SET status = ? WHERE id = ?", [
-      status,
-      req.params.id,
-    ]);
+    const [result] = await pool.query(
+      "UPDATE users SET status = ?, token_version = token_version + 1 WHERE id = ?",
+      [status, req.params.id],
+    );
+    if (result.affectedRows !== 1)
+      return res.status(404).json({ message: "Không tìm thấy tài khoản" });
     res.json({ message: "Cập nhật thành công" });
   } catch (err) {
     res.status(500).json({ message: "Lỗi server", error: err.message });
@@ -174,8 +220,8 @@ router.get("/properties", authMiddleware, async (req, res) => {
   if (req.user.role !== "admin")
     return res.status(403).json({ message: "Không có quyền" });
 
-  const { status, page = 1, limit = 10 } = req.query;
-  const offset = (parseInt(page) - 1) * parseInt(limit);
+  const { status } = req.query;
+  const { page, limit, offset } = parsePagination(req.query);
 
   let where = "";
   let params = [];
@@ -203,7 +249,7 @@ router.get("/properties", authMiddleware, async (req, res) => {
       ORDER BY p.created_at DESC
       LIMIT ? OFFSET ?
       `,
-      [...params, parseInt(limit), offset],
+      [...params, limit, offset],
     );
 
     const [[{ total }]] = await pool.query(
@@ -215,8 +261,8 @@ router.get("/properties", authMiddleware, async (req, res) => {
       data: rows,
       pagination: {
         total,
-        page: parseInt(page),
-        limit: parseInt(limit),
+        page,
+        limit,
         total_pages: Math.ceil(total / limit),
       },
     });

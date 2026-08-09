@@ -47,7 +47,7 @@ test("Buyer searches, views listing list, and opens listing detail", async ({
 test("Login redirects user by role", async ({ page }) => {
   await page.goto("/login");
 
-  await page.locator('input[type="text"]').first().fill("owner@bds.com");
+  await page.locator('input[type="email"]').first().fill("owner@bds.com");
   await page.locator('input[type="password"]').first().fill("123456");
   await page.locator('form button[type="submit"]').click();
 

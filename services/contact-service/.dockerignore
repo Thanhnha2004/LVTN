@@ -1,0 +1,9 @@
+# Never copy local secrets or dependencies into Docker images.
+.env
+.env.*
+node_modules
+npm-debug.log*
+coverage
+dist
+.git
+.gitignore

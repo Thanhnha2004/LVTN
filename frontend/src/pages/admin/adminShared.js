@@ -1,7 +1,8 @@
 // ─── CONFIG ────────────────────────────────────────────────
 import { getApiErrorMessage } from "../../api/errorMessage";
+import { API_BASE_URL } from "../../api/config";
 
-export const API = "http://localhost:3000";
+export const API = API_BASE_URL;
 
 // ─── DESIGN TOKENS ─────────────────────────────────────────
 export const C = {

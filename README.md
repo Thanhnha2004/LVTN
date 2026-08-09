@@ -112,7 +112,8 @@ LVTN/
 
 ## 5. Environment Variables
 
-Create a `.env` file in the project root:
+Copy [`.env.example`](.env.example) to `.env` in the project root, then replace every
+placeholder with a local secret:
 
 ```env
 DB_HOST=mysql
@@ -134,6 +135,9 @@ VNPAY_TMN_CODE=your_vnpay_tmn_code
 VNPAY_HASH_SECRET=your_vnpay_hash_secret
 VNPAY_PAYMENT_URL=https://sandbox.vnpayment.vn/paymentv2/vpcpay.html
 VNPAY_RETURN_URL=http://localhost:5173/payment/vnpay-return
+
+# Chỉ bật tạm thời khi cần trình diễn bằng tài khoản Admin mẫu trong init.sql
+ALLOW_DEMO_ADMIN_LOGIN=false
 ```
 
 Notes:
@@ -141,8 +145,12 @@ Notes:
 - `MAIL_PASS` should be an app password, not the normal email login password.
 - Cloudinary is used for property image upload.
 - VNPay variables are used for Sandbox payment testing.
+- Configure the VNPay merchant IPN URL as `https://<gateway-host>/api/property/vnpay-ipn`; the browser return URL is not a substitute for the server callback.
+- Keep `ALLOW_DEMO_ADMIN_LOGIN=false` by default. Set it to `true` only for a local demo, then turn it off again.
 
 ## 6. Run With Docker
+
+This Compose stack is intended for local development only. It binds MySQL and the API Gateway to `127.0.0.1`; backend services are reachable only through the Gateway. For production, do not run `init.sql` because it contains sample data and demo credentials.
 
 At the project root:
 
@@ -169,13 +177,18 @@ docker compose down -v
 docker compose up -d --build
 ```
 
+If the MySQL volume already existed before the security hardening changes, back
+it up and apply [the database migration](migrations/README.md) once before
+starting the updated services. A fresh volume receives the new schema from
+`init.sql` automatically.
+
 ## 7. Run Frontend
 
 If backend services are running with Docker, frontend can be run separately:
 
 ```bash
 cd frontend
-npm install
+npm ci
 npm run dev
 ```
 
@@ -338,20 +351,24 @@ Current backend test result:
 
 | Service | Tests | Result |
 |---|---:|---|
-| Auth Service | 9 | Passed |
-| Listing Service | 7 | Passed |
-| Contact Service | 10 | Passed |
-| Property Service | 12 | Passed |
-| Total | 38 | Passed |
+| Auth Service | 26 | Passed |
+| Listing Service | 11 | Passed |
+| Contact Service | 25 | Passed |
+| Property Service | 37 | Passed |
+| Total | 99 | Passed |
 
 Current line coverage:
 
 | Service | Line Coverage |
 |---|---:|
-| Auth Service | 64.67% |
-| Listing Service | 57.26% |
-| Contact Service | 79.00% |
-| Property Service | 42.15% |
+| Auth Service | 69.78% |
+| Listing Service | 66.13% |
+| Contact Service | 83.33% |
+| Property Service | 62.50% |
+
+The backend suites are route/unit tests with database and external dependencies
+mocked. Playwright currently adds 5 UI scenarios with mocked API responses; these
+results do not replace a full-stack test against a real MySQL/VNPay environment.
 
 ### Frontend Build Check
 

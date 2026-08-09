@@ -1,6 +1,6 @@
 ﻿// src/pages/profile/Profile.jsx
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import api from "../../api/axios";
 import Navbar from "../../components/Navbar";
@@ -37,12 +37,27 @@ function buyerContactStep(contact) {
   };
 }
 
+async function loadAllBuyerContacts() {
+  const contacts = [];
+  for (let page = 1; ; page += 1) {
+    const response = await api.get("/api/contact/buyer", {
+      params: { page, limit: 100 },
+    });
+    const payload = response.data || {};
+    contacts.push(...(Array.isArray(payload) ? payload : payload.data || []));
+    const totalPages = Math.max(
+      1,
+      Number(payload.pagination?.total_pages) || 1,
+    );
+    if (page >= totalPages) return contacts;
+  }
+}
+
 export default function Profile() {
   const [searchParams] = useSearchParams();
   const [user, setUser] = useState(null);
   const [saved, setSaved] = useState([]);
   const [contacts, setContacts] = useState([]);
-  const [activeTab, setActiveTab] = useState("profile");
   const [editing, setEditing] = useState(false);
   const [formData, setFormData] = useState({
     full_name: "",
@@ -59,6 +74,12 @@ export default function Profile() {
   const { showToast } = useToast();
   const { confirm } = useConfirm();
   const { updateUser } = useAuth();
+  const requestedTab = searchParams.get("tab");
+  const activeTab =
+    ["profile", "password"].includes(requestedTab) ||
+    (user?.role === "buyer" && ["saved", "contacts"].includes(requestedTab))
+      ? requestedTab
+      : "profile";
 
   const validateProfileForm = () => {
     const fullName = formData.full_name.trim().replace(/\s+/g, " ");
@@ -85,32 +106,7 @@ export default function Profile() {
     return { fullName, phoneNumber };
   };
 
-  useEffect(() => {
-    const tab = searchParams.get("tab");
-
-    if (tab === "saved") {
-      setActiveTab("saved");
-    } else if (tab === "contacts") {
-      setActiveTab("contacts");
-    } else if (tab === "password") {
-      setActiveTab("password");
-    } else {
-      setActiveTab("profile");
-    }
-    setEditing(false);
-    setAvatarFile(null);
-    fetchData();
-  }, [searchParams]);
-
-  useEffect(() => {
-    const tab = searchParams.get("tab");
-
-    if (tab) {
-      setActiveTab(tab);
-    }
-  }, [searchParams]);
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       const profileRes = await api.get("/api/auth/me");
 
@@ -123,22 +119,24 @@ export default function Profile() {
         phone_number: userData.phone_number || userData.phone || "",
       });
 
-      const requests = [api.get("/api/contact/saved")];
-
-      // chỉ buyer mới gọi contact/buyer
       if (userData.role === "buyer") {
-        requests.push(api.get("/api/contact/buyer"));
+        const [savedResult, contactsResult] = await Promise.allSettled([
+          api.get("/api/contact/saved"),
+          loadAllBuyerContacts(),
+        ]);
+
+        setSaved(
+          savedResult.status === "fulfilled" ? savedResult.value.data || [] : [],
+        );
+        setContacts(
+          contactsResult.status === "fulfilled"
+            ? contactsResult.value
+            : [],
+        );
+      } else {
+        setSaved([]);
+        setContacts([]);
       }
-
-      const results = await Promise.all(requests);
-
-      setSaved(results[0].data || []);
-
-      setContacts(
-        userData.role === "buyer"
-          ? results[1]?.data?.data || results[1]?.data || []
-          : [], // owner không có contacts
-      );
     } catch (err) {
       if (err.response?.status === 401) {
         navigate("/login");
@@ -146,7 +144,14 @@ export default function Profile() {
         console.log("Fetch error:", err.response?.status, err.message);
       }
     }
-  };
+  }, [navigate, updateUser]);
+
+  useEffect(() => {
+    // Initial profile hydration is the synchronization performed here; state
+    // updates occur after the API request resolves.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchData();
+  }, [fetchData]);
 
   const handleUnsave = async (propertyId) => {
     const ok = await confirm({
@@ -289,16 +294,18 @@ export default function Profile() {
                   Hồ sơ
                 </Link>
 
-                <Link
-                  to="/profile?tab=saved"
-                  className="btn text-start"
-                  style={{
-                    background:
-                      activeTab === "saved" ? "#b51b17" : "transparent",
-                    color: activeTab === "saved" ? "#fff" : "#5b403c",
-                  }}>
-                  Tin đã lưu ({saved.length})
-                </Link>
+                {user?.role === "buyer" && (
+                  <Link
+                    to="/profile?tab=saved"
+                    className="btn text-start"
+                    style={{
+                      background:
+                        activeTab === "saved" ? "#b51b17" : "transparent",
+                      color: activeTab === "saved" ? "#fff" : "#5b403c",
+                    }}>
+                    Tin đã lưu ({saved.length})
+                  </Link>
+                )}
 
                 {user?.role === "buyer" && (
                   <Link
@@ -401,10 +408,22 @@ export default function Profile() {
                 <input
                   id="avatarInput"
                   type="file"
-                  accept="image/*"
+                  accept="image/jpeg,image/png,image/webp"
                   style={{ display: "none" }}
                   onChange={(e) => {
-                    if (e.target.files?.[0]) setAvatarFile(e.target.files[0]);
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+                      showToast("Chỉ chấp nhận ảnh JPG, PNG hoặc WEBP", "error");
+                      e.target.value = "";
+                      return;
+                    }
+                    if (file.size > 2 * 1024 * 1024) {
+                      showToast("Ảnh đại diện không được vượt quá 2 MB", "error");
+                      e.target.value = "";
+                      return;
+                    }
+                    setAvatarFile(file);
                   }}
                 />
 
@@ -540,7 +559,7 @@ export default function Profile() {
             )}
 
             {/* SAVED */}
-            {activeTab === "saved" && (
+            {user?.role === "buyer" && activeTab === "saved" && (
               <div className="card border p-4" style={{ borderRadius: 12 }}>
                 <h5 className="fw-bold mb-4">
                   <UiIcon

@@ -133,6 +133,22 @@ describe("contact-service", () => {
     expect(res.body.message).toBeTruthy();
   });
 
+  test("maps a concurrent duplicate contact insert to conflict", async () => {
+    const duplicateError = Object.assign(new Error("duplicate"), {
+      code: "ER_DUP_ENTRY",
+    });
+    pool.query
+      .mockResolvedValueOnce([[{ id: 1, owner_id: 7 }]])
+      .mockResolvedValueOnce([[]])
+      .mockRejectedValueOnce(duplicateError);
+
+    const res = await request(app())
+      .post("/api/contact")
+      .send({ property_id: 1, message: "Toi can lien he" });
+
+    expect(res.status).toBe(409);
+  });
+
   test("rejects too short contact message", async () => {
     const res = await request(app())
       .post("/api/contact")
@@ -344,6 +360,23 @@ describe("contact-service", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.data[0].owner_phone).toBe("0909");
+    const buyerSelect = pool.query.mock.calls[0][0];
+    expect(buyerSelect).not.toContain("c.*");
+    expect(buyerSelect).not.toContain("owner_note");
+  });
+
+  test("buyer contact pagination clamps unsafe values", async () => {
+    pool.query
+      .mockResolvedValueOnce([[]])
+      .mockResolvedValueOnce([[{ total: 0 }]]);
+
+    const res = await request(app()).get(
+      "/api/contact/buyer?page=-2&limit=999999",
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.body.pagination).toMatchObject({ page: 1, limit: 100 });
+    expect(pool.query.mock.calls[0][1]).toEqual([1, 100, 0]);
   });
 
   test("buyer can remove saved property", async () => {
@@ -358,6 +391,15 @@ describe("contact-service", () => {
     );
   });
 
+  test("owner cannot remove buyer saved properties", async () => {
+    global.mockUser = { id: 7, role: "owner" };
+
+    const res = await request(app()).delete("/api/contact/saved/3");
+
+    expect(res.status).toBe(403);
+    expect(pool.query).not.toHaveBeenCalled();
+  });
+
   test("buyer can list saved properties", async () => {
     pool.query.mockResolvedValueOnce([[{ id: 3, title: "Nha pho" }]]);
 
@@ -365,5 +407,16 @@ describe("contact-service", () => {
 
     expect(res.status).toBe(200);
     expect(res.body[0].title).toBe("Nha pho");
+    expect(pool.query.mock.calls[0][0]).toContain("p.status = 'approved'");
+    expect(pool.query.mock.calls[0][0]).not.toContain("p.*");
+  });
+
+  test("owner cannot list buyer saved properties", async () => {
+    global.mockUser = { id: 7, role: "owner" };
+
+    const res = await request(app()).get("/api/contact/saved");
+
+    expect(res.status).toBe(403);
+    expect(pool.query).not.toHaveBeenCalled();
   });
 });

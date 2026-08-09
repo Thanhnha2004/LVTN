@@ -1,6 +1,8 @@
 const express = require("express");
 const request = require("supertest");
+const crypto = require("crypto");
 const pool = require("../db");
+const { cloudinary } = require("../cloudinary");
 const propertyRouter = require("../routes/property");
 
 jest.mock("../db", () => ({
@@ -11,7 +13,11 @@ jest.mock("../cloudinary", () => ({
   cloudinary: { uploader: { destroy: jest.fn().mockResolvedValue() } },
   upload: {
     single: () => (req, res, next) => next(),
-    array: () => (req, res, next) => next(),
+    array: () => (req, res, next) => {
+      global.mockImageUploadInvoked = true;
+      if (global.mockUploadedFiles) req.files = global.mockUploadedFiles;
+      next(global.mockImageUploadError);
+    },
   },
 }));
 jest.mock("../middleware/auth", () => (req, res, next) => {
@@ -26,10 +32,49 @@ function app() {
   return app;
 }
 
+function signVnpayQuery(overrides = {}) {
+  const params = {
+    vnp_Amount: "9900000",
+    vnp_ResponseCode: "00",
+    vnp_TmnCode: "TESTCODE",
+    vnp_TransactionNo: "123456",
+    vnp_TransactionStatus: "00",
+    vnp_TxnRef: "100",
+    ...overrides,
+  };
+  const signData = Object.keys(params)
+    .sort()
+    .map(
+      (key) =>
+        `${key}=${encodeURIComponent(String(params[key])).replace(/%20/g, "+")}`,
+    )
+    .join("&");
+  params.vnp_SecureHash = crypto
+    .createHmac("sha512", "TESTSECRET")
+    .update(Buffer.from(signData, "utf-8"))
+    .digest("hex");
+  return params;
+}
+
+let mockConnection;
+
 describe("property-service", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    pool.query.mockReset();
+    pool.getConnection.mockReset();
+    mockConnection = {
+      query: jest.fn(),
+      beginTransaction: jest.fn().mockResolvedValue(),
+      commit: jest.fn().mockResolvedValue(),
+      rollback: jest.fn().mockResolvedValue(),
+      release: jest.fn(),
+    };
+    pool.getConnection.mockResolvedValue(mockConnection);
     global.mockUser = { id: 1, role: "owner" };
+    global.mockUploadedFiles = undefined;
+    global.mockImageUploadError = undefined;
+    global.mockImageUploadInvoked = false;
     process.env.VNPAY_TMN_CODE = "TESTCODE";
     process.env.VNPAY_HASH_SECRET = "TESTSECRET";
     process.env.VNPAY_PAYMENT_URL =
@@ -38,7 +83,8 @@ describe("property-service", () => {
   });
 
   test("owner creates property in pending status and writes status history", async () => {
-    pool.query
+    mockConnection.query
+      .mockResolvedValueOnce([[{ id: 1 }]])
       .mockResolvedValueOnce([[]])
       .mockResolvedValueOnce([[{ pending_count: 0 }]])
       .mockResolvedValueOnce([[{ violation_count: 0 }]])
@@ -62,18 +108,21 @@ describe("property-service", () => {
 
     expect(res.status).toBe(201);
     expect(res.body.id).toBe(20);
-    expect(pool.query).toHaveBeenCalledWith(
+    expect(mockConnection.query).toHaveBeenCalledWith(
       expect.stringContaining("INSERT INTO properties"),
       expect.any(Array),
     );
-    expect(pool.query).toHaveBeenCalledWith(
+    expect(mockConnection.query).toHaveBeenCalledWith(
       expect.stringContaining("INSERT INTO property_status_history"),
       [20, null, "pending", 1, expect.any(String)],
     );
+    expect(mockConnection.commit).toHaveBeenCalledTimes(1);
   });
 
   test("owner cannot create a duplicate active property", async () => {
-    pool.query.mockResolvedValueOnce([[{ id: 20, status: "pending" }]]);
+    mockConnection.query
+      .mockResolvedValueOnce([[{ id: 1 }]])
+      .mockResolvedValueOnce([[{ id: 20, status: "pending" }]]);
 
     const res = await request(app()).post("/api/property").send({
       title: "Can ho cao cap Quan 1",
@@ -92,11 +141,14 @@ describe("property-service", () => {
 
     expect(res.status).toBe(409);
     expect(res.body.existing_id).toBe(20);
-    expect(pool.query).toHaveBeenCalledTimes(1);
+    expect(mockConnection.query).toHaveBeenCalledTimes(2);
+    expect(mockConnection.rollback).toHaveBeenCalledTimes(1);
   });
 
   test("duplicate check ignores location encoding differences", async () => {
-    pool.query.mockResolvedValueOnce([[{ id: 21, status: "pending" }]]);
+    mockConnection.query
+      .mockResolvedValueOnce([[{ id: 1 }]])
+      .mockResolvedValueOnce([[{ id: 21, status: "pending" }]]);
 
     const res = await request(app()).post("/api/property").send({
       title: "Can ho cao cap Quan 1",
@@ -116,7 +168,7 @@ describe("property-service", () => {
 
     expect(res.status).toBe(409);
     expect(res.body.existing_id).toBe(21);
-    expect(pool.query.mock.calls[0][1]).toEqual([
+    expect(mockConnection.query.mock.calls[1][1]).toEqual([
       1,
       "Can ho cao cap Quan 1",
       "Nguyen Hue",
@@ -126,7 +178,8 @@ describe("property-service", () => {
   });
 
   test("owner cannot create property when too many pending listings", async () => {
-    pool.query
+    mockConnection.query
+      .mockResolvedValueOnce([[{ id: 1 }]])
       .mockResolvedValueOnce([[]])
       .mockResolvedValueOnce([[{ pending_count: 10 }]])
       .mockResolvedValueOnce([[{ violation_count: 0 }]]);
@@ -333,11 +386,31 @@ describe("property-service", () => {
 
     expect(res.status).toBe(200);
     expect(res.body[0].new_status).toBe("approved");
+    expect(pool.query.mock.calls[1][0]).toContain("h.note NOT LIKE ?");
+    expect(pool.query.mock.calls[1][0]).not.toContain("SELECT h.*");
+    expect(pool.query.mock.calls[1][1]).toEqual([
+      "20",
+      "Người dùng báo cáo tin:%",
+    ]);
+  });
+
+  test("admin can view full property history including report actors", async () => {
+    global.mockUser = { id: 9, role: "admin" };
+    pool.query
+      .mockResolvedValueOnce([[{ id: 20, owner_id: 1 }]])
+      .mockResolvedValueOnce([[{ id: 5, actor_id: 2, actor_name: "Buyer" }]]);
+
+    const res = await request(app()).get("/api/property/20/history");
+
+    expect(res.status).toBe(200);
+    expect(pool.query.mock.calls[1][0]).toContain("SELECT h.*");
+    expect(pool.query.mock.calls[1][0]).not.toContain("h.note NOT LIKE ?");
+    expect(pool.query.mock.calls[1][1]).toEqual(["20"]);
   });
 
   test("buyer can report approved property without new table", async () => {
     global.mockUser = { id: 2, role: "buyer" };
-    pool.query
+    mockConnection.query
       .mockResolvedValueOnce([[{ id: 20, owner_id: 1, status: "approved" }]])
       .mockResolvedValueOnce([[]])
       .mockResolvedValueOnce([{}]);
@@ -350,7 +423,7 @@ describe("property-service", () => {
       });
 
     expect(res.status).toBe(201);
-    expect(pool.query).toHaveBeenCalledWith(
+    expect(mockConnection.query).toHaveBeenCalledWith(
       expect.stringContaining("INSERT INTO property_status_history"),
       [
         "20",
@@ -360,11 +433,12 @@ describe("property-service", () => {
         expect.stringContaining("Người dùng báo cáo tin"),
       ],
     );
+    expect(mockConnection.commit).toHaveBeenCalledTimes(1);
   });
 
   test("buyer cannot report the same property twice", async () => {
     global.mockUser = { id: 2, role: "buyer" };
-    pool.query
+    mockConnection.query
       .mockResolvedValueOnce([[{ id: 20, owner_id: 1, status: "approved" }]])
       .mockResolvedValueOnce([[{ id: 9 }]]);
 
@@ -377,6 +451,7 @@ describe("property-service", () => {
 
     expect(res.status).toBe(400);
     expect(res.body.message).toContain("đã báo cáo");
+    expect(mockConnection.rollback).toHaveBeenCalledTimes(1);
   });
 
   test("admin can view reported properties", async () => {
@@ -458,22 +533,36 @@ describe("property-service", () => {
   });
 
   test("owner can resubmit hidden property for approval", async () => {
-    pool.query
+    mockConnection.query
       .mockResolvedValueOnce([[{ owner_id: 1, status: "hidden" }]])
-      .mockResolvedValueOnce([{}])
+      .mockResolvedValueOnce([{ affectedRows: 1 }])
       .mockResolvedValueOnce([{}]);
 
     const res = await request(app()).patch("/api/property/20/unhide").send();
 
     expect(res.status).toBe(200);
-    expect(pool.query).toHaveBeenCalledWith(
+    expect(mockConnection.query).toHaveBeenCalledWith(
       "UPDATE properties SET status = 'pending', reject_reason = NULL, hidden_at = NULL WHERE id = ? AND status = 'hidden'",
       ["20"],
     );
+    expect(mockConnection.commit).toHaveBeenCalledTimes(1);
+  });
+
+  test("owner cannot resubmit a property that is not hidden", async () => {
+    mockConnection.query.mockResolvedValueOnce([
+      [{ owner_id: 1, status: "approved" }],
+    ]);
+
+    const res = await request(app()).patch("/api/property/20/unhide").send();
+
+    expect(res.status).toBe(409);
+    expect(mockConnection.rollback).toHaveBeenCalledTimes(1);
+    expect(mockConnection.query).toHaveBeenCalledTimes(1);
   });
 
   test("owner can create featured order for approved own property", async () => {
-    pool.query
+    mockConnection.query
+      .mockResolvedValueOnce([[{ id: 1 }]])
       .mockResolvedValueOnce([
         [
           {
@@ -503,14 +592,16 @@ describe("property-service", () => {
     expect(res.body.payment_url).toContain(
       "https://sandbox.vnpayment.vn/paymentv2/vpcpay.html",
     );
-    expect(pool.query).toHaveBeenCalledWith(
+    expect(mockConnection.query).toHaveBeenCalledWith(
       expect.stringContaining("INSERT INTO featured_orders"),
       [20, 1, 2, 99000, "vnpay", expect.any(String)],
     );
+    expect(mockConnection.commit).toHaveBeenCalledTimes(1);
   });
 
   test("owner cannot create new featured order when active featured limit reached", async () => {
-    pool.query
+    mockConnection.query
+      .mockResolvedValueOnce([[{ id: 1 }]])
       .mockResolvedValueOnce([
         [
           {
@@ -535,7 +626,8 @@ describe("property-service", () => {
   });
 
   test("owner with too many processed violations cannot buy featured package", async () => {
-    pool.query
+    mockConnection.query
+      .mockResolvedValueOnce([[{ id: 1 }]])
       .mockResolvedValueOnce([
         [
           {
@@ -558,7 +650,8 @@ describe("property-service", () => {
   });
 
   test("owner cannot create duplicate pending featured payment order", async () => {
-    pool.query
+    mockConnection.query
+      .mockResolvedValueOnce([[{ id: 1 }]])
       .mockResolvedValueOnce([
         [
           {
@@ -581,5 +674,228 @@ describe("property-service", () => {
 
     expect(res.status).toBe(400);
     expect(res.body.message).toContain("đơn thanh toán");
+  });
+
+  test("VNPay return activates featured package only for exact signed payment", async () => {
+    mockConnection.query
+      .mockResolvedValueOnce([
+        [
+          {
+            id: 100,
+            amount: "99000.00",
+            status: "pending",
+            payment_method: "vnpay",
+            property_id: 20,
+            property_status: "approved",
+            featured_until: null,
+            duration_days: 7,
+            created_at: new Date(),
+          },
+        ],
+      ])
+      .mockResolvedValueOnce([{}])
+      .mockResolvedValueOnce([{}]);
+
+    const res = await request(app())
+      .get("/api/property/vnpay-return")
+      .query(signVnpayQuery());
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(mockConnection.query).toHaveBeenCalledWith(
+      expect.stringContaining("SET status = 'paid'"),
+      expect.arrayContaining([100]),
+    );
+    expect(mockConnection.commit).toHaveBeenCalledTimes(1);
+  });
+
+  test("VNPay return rejects a signed callback with the wrong amount", async () => {
+    mockConnection.query.mockResolvedValueOnce([
+      [
+        {
+          id: 100,
+          amount: "99000.00",
+          status: "pending",
+          payment_method: "vnpay",
+          property_id: 20,
+          property_status: "approved",
+          duration_days: 7,
+          created_at: new Date(),
+        },
+      ],
+    ]);
+
+    const res = await request(app())
+      .get("/api/property/vnpay-return")
+      .query(signVnpayQuery({ vnp_Amount: "100" }));
+
+    expect(res.status).toBe(400);
+    expect(res.body.success).toBe(false);
+    expect(mockConnection.rollback).toHaveBeenCalled();
+    expect(mockConnection.query).toHaveBeenCalledTimes(1);
+  });
+
+  test("VNPay return requires successful transaction status", async () => {
+    mockConnection.query
+      .mockResolvedValueOnce([
+        [
+          {
+            id: 100,
+            amount: "99000.00",
+            status: "pending",
+            payment_method: "vnpay",
+            property_id: 20,
+            property_status: "approved",
+            duration_days: 7,
+            created_at: new Date(),
+          },
+        ],
+      ])
+      .mockResolvedValueOnce([{}]);
+
+    const res = await request(app())
+      .get("/api/property/vnpay-return")
+      .query(signVnpayQuery({ vnp_TransactionStatus: "02" }));
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(false);
+    expect(mockConnection.query).toHaveBeenCalledWith(
+      "UPDATE featured_orders SET status = 'failed' WHERE id = ? AND status = 'pending'",
+      [100],
+    );
+  });
+
+  test("VNPay return is idempotent for an already paid order", async () => {
+    mockConnection.query.mockResolvedValueOnce([
+      [
+        {
+          id: 100,
+          amount: "99000.00",
+          status: "paid",
+          payment_method: "vnpay",
+          property_id: 20,
+          featured_end_at: new Date(),
+        },
+      ],
+    ]);
+
+    const res = await request(app())
+      .get("/api/property/vnpay-return")
+      .query(signVnpayQuery());
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.idempotent).toBe(true);
+    expect(mockConnection.query).toHaveBeenCalledTimes(1);
+  });
+
+  test("VNPay IPN rejects a signed callback for a different merchant", async () => {
+    const res = await request(app())
+      .get("/api/property/vnpay-ipn")
+      .query(signVnpayQuery({ vnp_TmnCode: "OTHER_MERCHANT" }));
+
+    expect(res.status).toBe(200);
+    expect(res.body.RspCode).toBe("97");
+    expect(pool.getConnection).not.toHaveBeenCalled();
+  });
+
+  test("image upload checks ownership before invoking Cloudinary", async () => {
+    pool.query.mockResolvedValueOnce([
+      [{ owner_id: 2, status: "pending", image_count: 0 }],
+    ]);
+    global.mockUploadedFiles = [
+      {
+        path: "https://res.cloudinary.com/demo/image/upload/bds-platform/a.jpg",
+        filename: "bds-platform/a",
+      },
+    ];
+
+    const res = await request(app()).post("/api/property/20/images").send();
+
+    expect(res.status).toBe(403);
+    expect(global.mockImageUploadInvoked).toBe(false);
+    expect(pool.getConnection).not.toHaveBeenCalled();
+  });
+
+  test("adding images to an approved property sends it back to moderation", async () => {
+    pool.query.mockResolvedValueOnce([
+      [{ owner_id: 1, status: "approved", image_count: 1 }],
+    ]);
+    global.mockUploadedFiles = [
+      {
+        path: "https://res.cloudinary.com/demo/image/upload/bds-platform/a.jpg",
+        filename: "bds-platform/a",
+      },
+    ];
+    mockConnection.query
+      .mockResolvedValueOnce([[{ owner_id: 1, status: "approved" }]])
+      .mockResolvedValueOnce([[{ image_count: 1, max_order: 1 }]])
+      .mockResolvedValueOnce([{}])
+      .mockResolvedValueOnce([{ affectedRows: 1 }])
+      .mockResolvedValueOnce([{}])
+      .mockResolvedValueOnce([{}]);
+
+    const res = await request(app()).post("/api/property/20/images").send();
+
+    expect(res.status).toBe(200);
+    expect(res.body.requires_moderation).toBe(true);
+    expect(mockConnection.query).toHaveBeenCalledWith(
+      expect.stringContaining("SET status = 'pending'"),
+      ["20"],
+    );
+    expect(mockConnection.query).toHaveBeenCalledWith(
+      expect.stringContaining("INSERT INTO property_status_history"),
+      ["20", "approved", "pending", 1, expect.any(String)],
+    );
+    expect(cloudinary.uploader.destroy).not.toHaveBeenCalled();
+  });
+
+  test("image upload enforces total property quota and cleans Cloudinary files", async () => {
+    pool.query.mockResolvedValueOnce([
+      [{ owner_id: 1, status: "pending", image_count: 4 }],
+    ]);
+    global.mockUploadedFiles = [
+      {
+        path: "https://res.cloudinary.com/demo/image/upload/bds-platform/a.jpg",
+        filename: "bds-platform/a",
+      },
+      {
+        path: "https://res.cloudinary.com/demo/image/upload/bds-platform/b.jpg",
+        filename: "bds-platform/b",
+      },
+    ];
+    mockConnection.query
+      .mockResolvedValueOnce([[{ owner_id: 1, status: "pending" }]])
+      .mockResolvedValueOnce([[{ image_count: 4, max_order: 4 }]]);
+
+    const res = await request(app()).post("/api/property/20/images").send();
+
+    expect(res.status).toBe(400);
+    expect(cloudinary.uploader.destroy).toHaveBeenCalledTimes(2);
+    expect(mockConnection.rollback).toHaveBeenCalled();
+  });
+
+  test("image upload cleans Cloudinary file when database insert fails", async () => {
+    const consoleError = jest.spyOn(console, "error").mockImplementation();
+    pool.query.mockResolvedValueOnce([
+      [{ owner_id: 1, status: "pending", image_count: 0 }],
+    ]);
+    global.mockUploadedFiles = [
+      {
+        path: "https://res.cloudinary.com/demo/image/upload/bds-platform/a.jpg",
+        filename: "bds-platform/a",
+      },
+    ];
+    mockConnection.query
+      .mockResolvedValueOnce([[{ owner_id: 1, status: "pending" }]])
+      .mockResolvedValueOnce([[{ image_count: 0, max_order: 0 }]])
+      .mockRejectedValueOnce(new Error("database unavailable"));
+
+    const res = await request(app()).post("/api/property/20/images").send();
+
+    expect(res.status).toBe(500);
+    expect(mockConnection.rollback).toHaveBeenCalled();
+    expect(cloudinary.uploader.destroy).toHaveBeenCalledWith("bds-platform/a");
+    consoleError.mockRestore();
   });
 });

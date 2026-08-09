@@ -8,7 +8,6 @@ import {
   EmptyState,
   Pagination,
 } from "./Dashboard";
-import UiIcon from "../../components/UiIcon";
 import { useToast } from "../../components/ToastProvider";
 import { useConfirm } from "../../components/ConfirmProvider";
 
@@ -27,7 +26,12 @@ export default function UsersPage({ showToast }) {
   const [error, setError] = useState("");
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  const [total, setTotal] = useState(0);
+  const [summary, setSummary] = useState({
+    total: 0,
+    owners: 0,
+    buyers: 0,
+    banned: 0,
+  });
   const [filterRole, setFilterRole] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
   const [actionLoading, setActionLoading] = useState({});
@@ -37,14 +41,20 @@ export default function UsersPage({ showToast }) {
     setLoading(true);
     try {
       const params = new URLSearchParams({ page, limit: LIMIT });
+      if (filterRole) params.set("role", filterRole);
+      if (filterStatus) params.set("status", filterStatus);
       const data = await apiFetch(`/api/admin/users?${params}`);
-      let list = Array.isArray(data) ? data : data.data || [];
-      // client-side filter since API may not support role/status filters
-      if (filterRole) list = list.filter((u) => u.role === filterRole);
-      if (filterStatus) list = list.filter((u) => u.status === filterStatus);
+      const list = Array.isArray(data) ? data : data.data || [];
       setUsers(list);
-      setTotal(data?.pagination?.total || list.length);
       setTotalPages(data?.pagination?.total_pages || 1);
+      setSummary(
+        data?.summary || {
+          total: data?.pagination?.total || list.length,
+          owners: list.filter((user) => user.role === "owner").length,
+          buyers: list.filter((user) => user.role === "buyer").length,
+          banned: list.filter((user) => user.status === "banned").length,
+        },
+      );
     } catch (e) {
       setError(e.message);
     } finally {
@@ -53,6 +63,8 @@ export default function UsersPage({ showToast }) {
   }, [page, filterRole, filterStatus]);
 
   useEffect(() => {
+    // Fetching the requested server page is the synchronization for this effect.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadUsers();
   }, [loadUsers]);
 
@@ -77,9 +89,7 @@ export default function UsersPage({ showToast }) {
         method: "PATCH",
         body: { status: newStatus },
       });
-      setUsers((prev) =>
-        prev.map((u) => (u.id === id ? { ...u, status: newStatus } : u)),
-      );
+      await loadUsers();
       notify(
         newStatus === "banned" ? "Đã cấm tài khoản" : "Đã kích hoạt tài khoản",
       );
@@ -102,19 +112,19 @@ export default function UsersPage({ showToast }) {
         }}>
         <StatCard
           label="Tổng người dùng"
-          value={total.toLocaleString()}
+          value={summary.total.toLocaleString()}
         />
         <StatCard
           label="Người bán"
-          value={users.filter((u) => u.role === "owner").length}
+          value={summary.owners.toLocaleString()}
         />
         <StatCard
           label="Người mua"
-          value={users.filter((u) => u.role === "buyer").length}
+          value={summary.buyers.toLocaleString()}
         />
         <StatCard
           label="Bị cấm"
-          value={users.filter((u) => u.status === "banned").length}
+          value={summary.banned.toLocaleString()}
           subColor={C.error}
         />
       </div>

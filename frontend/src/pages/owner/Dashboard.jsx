@@ -27,6 +27,31 @@ import {
 } from "react-icons/fa";
 
 const VN = { fontFamily: "'Be Vietnam Pro', Inter, sans-serif" };
+const OWNER_LIST_PAGE_SIZE = 50;
+
+async function loadAllOwnerProperties() {
+  const properties = [];
+  let currentPage = 1;
+  let totalPages;
+
+  do {
+    const response = await api.get("/api/property/owner/list", {
+      params: { page: currentPage, limit: OWNER_LIST_PAGE_SIZE },
+    });
+    const pageItems = Array.isArray(response.data)
+      ? response.data
+      : response.data.data || [];
+
+    properties.push(...pageItems);
+    totalPages = Math.max(
+      1,
+      Number(response.data?.pagination?.total_pages) || 1,
+    );
+    currentPage += 1;
+  } while (currentPage <= totalPages);
+
+  return properties;
+}
 
 function formatPrice(price) {
   if (!price) return "—";
@@ -278,20 +303,6 @@ const TABS = [
   { key: "rejected", label: "Ẩn / Từ chối" },
 ];
 
-const SIDEBAR = [
-  {
-    to: "/owner/dashboard",
-    icon: <FaListAlt size={16} />,
-    label: "Tin đã đăng",
-    active: true,
-  },
-  {
-    to: "/owner/contacts",
-    icon: <FaComments size={16} />,
-    label: "Liên hệ",
-  },
-];
-
 function StatusBadge({ status, rejectReason }) {
   const s = STATUS_MAP[status] || STATUS_MAP.hidden;
   return (
@@ -492,27 +503,44 @@ export default function OwnerDashboard() {
   const [paymentLoading, setPaymentLoading] = useState(false);
 
   useEffect(() => {
+    let ignore = false;
+
     (async () => {
-      try {
-        const [listRes, statsRes, packagesRes, ordersRes] = await Promise.all([
-          api.get("/api/property/owner/list"),
+      const [listResult, statsResult, packagesResult, ordersResult] =
+        await Promise.allSettled([
+          loadAllOwnerProperties(),
           api.get("/api/property/owner/stats"),
           api.get("/api/property/featured-packages"),
           api.get("/api/property/owner/featured-orders"),
         ]);
-        setProperties(
-          Array.isArray(listRes.data) ? listRes.data : listRes.data.data || [],
-        );
-        setOwnerStats(statsRes.data);
-        setFeaturedPackages(Array.isArray(packagesRes.data) ? packagesRes.data : []);
-        setFeaturedOrders(Array.isArray(ordersRes.data) ? ordersRes.data : []);
-      } catch (err) {
-        if (err.response?.status === 401) navigate("/login");
-      } finally {
-        setLoading(false);
+
+      if (ignore) return;
+
+      if (listResult.status === "fulfilled") {
+        setProperties(listResult.value);
+      } else if ([401, 403].includes(listResult.reason?.response?.status)) {
+        navigate("/login");
       }
+
+      if (statsResult.status === "fulfilled") {
+        setOwnerStats(statsResult.value.data);
+      }
+      if (packagesResult.status === "fulfilled") {
+        const data = packagesResult.value.data;
+        setFeaturedPackages(Array.isArray(data) ? data : []);
+      }
+      if (ordersResult.status === "fulfilled") {
+        const data = ordersResult.value.data;
+        setFeaturedOrders(Array.isArray(data) ? data : []);
+      }
+
+      setLoading(false);
     })();
-  }, []);
+
+    return () => {
+      ignore = true;
+    };
+  }, [navigate]);
 
   const handleDelete = async (id) => {
     const ok = await confirm({
@@ -597,7 +625,7 @@ export default function OwnerDashboard() {
     try {
       const res = await api.get(`/api/property/${property.id}/history`);
       setHistoryItems(Array.isArray(res.data) ? res.data : []);
-    } catch (err) {
+    } catch {
       showToast("Không thể tải lịch sử trạng thái", "error");
       setHistoryItems([]);
     } finally {
@@ -612,7 +640,7 @@ export default function OwnerDashboard() {
     try {
       const res = await api.get(`/api/property/owner/stats/${property.id}`);
       setPropertyStats(res.data);
-    } catch (err) {
+    } catch {
       showToast("Không thể tải thống kê chi tiết tin", "error");
       setPropertyStats(null);
     } finally {

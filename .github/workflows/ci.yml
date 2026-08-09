@@ -19,7 +19,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
@@ -27,12 +27,16 @@ jobs:
         working-directory: frontend
         run: npm ci
 
+      - name: Lint critical frontend modules
+        working-directory: frontend
+        run: npm run lint:ci
+
       - name: Build frontend
         working-directory: frontend
         run: npm run build
 
   backend:
-    name: Backend syntax check
+    name: Backend checks
     runs-on: ubuntu-latest
 
     strategy:
@@ -52,7 +56,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
           cache-dependency-path: ${{ matrix.service }}/package-lock.json
 
@@ -65,6 +69,11 @@ jobs:
         run: |
           find . -path ./node_modules -prune -o -name "*.js" -print0 | xargs -0 -n1 node --check
 
+      - name: Run service tests
+        if: matrix.service != 'api-gateway'
+        working-directory: ${{ matrix.service }}
+        run: npm test
+
   docker:
     name: Docker Compose config
     runs-on: ubuntu-latest
@@ -76,10 +85,38 @@ jobs:
       - name: Validate docker compose file
         run: docker compose config
 
+  system:
+    name: Playwright UI scenarios
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            frontend/package-lock.json
+
+      - name: Install test and frontend dependencies
+        run: |
+          npm ci
+          npm --prefix frontend ci
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run UI scenarios
+        run: npm run test:system
+
   docker-build:
     name: Docker Compose build
     runs-on: ubuntu-latest
-    needs: [frontend, backend, docker]
+    needs: [frontend, backend, docker, system]
 
     steps:
       - name: Checkout source
