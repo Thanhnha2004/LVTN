@@ -252,6 +252,12 @@ GET    /api/property/owner/list
 GET    /api/property/owner/stats
 GET    /api/property/owner/stats/:id
 POST   /api/property
+GET    /api/property/featured-packages
+GET    /api/property/owner/featured-orders
+POST   /api/property/:id/featured-orders
+GET    /api/property/vnpay-return
+GET    /api/property/vnpay-ipn
+GET    /api/property/admin/reports
 GET    /api/property/:id
 PUT    /api/property/:id
 DELETE /api/property/:id
@@ -261,10 +267,7 @@ PATCH  /api/property/:id/hide
 PATCH  /api/property/:id/unhide
 PATCH  /api/property/:id/sold
 GET    /api/property/:id/history
-GET    /api/property/featured-packages
-GET    /api/property/owner/featured-orders
-POST   /api/property/:id/featured-orders
-GET    /api/property/vnpay-return
+POST   /api/property/:id/report
 ```
 
 ### Listing Service
@@ -272,7 +275,9 @@ GET    /api/property/vnpay-return
 ```text
 GET    /api/listing/category-counts
 GET    /api/listing
+GET    /api/listing/owners/:id
 GET    /api/listing/:id
+GET    /api/listing/:id/price-estimate
 GET    /api/listing/:id/similar
 ```
 
@@ -383,9 +388,15 @@ The project includes GitHub Actions configuration in `.github/workflows/ci.yml`.
 
 The CI workflow is used to:
 
-- Build/check frontend source.
-- Check backend service test commands where configured.
-- Support automatic verification when code is pushed to GitHub.
+- Lint critical frontend modules and build the React/Vite frontend.
+- Check JavaScript syntax for API Gateway and all backend services.
+- Run Jest tests for the four backend services.
+- Validate Docker Compose configuration.
+- Run 5 Playwright UI scenarios with mocked API responses.
+- Build Docker images after the previous checks pass.
+
+The workflow currently covers CI only. It does not deploy the system to a cloud
+or VPS environment automatically.
 
 Additional CI/CD documentation is available in:
 
@@ -401,6 +412,10 @@ Planned improvements:
 ## 12. Demo Accounts
 
 Demo accounts are created in `init.sql`. They can be changed directly in `init.sql` before resetting the database.
+
+For security, the seeded Admin account is blocked by default. To use it in an
+isolated local demo, set `ALLOW_DEMO_ADMIN_LOGIN=true`, then turn it off again
+after the demo.
 
 Default password for seeded demo accounts:
 

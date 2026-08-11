@@ -240,8 +240,7 @@ router.get("/properties", authMiddleware, async (req, res) => {
              (
                SELECT COUNT(*)
                FROM property_status_history h
-               WHERE h.property_id = p.id
-                 AND h.note LIKE 'Người dùng báo cáo tin:%'
+               WHERE h.property_id = p.id AND h.note LIKE 'Người dùng báo cáo tin:%'
              ) AS report_count
       FROM properties p
       JOIN users u ON p.owner_id = u.id
