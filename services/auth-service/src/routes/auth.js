@@ -18,6 +18,11 @@ const EMAIL_OTP_REQUEST_MESSAGE =
   "Nếu tài khoản hợp lệ và chưa xác minh, mã OTP sẽ được gửi đến email.";
 const RESET_OTP_REQUEST_MESSAGE =
   "Nếu tài khoản hợp lệ, mã OTP đặt lại mật khẩu sẽ được gửi đến email.";
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function normalizeEmail(value) {
+  return String(value || "").trim().toLowerCase();
+}
 
 function otpMatches(input, expected) {
   const normalizedInput = String(input || "");
@@ -50,6 +55,7 @@ async function hasRecentOtp(userId, type) {
 router.post("/register", async (req, res) => {
   const { full_name, email, password, role, phone_number } = req.body;
   const normalizedName = String(full_name || "").trim().replace(/\s+/g, " ");
+  const normalizedEmail = normalizeEmail(email);
   const normalizedPhone = String(phone_number || "").trim();
   const nameParts = normalizedName.split(" ").filter(Boolean);
   const nameRegex = /^[A-Za-zÀ-ỹ\s'.-]+$/;
@@ -70,8 +76,7 @@ router.post("/register", async (req, res) => {
       message: "Số điện thoại phải gồm 10 chữ số và bắt đầu bằng số 0",
     });
 
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (!emailRegex.test(email))
+  if (!EMAIL_REGEX.test(normalizedEmail))
     return res.status(400).json({ message: "Email không hợp lệ" });
 
   if (!password || password.length < 6)
@@ -82,7 +87,7 @@ router.post("/register", async (req, res) => {
   try {
     const [existing] = await pool.query(
       "SELECT id FROM users WHERE email = ?",
-      [email],
+      [normalizedEmail],
     );
     if (existing.length > 0)
       return res.status(400).json({ message: "Email đã tồn tại" });
@@ -95,7 +100,7 @@ router.post("/register", async (req, res) => {
     // Tạo tài khoản với email_verified = 0
     const [result] = await pool.query(
       "INSERT INTO users (full_name, email, password_hash, role, phone_number, email_verified) VALUES (?, ?, ?, ?, ?, 0)",
-      [normalizedName, email, hash, validRole, normalizedPhone],
+      [normalizedName, normalizedEmail, hash, validRole, normalizedPhone],
     );
 
     // Gửi OTP ngay sau khi đăng ký
@@ -109,7 +114,7 @@ router.post("/register", async (req, res) => {
 
     // Gửi mail không đồng bộ không block response
     // Gui mail bat dong bo: neu SMTP loi thi user van duoc tao, backend chi log loi gui mail.
-    sendOtpEmail({ toEmail: email, toName: normalizedName, otp }).catch((err) =>
+    sendOtpEmail({ toEmail: normalizedEmail, toName: normalizedName, otp }).catch((err) =>
       console.error("Send OTP mail error:", err.message),
     );
 
@@ -122,12 +127,14 @@ router.post("/register", async (req, res) => {
     res.status(500).json({ message: "Lỗi server", error: err.message });
   }
 });
+
 // POST /api/auth/send-otp
 // Gửi lại OTP (dùng khi user chưa xác minh hoặc OTP hết hạn)
 // Public API: tao OTP xac minh email moi, dong thoi vo hieu hoa cac OTP cu chua dung.
 router.post("/send-otp", async (req, res) => {
-  const { email } = req.body;
-  if (!email) return res.status(400).json({ message: "Thiếu email" });
+  const email = normalizeEmail(req.body.email);
+  if (!EMAIL_REGEX.test(email))
+    return res.status(400).json({ message: "Email không hợp lệ" });
 
   try {
     const [rows] = await pool.query(
@@ -175,9 +182,12 @@ router.post("/send-otp", async (req, res) => {
 // Public API: kiem tra OTP dung ma, dung loai, chua dung va chua het han.
 // Neu hop le thi cap nhat users.email_verified = 1.
 router.post("/verify-email", async (req, res) => {
-  const { email, otp } = req.body;
+  const email = normalizeEmail(req.body.email);
+  const { otp } = req.body;
   if (!email || !otp)
     return res.status(400).json({ message: "Thiếu email hoặc mã OTP" });
+  if (!EMAIL_REGEX.test(email))
+    return res.status(400).json({ message: "Email không hợp lệ" });
 
   let connection;
   try {
@@ -259,8 +269,9 @@ router.post("/verify-email", async (req, res) => {
 // Public API: tao OTP loai reset_password de nguoi dung dat lai mat khau.
 // Tai khoan banned khong duoc reset mat khau.
 router.post("/forgot-password", async (req, res) => {
-  const { email } = req.body;
-  if (!email) return res.status(400).json({ message: "Thiếu email" });
+  const email = normalizeEmail(req.body.email);
+  if (!EMAIL_REGEX.test(email))
+    return res.status(400).json({ message: "Email không hợp lệ" });
 
   try {
     const [rows] = await pool.query(
@@ -310,18 +321,20 @@ router.post("/forgot-password", async (req, res) => {
 // Kiểm tra OTP và cập nhật mật khẩu mới
 // Public API: xac thuc OTP reset_password, hash mat khau moi roi cap nhat password_hash.
 router.post("/reset-password", async (req, res) => {
-  const { email, otp, new_password } = req.body;
+  const email = normalizeEmail(req.body.email);
+  const { otp, new_password } = req.body;
 
   if (!email || !otp || !new_password)
     return res
       .status(400)
       .json({ message: "Thiếu email, OTP hoặc mật khẩu mới" });
+  if (!EMAIL_REGEX.test(email))
+    return res.status(400).json({ message: "Email không hợp lệ" });
 
   if (new_password.length < 6)
     return res
       .status(400)
       .json({ message: "Mật khẩu mới phải có ít nhất 6 ký tự" });
-
   let connection;
   try {
     connection = await pool.getConnection();
@@ -404,7 +417,10 @@ router.post("/reset-password", async (req, res) => {
 // Public API: kiem tra email, trang thai tai khoan, mat khau bcrypt va email_verified.
 // Neu hop le thi tra JWT gom id va role de frontend goi cac API can dang nhap.
 router.post("/login", async (req, res) => {
-  const { email, password } = req.body;
+  const email = normalizeEmail(req.body.email);
+  const { password } = req.body;
+  if (!EMAIL_REGEX.test(email) || !password)
+    return res.status(400).json({ message: "Email hoặc mật khẩu không đúng" });
   try {
     const [rows] = await pool.query(
       `SELECT id, full_name, password_hash, avatar_url, role, status,
@@ -616,6 +632,10 @@ router.put("/change-password", authMiddleware, async (req, res) => {
     return res
       .status(400)
       .json({ message: "Mật khẩu mới phải có ít nhất 6 ký tự" });
+  if (old_password === new_password)
+    return res
+      .status(400)
+      .json({ message: "Mật khẩu mới phải khác mật khẩu hiện tại" });
 
   try {
     const [rows] = await pool.query(

@@ -13,6 +13,8 @@ const inputStyle = {
   boxSizing: "border-box",
 };
 
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 export default function ForgotPassword() {
   const navigate = useNavigate();
   const { showToast } = useToast();
@@ -35,14 +37,18 @@ export default function ForgotPassword() {
     setError("");
     setMessage("");
 
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!EMAIL_REGEX.test(normalizedEmail)) {
       showError("Email không hợp lệ");
       return;
     }
+    setEmail(normalizedEmail);
 
     setLoading(true);
     try {
-      const res = await api.post("/api/auth/forgot-password", { email });
+      const res = await api.post("/api/auth/forgot-password", {
+        email: normalizedEmail,
+      });
       const text = res.data.message || "Đã gửi mã OTP về email";
       setMessage(text);
       setStep(2);
@@ -57,6 +63,12 @@ export default function ForgotPassword() {
   const handleResetPassword = async (event) => {
     event.preventDefault();
     setError("");
+    const normalizedEmail = email.trim().toLowerCase();
+
+    if (!EMAIL_REGEX.test(normalizedEmail)) {
+      showError("Email không hợp lệ");
+      return;
+    }
 
     if (!/^\d{6}$/.test(otp)) {
       showError("Mã OTP phải gồm đúng 6 chữ số");
@@ -76,7 +88,7 @@ export default function ForgotPassword() {
     setLoading(true);
     try {
       const res = await api.post("/api/auth/reset-password", {
-        email,
+        email: normalizedEmail,
         otp,
         new_password: newPassword,
       });
@@ -101,7 +113,7 @@ export default function ForgotPassword() {
         alignItems: "center",
         justifyContent: "center",
         padding: 20,
-        fontFamily: "'Be Vietnam Pro', Inter, sans-serif",
+        fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
       }}>
       <div
         style={{

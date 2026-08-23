@@ -5,6 +5,8 @@ import UsersPage from "./Users";
 import PendingPage from "./Pending";
 import UiIcon from "../../components/UiIcon";
 
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 // ─── SHARED COMPONENTS ─────────────────────────────────────
 
 export function Sidebar({ page, setPage }) {
@@ -385,11 +387,20 @@ function LoginPage({ onLogin }) {
 
   const handleSubmit = async () => {
     setError("");
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!EMAIL_REGEX.test(normalizedEmail)) {
+      setError("Email không hợp lệ.");
+      return;
+    }
+    if (!password) {
+      setError("Vui lòng nhập mật khẩu.");
+      return;
+    }
     setLoading(true);
     try {
       const data = await apiFetch("/api/auth/login", {
         method: "POST",
-        body: { email, password },
+        body: { email: normalizedEmail, password },
       });
       if (data.user?.role !== "admin") {
         setError("Tài khoản không có quyền admin.");
@@ -838,14 +849,6 @@ export default function AdminPortal() {
   const [toast, setToast] = useState({ msg: "", type: "success" });
 
   const showToast = (msg, type = "success") => setToast({ msg, type });
-
-  useEffect(() => {
-    const link = document.createElement("link");
-    link.rel = "stylesheet";
-    link.href =
-      "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Manrope:wght@600;700;800&display=swap";
-    document.head.appendChild(link);
-  }, []);
 
   if (!user) {
     return <LoginPage onLogin={(u) => setUser(u)} />;

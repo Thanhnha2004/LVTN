@@ -426,7 +426,7 @@ describe("property-service", () => {
     expect(mockConnection.query).toHaveBeenCalledWith(
       expect.stringContaining("INSERT INTO property_status_history"),
       [
-        "20",
+        20,
         "approved",
         "approved",
         2,

@@ -32,6 +32,11 @@ function normalizeMessage(value) {
     .replace(/\s+/g, " ");
 }
 
+function parsePositiveId(value) {
+  const id = Number(value);
+  return Number.isSafeInteger(id) && id > 0 ? id : null;
+}
+
 function parsePagination(
   query,
   { defaultLimit = 10, maxLimit = 100, maxPage = 1_000_000 } = {},
@@ -65,9 +70,9 @@ router.post("/", authMiddleware, async (req, res) => {
   if (!["buyer", "owner"].includes(req.user.role))
     return res.status(403).json({ message: "Không có quyền gửi liên hệ" });
 
-  const { property_id } = req.body;
+  const propertyId = parsePositiveId(req.body.property_id);
   const message = normalizeMessage(req.body.message);
-  if (!property_id || !message)
+  if (!propertyId || !message)
     return res.status(400).json({ message: "Thiếu property_id hoặc message" });
   if (message.length < 10) {
     return res
@@ -85,7 +90,7 @@ router.post("/", authMiddleware, async (req, res) => {
     // Chi cho lien he voi tin approved de tranh buyer lien he tin chua duyet/da an.
     const [props] = await pool.query(
       "SELECT id, owner_id FROM properties WHERE id = ? AND status = 'approved'",
-      [property_id],
+      [propertyId],
     );
     if (props.length === 0)
       return res.status(404).json({ message: "Bất động sản không tồn tại" });
@@ -98,7 +103,7 @@ router.post("/", authMiddleware, async (req, res) => {
     // Moi buyer chi tao mot contact cho mot property de giam spam lead.
     const [existing] = await pool.query(
       "SELECT id FROM contacts WHERE property_id = ? AND buyer_id = ?",
-      [property_id, req.user.id],
+      [propertyId, req.user.id],
     );
     if (existing.length > 0)
       return res
@@ -107,7 +112,7 @@ router.post("/", authMiddleware, async (req, res) => {
 
     await pool.query(
       "INSERT INTO contacts (property_id, buyer_id, message) VALUES (?, ?, ?)",
-      [property_id, req.user.id, message],
+      [propertyId, req.user.id, message],
     );
 
     // Lấy thông tin owner và property để gửi mail
@@ -121,7 +126,7 @@ router.post("/", authMiddleware, async (req, res) => {
         JOIN users b ON b.id = ?
         WHERE p.id = ?
       `,
-      [req.user.id, property_id],
+      [req.user.id, propertyId],
     );
 
     if (details.length > 0) {
@@ -251,6 +256,11 @@ router.patch("/:id/lead", authMiddleware, async (req, res) => {
       message: "Trạng thái đã chốt hoặc hủy phải có ghi chú kết quả tối thiểu 10 ký tự",
     });
   }
+  if (owner_note.length > 500) {
+    return res.status(400).json({
+      message: "Ghi chú chăm sóc khách không được vượt quá 500 ký tự",
+    });
+  }
 
   let connection;
   try {
@@ -336,9 +346,19 @@ router.patch("/:id/reply", authMiddleware, async (req, res) => {
   if (req.user.role !== "owner")
     return res.status(403).json({ message: "Chỉ owner mới được phản hồi" });
 
-  const { owner_reply } = req.body;
-  if (!owner_reply)
+  const ownerReply = normalizeMessage(req.body.owner_reply);
+  if (!ownerReply)
     return res.status(400).json({ message: "Thiếu nội dung phản hồi" });
+  if (ownerReply.length < 10) {
+    return res
+      .status(400)
+      .json({ message: "Nội dung phản hồi phải có ít nhất 10 ký tự" });
+  }
+  if (ownerReply.length > 1000) {
+    return res
+      .status(400)
+      .json({ message: "Nội dung phản hồi không được vượt quá 1000 ký tự" });
+  }
 
   try {
     // Kiểm tra contact thuộc về tin của owner này không
@@ -363,7 +383,7 @@ router.patch("/:id/reply", authMiddleware, async (req, res) => {
 
     await pool.query(
       "UPDATE contacts SET owner_reply = ?, status = 'replied', lead_status = ? WHERE id = ?",
-      [owner_reply, nextLeadStatus, req.params.id],
+      [ownerReply, nextLeadStatus, req.params.id],
     );
 
     res.json({
@@ -430,13 +450,15 @@ router.post("/saved", authMiddleware, async (req, res) => {
   if (req.user.role !== "buyer")
     return res.status(403).json({ message: "Chỉ buyer mới được lưu tin" });
 
-  const { property_id } = req.body;
+  const propertyId = parsePositiveId(req.body.property_id);
+  if (!propertyId)
+    return res.status(400).json({ message: "Mã bất động sản không hợp lệ" });
   try {
     // Thêm kiểm tra approved
     // Chi cho luu tin approved vi tin chua duyet khong nen xuat hien trong danh sach yeu thich.
     const [rows] = await pool.query(
       "SELECT id FROM properties WHERE id = ? AND status = 'approved'",
-      [property_id],
+      [propertyId],
     );
     if (rows.length === 0)
       return res
@@ -445,7 +467,7 @@ router.post("/saved", authMiddleware, async (req, res) => {
 
     await pool.query(
       "INSERT IGNORE INTO saved_properties (buyer_id, property_id) VALUES (?, ?)",
-      [req.user.id, property_id],
+      [req.user.id, propertyId],
     );
     res.json({ message: "Đã lưu tin" });
   } catch (err) {
@@ -459,10 +481,14 @@ router.delete("/saved/:property_id", authMiddleware, async (req, res) => {
   if (req.user.role !== "buyer")
     return res.status(403).json({ message: "Chỉ buyer mới được bỏ lưu tin" });
 
+  const propertyId = parsePositiveId(req.params.property_id);
+  if (!propertyId)
+    return res.status(400).json({ message: "Mã bất động sản không hợp lệ" });
+
   try {
     await pool.query(
       "DELETE FROM saved_properties WHERE buyer_id = ? AND property_id = ?",
-      [req.user.id, req.params.property_id],
+      [req.user.id, propertyId],
     );
     res.json({ message: "Đã bỏ lưu" });
   } catch (err) {

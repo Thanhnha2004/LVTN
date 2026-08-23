@@ -45,7 +45,7 @@ export default function SiteFooter() {
             <Link
               to="/"
               style={{
-                fontFamily: "Manrope",
+                fontFamily: "'Be Vietnam Pro'",
                 fontWeight: 700,
                 fontSize: 18,
                 color: "#b51b17",

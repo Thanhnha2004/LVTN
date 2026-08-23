@@ -3,7 +3,7 @@ import Navbar from "../../components/Navbar";
 import SiteFooter from "../../components/SiteFooter";
 import UiIcon from "../../components/UiIcon";
 
-const VN = { fontFamily: "'Be Vietnam Pro', Inter, sans-serif" };
+const VN = { fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif" };
 
 const POLICY_GROUPS = [
   {
@@ -82,7 +82,7 @@ export default function PostingPolicy() {
           <div style={{ maxWidth: 760 }}>
             <h1
               style={{
-                fontFamily: "Manrope, sans-serif",
+                fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
                 fontSize: 30,
                 fontWeight: 850,
                 color: "#1a1c1c",

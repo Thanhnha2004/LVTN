@@ -222,8 +222,17 @@ export default function Profile() {
   };
 
   const handleChangePassword = async () => {
+    if (!passwordData.old_password) {
+      return showToast("Vui lòng nhập mật khẩu hiện tại", "error");
+    }
+    if (passwordData.new_password.length < 6) {
+      return showToast("Mật khẩu mới phải có ít nhất 6 ký tự", "error");
+    }
     if (passwordData.new_password !== passwordData.confirm_password) {
       return showToast("Xác nhận mật khẩu không khớp", "error");
+    }
+    if (passwordData.old_password === passwordData.new_password) {
+      return showToast("Mật khẩu mới phải khác mật khẩu hiện tại", "error");
     }
 
     try {

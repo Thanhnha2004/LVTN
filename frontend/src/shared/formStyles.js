@@ -7,7 +7,7 @@ export const inputStyle = {
   color: "#1a1c1c",
   background: "#fff",
   outline: "none",
-  fontFamily: "Inter, sans-serif",
+  fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
   transition: "border-color 0.16s ease, box-shadow 0.16s ease",
   boxSizing: "border-box",
 };
@@ -18,7 +18,7 @@ export const labelStyle = {
   fontWeight: 600,
   color: "#1a1c1c",
   marginBottom: 6,
-  fontFamily: "Inter, sans-serif",
+  fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
 };
 
 export const focusInput = (event) => {

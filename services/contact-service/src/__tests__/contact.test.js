@@ -387,7 +387,7 @@ describe("contact-service", () => {
     expect(res.status).toBe(200);
     expect(pool.query).toHaveBeenCalledWith(
       "DELETE FROM saved_properties WHERE buyer_id = ? AND property_id = ?",
-      [1, "3"],
+      [1, 3],
     );
   });
 

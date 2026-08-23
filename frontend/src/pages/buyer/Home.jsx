@@ -18,6 +18,7 @@ const TYPE_OPTIONS = [
 ];
 
 const TRANSACTION_OPTIONS = [
+  { value: "", label: "Tất cả" },
   { value: "sale", label: "Bán" },
   { value: "rent", label: "Cho thuê" },
 ];
@@ -339,9 +340,8 @@ export default function Home() {
   };
 
   const handleTabChange = (val) => {
-    const nextValue = activeTab === val ? "" : val;
-    setActiveTab(nextValue);
-    setFilter((f) => ({ ...f, transaction_type: nextValue, page: 1 }));
+    setActiveTab(val);
+    setFilter((f) => ({ ...f, transaction_type: val, page: 1 }));
   };
 
   const handleCategoryClick = (cat) => {
@@ -358,10 +358,9 @@ export default function Home() {
       style={{
         background: "#f9f9f9",
         minHeight: "100vh",
-        fontFamily: "Inter, sans-serif",
+        fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
       }}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@600;700;800&family=Inter:wght@400;500;600&display=swap');
         .property-card-hover { box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
         .property-card-hover:hover { transform: translateY(-4px); box-shadow: 0 12px 32px rgba(0,0,0,0.1); }
         .line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
@@ -419,7 +418,7 @@ export default function Home() {
           {/* Title */}
           <h1
             style={{
-              fontFamily: "Manrope, sans-serif",
+              fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
               fontSize: "clamp(28px, 5vw, 48px)",
               fontWeight: 700,
               lineHeight: 1.15,
@@ -740,7 +739,7 @@ export default function Home() {
           <div>
             <h2
               style={{
-                fontFamily: "Manrope",
+                fontFamily: "'Be Vietnam Pro'",
                 fontWeight: 700,
                 fontSize: 28,
                 color: "#1a1c1c",
@@ -835,7 +834,7 @@ export default function Home() {
             }}>
             <h2
               style={{
-                fontFamily: "Manrope",
+                fontFamily: "'Be Vietnam Pro'",
                 fontWeight: 700,
                 fontSize: 28,
                 color: "#1a1c1c",
@@ -937,7 +936,7 @@ export default function Home() {
             </span>
             <h2
               style={{
-                fontFamily: "Manrope",
+                fontFamily: "'Be Vietnam Pro'",
                 fontWeight: 700,
                 fontSize: 28,
                 color: "#1a1c1c",
@@ -1166,7 +1165,7 @@ export default function Home() {
 
           <h2
             style={{
-              fontFamily: "Manrope",
+              fontFamily: "'Be Vietnam Pro'",
               fontWeight: 700,
               fontSize: 28,
               color: "#fff",

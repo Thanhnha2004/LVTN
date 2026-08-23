@@ -3,12 +3,14 @@ import { Link, useLocation, useNavigate, useSearchParams } from "react-router-do
 import api from "../api/axios";
 import { useToast } from "../components/ToastProvider";
 
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 export default function VerifyEmail() {
   const navigate = useNavigate();
   const { showToast } = useToast();
   const location = useLocation();
   const [searchParams] = useSearchParams();
-  const email = searchParams.get("email") || "";
+  const email = (searchParams.get("email") || "").trim().toLowerCase();
   const [otp, setOtp] = useState("");
   const [message, setMessage] = useState(location.state?.message || "");
   const [error, setError] = useState("");
@@ -17,6 +19,11 @@ export default function VerifyEmail() {
 
   const handleVerify = async (event) => {
     event.preventDefault();
+    if (!EMAIL_REGEX.test(email)) {
+      setError("Email xác minh không hợp lệ.");
+      showToast("Email xác minh không hợp lệ.", "error");
+      return;
+    }
     if (!/^\d{6}$/.test(otp)) {
       setError("Mã OTP phải gồm đúng 6 chữ số.");
       showToast("Mã OTP phải gồm đúng 6 chữ số.", "error");
@@ -44,6 +51,12 @@ export default function VerifyEmail() {
   const handleResend = async () => {
     setError("");
     setMessage("");
+    if (!EMAIL_REGEX.test(email)) {
+      const message = "Email xác minh không hợp lệ.";
+      setError(message);
+      showToast(message, "error");
+      return;
+    }
     setResending(true);
     try {
       const res = await api.post("/api/auth/send-otp", { email });
@@ -61,7 +74,7 @@ export default function VerifyEmail() {
   };
 
   return (
-    <main style={{ minHeight: "100vh", display: "grid", placeItems: "center", padding: 24, background: "#f7f6f3", fontFamily: "'Be Vietnam Pro', sans-serif" }}>
+    <main style={{ minHeight: "100vh", display: "grid", placeItems: "center", padding: 24, background: "#f7f6f3", fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif" }}>
       <section style={{ width: "100%", maxWidth: 460, padding: 32, background: "#fff", border: "1px solid #e5e5e5", borderRadius: 8, boxShadow: "0 12px 32px rgba(0,0,0,0.06)" }}>
         <h1 style={{ margin: "0 0 10px", fontSize: 26, color: "#171717" }}>Xác minh email</h1>
         <p style={{ margin: "0 0 22px", color: "#666", lineHeight: 1.6 }}>

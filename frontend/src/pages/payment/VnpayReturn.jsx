@@ -5,7 +5,7 @@ import api from "../../api/axios";
 import Navbar from "../../components/Navbar";
 import { useAuth } from "../../context/AuthContext";
 
-const VN = { fontFamily: "'Be Vietnam Pro', Inter, sans-serif" };
+const VN = { fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif" };
 
 export default function VnpayReturn() {
   const location = useLocation();

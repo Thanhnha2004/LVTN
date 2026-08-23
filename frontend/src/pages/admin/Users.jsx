@@ -34,6 +34,8 @@ export default function UsersPage({ showToast }) {
   });
   const [filterRole, setFilterRole] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
+  const [searchText, setSearchText] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
   const [actionLoading, setActionLoading] = useState({});
   const LIMIT = 10;
 
@@ -41,6 +43,7 @@ export default function UsersPage({ showToast }) {
     setLoading(true);
     try {
       const params = new URLSearchParams({ page, limit: LIMIT });
+      if (searchTerm) params.set("search", searchTerm);
       if (filterRole) params.set("role", filterRole);
       if (filterStatus) params.set("status", filterStatus);
       const data = await apiFetch(`/api/admin/users?${params}`);
@@ -60,13 +63,22 @@ export default function UsersPage({ showToast }) {
     } finally {
       setLoading(false);
     }
-  }, [page, filterRole, filterStatus]);
+  }, [page, searchTerm, filterRole, filterStatus]);
 
   useEffect(() => {
     // Fetching the requested server page is the synchronization for this effect.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     loadUsers();
   }, [loadUsers]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setSearchTerm(searchText.trim());
+      setPage(1);
+    }, 350);
+
+    return () => window.clearTimeout(timer);
+  }, [searchText]);
 
   const handleStatus = async (id, newStatus) => {
     const ok = await confirm({
@@ -98,6 +110,14 @@ export default function UsersPage({ showToast }) {
     } finally {
       setActionLoading((prev) => ({ ...prev, [id]: false }));
     }
+  };
+
+  const clearFilters = () => {
+    setSearchText("");
+    setSearchTerm("");
+    setFilterRole("");
+    setFilterStatus("");
+    setPage(1);
   };
 
   return (
@@ -157,7 +177,31 @@ export default function UsersPage({ showToast }) {
             }}>
             Danh sách người dùng
           </div>
-          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          <div
+            style={{
+              display: "flex",
+              gap: 10,
+              alignItems: "center",
+              flexWrap: "wrap",
+              justifyContent: "flex-end",
+            }}>
+            <input
+              value={searchText}
+              onChange={(e) => setSearchText(e.target.value)}
+              placeholder="Tìm tên hoặc email"
+              style={{
+                width: 240,
+                maxWidth: "100%",
+                padding: "9px 12px",
+                borderRadius: 8,
+                border: `1px solid ${C.borderSubtle}`,
+                background: C.surfaceContainerLowest,
+                color: C.onSurface,
+                fontSize: 13,
+                fontFamily: font.body,
+                outline: "none",
+              }}
+            />
             <select
               value={filterRole}
               onChange={(e) => {
@@ -181,13 +225,10 @@ export default function UsersPage({ showToast }) {
               <option value="active">Hoạt động</option>
               <option value="banned">Bị cấm</option>
             </select>
-            {(filterRole || filterStatus) && (
+            {(searchTerm || searchText || filterRole || filterStatus) && (
               <button
-                onClick={() => {
-                  setFilterRole("");
-                  setFilterStatus("");
-                  setPage(1);
-                }}
+                type="button"
+                onClick={clearFilters}
                 style={{
                   fontSize: 13,
                   color: C.primary,
@@ -256,7 +297,7 @@ export default function UsersPage({ showToast }) {
                         style={{
                           fontSize: 11,
                           color: C.textMuted,
-                          fontFamily: "monospace",
+                          fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
                         }}>
                         #{user.id}
                       </span>

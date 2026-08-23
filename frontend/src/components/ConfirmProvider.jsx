@@ -50,7 +50,7 @@ export function ConfirmProvider({ children }) {
               borderRadius: 14,
               boxShadow: "0 18px 50px rgba(0,0,0,.22)",
               overflow: "hidden",
-              fontFamily: "'Be Vietnam Pro', Inter, sans-serif",
+              fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
             }}>
             <div style={{ padding: "22px 24px 12px" }}>
               <div

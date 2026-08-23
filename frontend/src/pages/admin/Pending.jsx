@@ -18,6 +18,15 @@ import UiIcon from "../../components/UiIcon";
 import { useToast } from "../../components/ToastProvider";
 import { useConfirm } from "../../components/ConfirmProvider";
 
+const ADMIN_STATUS_VALUES = new Set(["approved", "rejected", "hidden", "pending"]);
+const ADMIN_REASON_MIN_LENGTH = 20;
+const ADMIN_REASON_MAX_LENGTH = 500;
+
+function getPositiveId(value) {
+  const id = Number(value);
+  return Number.isSafeInteger(id) && id > 0 ? id : null;
+}
+
 const ADMIN_REVIEW_POLICY = [
   {
     title: "1. Tiêu đề và mô tả",
@@ -338,6 +347,26 @@ export default function PendingPage({ showToast }) {
   };
 
   const handleStatus = async (id, status, reason) => {
+    const propertyId = getPositiveId(id);
+    const trimmedReason = String(reason || "").trim().replace(/\s+/g, " ");
+    if (!propertyId) {
+      notify("Mã tin đăng không hợp lệ", "error");
+      return;
+    }
+    if (!ADMIN_STATUS_VALUES.has(status)) {
+      notify("Trạng thái xử lý không hợp lệ", "error");
+      return;
+    }
+    if (["rejected", "hidden"].includes(status)) {
+      if (trimmedReason.length < ADMIN_REASON_MIN_LENGTH) {
+        notify("Lý do xử lý phải có ít nhất 20 ký tự", "error");
+        return;
+      }
+      if (trimmedReason.length > ADMIN_REASON_MAX_LENGTH) {
+        notify("Lý do xử lý không được vượt quá 500 ký tự", "error");
+        return;
+      }
+    }
     const statusText = {
       approved: "duyệt tin",
       rejected: "từ chối tin",
@@ -371,13 +400,16 @@ export default function PendingPage({ showToast }) {
     });
     if (!ok) return;
 
-    setActionLoading((prev) => ({ ...prev, [id]: true }));
+    setActionLoading((prev) => ({ ...prev, [propertyId]: true }));
     try {
-      await apiFetch(`/api/property/${id}/status`, {
+      await apiFetch(`/api/property/${propertyId}/status`, {
         method: "PATCH",
-        body: { status, ...(reason ? { reject_reason: reason } : {}) },
+        body: {
+          status,
+          ...(trimmedReason ? { reject_reason: trimmedReason } : {}),
+        },
       });
-      setProperties((prev) => prev.filter((p) => p.id !== id));
+      setProperties((prev) => prev.filter((p) => Number(p.id) !== propertyId));
       notify(successMessage);
       setRejectModal(null);
       setDetailModal(null);
@@ -385,7 +417,7 @@ export default function PendingPage({ showToast }) {
     } catch (e) {
       notify(e.message, "error");
     } finally {
-      setActionLoading((prev) => ({ ...prev, [id]: false }));
+      setActionLoading((prev) => ({ ...prev, [propertyId]: false }));
     }
   };
 
@@ -879,146 +911,6 @@ export default function PendingPage({ showToast }) {
                       </div>
                     </div>
 
-                    {detailModal.review_insights && (
-                      <div
-                        style={{
-                          padding: 14,
-                          borderRadius: 10,
-                          border: `1px solid ${
-                            detailModal.review_insights.quality_level === "risk" ||
-                            detailModal.review_insights.price_risk?.level === "warning"
-                              ? "#f0ce7a"
-                              : C.borderSubtle
-                          }`,
-                          background:
-                            detailModal.review_insights.quality_level === "risk" ||
-                            detailModal.review_insights.price_risk?.level === "warning"
-                              ? "#fff8e1"
-                              : C.surfaceContainerLow,
-                          marginBottom: 18,
-                        }}>
-                        <div
-                          style={{
-                            display: "flex",
-                            justifyContent: "space-between",
-                            alignItems: "center",
-                            gap: 12,
-                            marginBottom: 10,
-                          }}>
-                          <div style={{ fontSize: 13, fontWeight: 800, color: C.onSurface }}>
-                            Đánh giá nghiệp vụ
-                          </div>
-                          <span
-                            style={{
-                              fontSize: 12,
-                              fontWeight: 900,
-                              color:
-                                detailModal.review_insights.quality_score >= 85
-                                  ? "#0f6e56"
-                                  : detailModal.review_insights.quality_score >= 65
-                                    ? "#8a5a00"
-                                    : C.error,
-                            }}>
-                            {detailModal.review_insights.quality_score}/100
-                          </span>
-                        </div>
-                        <div
-                          style={{
-                            display: "grid",
-                            gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-                            gap: 8,
-                            marginBottom: 10,
-                          }}>
-                          <div
-                            style={{
-                              padding: "9px 11px",
-                              borderRadius: 8,
-                              background: C.surfaceContainerLowest,
-                              border: `1px solid ${C.borderSubtle}`,
-                            }}>
-                            <div style={{ fontSize: 11, color: C.textMuted, marginBottom: 3 }}>
-                              Chất lượng tin
-                            </div>
-                            <div style={{ fontSize: 13, fontWeight: 800, color: C.onSurface }}>
-                              {detailModal.review_insights.quality_level === "good"
-                                ? "Đạt tốt"
-                                : detailModal.review_insights.quality_level === "watch"
-                                  ? "Cần xem xét"
-                                  : "Rủi ro"}
-                            </div>
-                          </div>
-                          <div
-                            style={{
-                              padding: "9px 11px",
-                              borderRadius: 8,
-                              background: C.surfaceContainerLowest,
-                              border: `1px solid ${C.borderSubtle}`,
-                            }}>
-                            <div style={{ fontSize: 11, color: C.textMuted, marginBottom: 3 }}>
-                              So sánh giá
-                            </div>
-                            <div
-                              style={{
-                                fontSize: 13,
-                                fontWeight: 800,
-                                color:
-                                  detailModal.review_insights.price_risk?.level === "warning"
-                                    ? "#8a5a00"
-                                    : C.onSurface,
-                              }}>
-                              {detailModal.review_insights.price_risk?.label ||
-                                "Chưa đủ dữ liệu"}
-                            </div>
-                          </div>
-                        </div>
-                        {detailModal.review_insights.price_risk?.reference_unit_price && (
-                          <div style={{ fontSize: 12, color: C.secondary, marginBottom: 8 }}>
-                            Giá/m² tin này:{" "}
-                            <strong>
-                              {formatPrice(
-                                detailModal.review_insights.price_risk.current_unit_price,
-                              )}
-                            </strong>
-                            {" · "}Khoảng tham khảo:{" "}
-                            <strong>
-                              {formatPrice(
-                                detailModal.review_insights.price_risk.reference_unit_price.low,
-                              )}
-                              {" - "}
-                              {formatPrice(
-                                detailModal.review_insights.price_risk.reference_unit_price.high,
-                              )}
-                            </strong>
-                            {" · "}Mẫu so sánh:{" "}
-                            {detailModal.review_insights.price_risk.sample_size}
-                          </div>
-                        )}
-                        {!detailModal.review_insights.price_risk?.reference_unit_price && (
-                          <div style={{ fontSize: 12, color: C.secondary, marginBottom: 8 }}>
-                            Phạm vi so sánh:{" "}
-                            <strong>
-                              {detailModal.review_insights.price_risk?.basis ||
-                                "Đang mở rộng dữ liệu"}
-                            </strong>
-                            {" · "}Mẫu tìm được:{" "}
-                            {detailModal.review_insights.price_risk?.sample_size || 0}
-                          </div>
-                        )}
-                        {detailModal.review_insights.failed_items?.length > 0 ? (
-                          <div style={{ fontSize: 12, color: C.secondary, lineHeight: 1.5 }}>
-                            Cần kiểm tra:{" "}
-                            {detailModal.review_insights.failed_items
-                              .map((item) => item.label)
-                              .join("; ")}
-                          </div>
-                        ) : (
-                          <div style={{ fontSize: 12, color: C.secondary }}>
-                            Tin đạt các tiêu chí chất lượng cơ bản.
-                          </div>
-                        )}
-                      </div>
-                    )}
-
                     <div
                       style={{
                         padding: 14,
@@ -1427,6 +1319,7 @@ export default function PendingPage({ showToast }) {
               onChange={(e) => setRejectReason(e.target.value)}
               placeholder={placeholder}
               rows={4}
+              maxLength={ADMIN_REASON_MAX_LENGTH}
               style={{
                 width: "100%",
                 padding: "10px 12px",
@@ -1443,10 +1336,12 @@ export default function PendingPage({ showToast }) {
               style={{
                 fontSize: 12,
                 color:
-                  rejectReason.trim().length >= 20 ? C.textMuted : C.error,
+                  rejectReason.trim().length >= ADMIN_REASON_MIN_LENGTH
+                    ? C.textMuted
+                    : C.error,
                 marginTop: 6,
               }}>
-              {helpText}
+              {helpText} ({rejectReason.trim().length}/{ADMIN_REASON_MAX_LENGTH})
             </div>
             <div
               style={{
@@ -1474,7 +1369,7 @@ export default function PendingPage({ showToast }) {
               </button>
               <button
                 disabled={
-                  rejectReason.trim().length < 20 ||
+                  rejectReason.trim().length < ADMIN_REASON_MIN_LENGTH ||
                   actionLoading[rejectModal.id]
                 }
                 onClick={() =>
@@ -1485,12 +1380,14 @@ export default function PendingPage({ showToast }) {
                   borderRadius: 8,
                   border: "none",
                   background:
-                    rejectReason.trim().length < 20 ? "#ccc" : C.error,
+                    rejectReason.trim().length < ADMIN_REASON_MIN_LENGTH
+                      ? "#ccc"
+                      : C.error,
                   color: "#fff",
                   fontSize: 14,
                   fontWeight: 700,
                   cursor:
-                    rejectReason.trim().length < 20
+                    rejectReason.trim().length < ADMIN_REASON_MIN_LENGTH
                       ? "not-allowed"
                       : "pointer",
                   fontFamily: font.body,

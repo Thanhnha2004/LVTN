@@ -40,7 +40,7 @@ const sectionTitle = (text) => (
     style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 24 }}>
     <h2
       style={{
-        fontFamily: "Manrope, sans-serif",
+        fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
         fontSize: 18,
         fontWeight: 700,
         color: "#1a1c1c",
@@ -242,7 +242,7 @@ export default function CreateProperty() {
             <div style={{ color: "#18753c", marginBottom: 20 }}><UiIcon name="success" size={64} /></div>
             <h2
               style={{
-                fontFamily: "Manrope, sans-serif",
+                fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
                 fontSize: 24,
                 fontWeight: 700,
                 color: "#1a1c1c",
@@ -252,7 +252,7 @@ export default function CreateProperty() {
             </h2>
             <p
               style={{
-                fontFamily: "Inter, sans-serif",
+                fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
                 fontSize: 15,
                 color: "#757575",
                 lineHeight: 1.7,
@@ -263,7 +263,7 @@ export default function CreateProperty() {
             {imageUploadWarning && (
               <p
                 style={{
-                  fontFamily: "Inter, sans-serif",
+                  fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
                   fontSize: 14,
                   color: "#9a6700",
                   lineHeight: 1.6,
@@ -274,7 +274,7 @@ export default function CreateProperty() {
             )}
             <p
               style={{
-                fontFamily: "Inter, sans-serif",
+                fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
                 fontSize: 14,
                 color: "#00A550",
                 fontWeight: 600,
@@ -291,7 +291,7 @@ export default function CreateProperty() {
                   border: "none",
                   borderRadius: 8,
                   padding: "12px 24px",
-                  fontFamily: "Inter, sans-serif",
+                  fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
                   fontSize: 14,
                   fontWeight: 600,
                   cursor: "pointer",
@@ -329,7 +329,7 @@ export default function CreateProperty() {
                   border: "1.5px solid #E8E8E8",
                   borderRadius: 8,
                   padding: "12px 24px",
-                  fontFamily: "Inter, sans-serif",
+                  fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
                   fontSize: 14,
                   fontWeight: 600,
                   cursor: "pointer",
@@ -348,7 +348,7 @@ export default function CreateProperty() {
       style={{
         background: "#f9f9f9",
         minHeight: "100vh",
-        fontFamily: "Inter, sans-serif",
+        fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
       }}>
       <Navbar />
       {/* Breadcrumb */}
@@ -371,7 +371,7 @@ export default function CreateProperty() {
         <div style={{ marginBottom: 32 }}>
           <h1
             style={{
-              fontFamily: "Manrope, sans-serif",
+              fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
               fontSize: 28,
               fontWeight: 700,
               color: "#1a1c1c",
@@ -450,7 +450,7 @@ export default function CreateProperty() {
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
-                      fontFamily: "Manrope, sans-serif",
+                      fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
                       fontWeight: 700,
                       fontSize: 14,
                       boxShadow: active
@@ -548,7 +548,7 @@ export default function CreateProperty() {
                             form.transaction_type === t.value
                               ? "#b51b17"
                               : "#5f5e5e",
-                          fontFamily: "Inter, sans-serif",
+                          fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
                           fontWeight: 600,
                           fontSize: 14,
                           cursor: "pointer",
@@ -586,7 +586,7 @@ export default function CreateProperty() {
                           background:
                             form.type === t.value ? "#fef2f0" : "#fff",
                           color: form.type === t.value ? "#b51b17" : "#1a1c1c",
-                          fontFamily: "Inter, sans-serif",
+                          fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
                           fontWeight: 500,
                           fontSize: 14,
                           cursor: "pointer",
@@ -1570,7 +1570,7 @@ export default function CreateProperty() {
                 }}>
                 <h3
                   style={{
-                    fontFamily: "Manrope, sans-serif",
+                    fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
                     fontSize: 15,
                     fontWeight: 700,
                     color: "#1a1c1c",
@@ -1667,7 +1667,7 @@ export default function CreateProperty() {
                       fontWeight: 800,
                       color: "#b51b17",
                       margin: 0,
-                      fontFamily: "Manrope, sans-serif",
+                      fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
                     }}>
                     1900 1234
                   </p>

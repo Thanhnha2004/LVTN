@@ -30,6 +30,11 @@ function getVnpayConfig() {
   };
 }
 
+function parsePositiveId(value) {
+  const id = Number(value);
+  return Number.isSafeInteger(id) && id > 0 ? id : null;
+}
+
 async function addStatusHistory(
   propertyId,
   oldStatus,
@@ -996,9 +1001,13 @@ router.post("/:id/featured-orders", authMiddleware, async (req, res) => {
       .status(403)
       .json({ message: "Chỉ owner mới được mua gói nổi bật" });
 
-  const packageId = parseInt(req.body.package_id, 10);
+  const propertyId = parsePositiveId(req.params.id);
+  const packageId = parsePositiveId(req.body.package_id);
   const paymentMethod = req.body.payment_method || "vnpay";
 
+  if (!propertyId) {
+    return res.status(400).json({ message: "Mã tin đăng không hợp lệ" });
+  }
   if (!packageId) {
     return res.status(400).json({ message: "Vui lòng chọn gói nổi bật" });
   }
@@ -1032,7 +1041,7 @@ router.post("/:id/featured-orders", authMiddleware, async (req, res) => {
        FROM properties
        WHERE id = ?
        FOR UPDATE`,
-      [req.params.id],
+      [propertyId],
     );
 
     if (!property)
@@ -1118,6 +1127,11 @@ router.post("/:id/featured-orders", authMiddleware, async (req, res) => {
       [property.id, req.user.id, pkg.id, pkg.price, paymentMethod, paymentCode],
     );
 
+    const [[createdOrder]] = await connection.query(
+      "SELECT created_at FROM featured_orders WHERE id = ?",
+      [result.insertId],
+    );
+
     const order = {
       id: result.insertId,
       property_id: property.id,
@@ -1129,6 +1143,7 @@ router.post("/:id/featured-orders", authMiddleware, async (req, res) => {
       payment_method: paymentMethod,
       status: "pending",
       payment_code: paymentCode,
+      created_at: createdOrder?.created_at || new Date(),
     };
 
     // Chi VNPay duoc ho tro, nen tra payment_url de frontend redirect nguoi dung sang VNPay Sandbox.
@@ -1394,9 +1409,11 @@ router.get("/admin/reports", authMiddleware, async (req, res) => {
   const page = Math.max(1, Number(req.query.page) || 1);
   const limit = Math.min(50, Math.max(1, Number(req.query.limit) || 10));
   const offset = (page - 1) * limit;
-  const propertyId = req.query.property_id ? Number(req.query.property_id) : null;
+  const propertyId = req.query.property_id
+    ? parsePositiveId(req.query.property_id)
+    : null;
 
-  if (req.query.property_id && !Number.isInteger(propertyId)) {
+  if (req.query.property_id && !propertyId) {
     return res.status(400).json({ message: "Mã tin không hợp lệ" });
   }
 
@@ -1472,10 +1489,7 @@ router.get("/admin/reports", authMiddleware, async (req, res) => {
       },
     });
   } catch (err) {
-    if (connection) await connection.rollback();
     return res.status(500).json({ message: "Lỗi server", error: err.message });
-  } finally {
-    if (connection) connection.release();
   }
 });
 
@@ -1869,7 +1883,11 @@ router.post("/:id/report", authMiddleware, async (req, res) => {
   }
 
   const reason = String(req.body.reason || "").trim();
+  const propertyId = parsePositiveId(req.params.id);
   const message = normalizeText(req.body.message);
+  if (!propertyId) {
+    return res.status(400).json({ message: "Mã tin đăng không hợp lệ" });
+  }
   if (!REPORT_REASONS[reason]) {
     return res.status(400).json({ message: "Lý do báo cáo không hợp lệ" });
   }
@@ -1892,7 +1910,7 @@ router.post("/:id/report", authMiddleware, async (req, res) => {
     // cung vuot qua buoc kiem tra duplicate roi chen hai report.
     const [rows] = await connection.query(
       "SELECT id, owner_id, status FROM properties WHERE id = ? FOR UPDATE",
-      [req.params.id],
+      [propertyId],
     );
     if (rows.length === 0) {
       await connection.rollback();
@@ -1919,7 +1937,7 @@ router.post("/:id/report", authMiddleware, async (req, res) => {
          AND actor_id = ?
          AND note LIKE 'Người dùng báo cáo tin:%'
        LIMIT 1`,
-      [req.params.id, req.user.id],
+      [propertyId, req.user.id],
     );
     if (existingReports.length > 0) {
       await connection.rollback();
@@ -1929,7 +1947,7 @@ router.post("/:id/report", authMiddleware, async (req, res) => {
     }
 
     await addStatusHistory(
-      req.params.id,
+      propertyId,
       property.status,
       property.status,
       req.user.id,

@@ -6,7 +6,7 @@ import SiteFooter from "../../components/SiteFooter";
 import UiIcon from "../../components/UiIcon";
 import { TYPE_LABEL, formatPrice } from "../../shared/property";
 
-const VN = { fontFamily: "'Be Vietnam Pro', Inter, sans-serif" };
+const VN = { fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif" };
 
 function formatDate(value) {
   if (!value) return "Chưa cập nhật";
@@ -159,7 +159,7 @@ export default function PublicOwnerProfile() {
           </div>
           <h1
             style={{
-              fontFamily: "Manrope, sans-serif",
+              fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
               fontSize: 24,
               fontWeight: 850,
               color: "#1a1c1c",
@@ -238,7 +238,7 @@ export default function PublicOwnerProfile() {
             <div>
               <h1
                 style={{
-                  fontFamily: "Manrope, sans-serif",
+                  fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
                   fontSize: 26,
                   fontWeight: 800,
                   margin: "0 0 8px",
@@ -337,7 +337,7 @@ export default function PublicOwnerProfile() {
             <div>
               <h2
                 style={{
-                  fontFamily: "Manrope, sans-serif",
+                  fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
                   fontSize: 20,
                   fontWeight: 800,
                   margin: 0,

@@ -48,7 +48,7 @@ export function ToastProvider({ children }) {
                 justifyContent: "space-between",
                 gap: 12,
                 color: isError ? "#7f1d1d" : "#164b35",
-                fontFamily: "'Be Vietnam Pro', Inter, sans-serif",
+                fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
                 fontSize: 13,
                 lineHeight: 1.5,
               }}>

@@ -21,7 +21,7 @@ import { locationData } from "../../data/locationData";
 import { useToast } from "../../components/ToastProvider";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-const VN = { fontFamily: "'Be Vietnam Pro', Inter, sans-serif" };
+const VN = { fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif" };
 
 
 // ─── SectionCard ──────────────────────────────────────────────────────────────
@@ -48,7 +48,7 @@ function SectionCard({ icon, title, children }) {
         <span style={{ fontSize: 18 }}>{icon}</span>
         <h3
           style={{
-            fontFamily: "Manrope, sans-serif",
+            fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
             fontSize: 17,
             fontWeight: 700,
             color: "#1a1c1c",
@@ -330,7 +330,7 @@ export default function EditProperty() {
             }}>
             <h2
               style={{
-                fontFamily: "Manrope, sans-serif",
+                fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
                 fontSize: 22,
                 fontWeight: 700,
                 color: "#1a1c1c",
@@ -443,7 +443,7 @@ export default function EditProperty() {
             </nav>
             <h1
               style={{
-                fontFamily: "Manrope, sans-serif",
+                fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
                 fontSize: 26,
                 fontWeight: 700,
                 color: "#1a1c1c",
@@ -580,7 +580,7 @@ export default function EditProperty() {
                           form.transaction_type === t.value
                             ? "#b51b17"
                             : "#5f5e5e",
-                        fontFamily: "Inter, sans-serif",
+                        fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
                         fontWeight: 600,
                         fontSize: 14,
                         cursor: "pointer",
@@ -614,7 +614,7 @@ export default function EditProperty() {
                         borderRadius: 8,
                         background: form.type === t.value ? "#fef2f0" : "#fff",
                         color: form.type === t.value ? "#b51b17" : "#1a1c1c",
-                        fontFamily: "Inter, sans-serif",
+                        fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
                         fontWeight: 500,
                         fontSize: 14,
                         cursor: "pointer",

@@ -328,9 +328,6 @@ router.get("/", async (req, res) => {
   }
 });
 
-// GET /api/listing/:id — chi tiết tin (public)
-// Tự động tăng view_count trực tiếp trên bảng properties
-// Public API: xem chi tiet mot tin approved, gom anh thanh mang images va tang view_count.
 // GET /api/listing/owners/:id - ho so cong khai cua nguoi ban
 // Public API: tong hop uy tin owner tu du lieu san co va danh sach tin dang da duyet.
 router.get("/owners/:id", async (req, res) => {
@@ -399,6 +396,9 @@ router.get("/owners/:id", async (req, res) => {
   }
 });
 
+// GET /api/listing/:id — chi tiết tin (public)
+// Tự động tăng view_count trực tiếp trên bảng properties
+// Public API: xem chi tiet mot tin approved, gom anh thanh mang images va tang view_count.
 router.get("/:id", async (req, res) => {
   try {
     const [rows] = await pool.query(

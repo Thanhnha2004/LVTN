@@ -31,8 +31,8 @@ export const C = {
 };
 
 export const font = {
-  headline: "'Manrope', sans-serif",
-  body: "'Inter', sans-serif",
+  headline: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
+  body: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
 };
 
 // ─── HELPERS ───────────────────────────────────────────────

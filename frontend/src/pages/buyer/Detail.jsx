@@ -65,6 +65,20 @@ function formatDetailDate(value) {
   return new Date(value).toLocaleDateString("vi-VN");
 }
 
+const REPORT_REASONS = new Set([
+  "wrong_info",
+  "fake_images",
+  "duplicate",
+  "scam",
+  "unavailable",
+  "other",
+]);
+
+function getPositiveId(value) {
+  const id = Number(value);
+  return Number.isSafeInteger(id) && id > 0 ? id : null;
+}
+
 export default function Detail() {
   const { id } = useParams();
   const { user } = useAuth();
@@ -172,11 +186,16 @@ export default function Detail() {
 
   const handleSave = async () => {
     if (!user) return navigate("/login");
+    const propertyId = getPositiveId(id);
+    if (!propertyId) {
+      showToast("Mã bất động sản không hợp lệ", "error");
+      return;
+    }
     try {
       if (saved) {
-        await api.delete(`/api/contact/saved/${id}`);
+        await api.delete(`/api/contact/saved/${propertyId}`);
       } else {
-        await api.post("/api/contact/saved", { property_id: id });
+        await api.post("/api/contact/saved", { property_id: propertyId });
       }
       setSaved(!saved);
       showToast(saved ? "Đã bỏ lưu tin quan tâm" : "Đã lưu tin quan tâm");
@@ -188,10 +207,38 @@ export default function Detail() {
   const handleReport = async (e) => {
     e.preventDefault();
     if (!user) return navigate("/login");
+    const propertyId = getPositiveId(id);
+    const reason = REPORT_REASONS.has(reportForm.reason)
+      ? reportForm.reason
+      : "";
+    const messageText = reportForm.message.trim().replace(/\s+/g, " ");
+    if (!propertyId) {
+      setReportError("Mã bất động sản không hợp lệ");
+      showToast("Mã bất động sản không hợp lệ", "error");
+      return;
+    }
+    if (!reason) {
+      setReportError("Vui lòng chọn lý do báo cáo hợp lệ");
+      showToast("Vui lòng chọn lý do báo cáo hợp lệ", "error");
+      return;
+    }
+    if (messageText.length < 10) {
+      setReportError("Mô tả báo cáo phải có ít nhất 10 ký tự");
+      showToast("Mô tả báo cáo phải có ít nhất 10 ký tự", "error");
+      return;
+    }
+    if (messageText.length > 500) {
+      setReportError("Mô tả báo cáo không được vượt quá 500 ký tự");
+      showToast("Mô tả báo cáo không được vượt quá 500 ký tự", "error");
+      return;
+    }
     setReportLoading(true);
     setReportError("");
     try {
-      await api.post(`/api/property/${id}/report`, reportForm);
+      await api.post(`/api/property/${propertyId}/report`, {
+        reason,
+        message: messageText,
+      });
       showToast("Đã gửi báo cáo tin đăng. Admin sẽ xem xét trong lịch sử kiểm tra.");
       setReportOpen(false);
       setReportForm({ reason: "wrong_info", message: "" });
@@ -207,16 +254,33 @@ export default function Detail() {
   const handleContact = async (e) => {
     e.preventDefault();
     if (!user) return navigate("/login");
+    const propertyId = getPositiveId(id);
+    const messageText = contact.message.trim().replace(/\s+/g, " ");
+    if (!propertyId) {
+      setContactError("Mã bất động sản không hợp lệ");
+      showToast("Mã bất động sản không hợp lệ", "error");
+      return;
+    }
+    if (messageText.length < 10) {
+      setContactError("Nội dung liên hệ phải có ít nhất 10 ký tự");
+      showToast("Nội dung liên hệ phải có ít nhất 10 ký tự", "error");
+      return;
+    }
+    if (messageText.length > 1000) {
+      setContactError("Nội dung liên hệ không được vượt quá 1000 ký tự");
+      showToast("Nội dung liên hệ không được vượt quá 1000 ký tự", "error");
+      return;
+    }
     setContactLoading(true);
     setContactError("");
     try {
       await api.post("/api/contact", {
-        property_id: id,
-        message: contact.message,
+        property_id: propertyId,
+        message: messageText,
       });
       setExistingContact({
-        property_id: Number(id),
-        message: contact.message,
+        property_id: propertyId,
+        message: messageText,
         status: "pending",
         lead_status: "new",
         created_at: new Date().toISOString(),
@@ -259,7 +323,7 @@ export default function Detail() {
             margin: "0 auto",
             padding: "84px 32px",
             textAlign: "center",
-            fontFamily: "Inter, sans-serif",
+            fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
           }}>
           <div
             style={{
@@ -277,7 +341,7 @@ export default function Detail() {
           </div>
           <h1
             style={{
-              fontFamily: "Manrope, sans-serif",
+              fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
               fontSize: 24,
               fontWeight: 800,
               color: "#1a1c1c",
@@ -393,32 +457,38 @@ export default function Detail() {
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "3fr 2fr",
+              gridTemplateColumns: "minmax(0, 3fr) minmax(280px, 2fr)",
               gap: 6,
+              height: 480,
               borderRadius: 12,
               overflow: "hidden",
             }}>
-            {/* Main image */}
             <div
               style={{
                 position: "relative",
+                minWidth: 0,
+                height: "100%",
                 overflow: "hidden",
-                height: 480,
-                cursor: "pointer",
+                background: "#e8e8e8",
+                cursor: images[0] ? "pointer" : "default",
               }}
               onClick={() => openImageViewer(0)}>
               {images[0] ? (
                 <img
                   src={images[0]}
                   alt=""
-                  style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    objectFit: "cover",
+                    display: "block",
+                  }}
                 />
               ) : (
                 <div
                   style={{
                     width: "100%",
                     height: "100%",
-                    background: "#e8e8e8",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
@@ -426,22 +496,19 @@ export default function Detail() {
                   <UiIcon name="home" size={72} style={{ opacity: 0.3 }} />
                 </div>
               )}
-              {/* Transaction badge */}
               <div
                 style={{
                   position: "absolute",
                   top: 16,
                   left: 16,
                   background:
-                    property.transaction_type === "sale"
-                      ? "#b51b17"
-                      : "#006480",
+                    property.transaction_type === "sale" ? "#b51b17" : "#006480",
                   color: "#fff",
                   fontSize: 12,
                   fontWeight: 600,
                   padding: "4px 12px",
                   borderRadius: 4,
-                  fontFamily: "Inter, sans-serif",
+                  fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
                 }}>
                 {property.transaction_type === "sale" ? "Bán" : "Cho thuê"}
               </div>
@@ -457,25 +524,25 @@ export default function Detail() {
                     fontWeight: 700,
                     padding: "4px 12px",
                     borderRadius: 4,
-                    fontFamily: "Inter, sans-serif",
+                    fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
                   }}>
                   NỔI BẬT
                 </div>
               )}
             </div>
 
-            {/* Right column: 2 stacked images */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <div style={{ display: "grid", gridTemplateRows: "1fr 1fr", gap: 6, minWidth: 0 }}>
               {[1, 2].map((i) => (
                 <div
                   key={i}
                   style={{
                     position: "relative",
+                    minHeight: 0,
                     overflow: "hidden",
-                    flex: 1,
+                    background: "#e8e8e8",
                     cursor: images[i] ? "pointer" : "default",
                   }}
-                  onClick={() => openImageViewer(i)}>
+                  onClick={() => images[i] && openImageViewer(i)}>
                   {images[i] ? (
                     <img
                       src={images[i]}
@@ -492,11 +559,13 @@ export default function Detail() {
                       style={{
                         width: "100%",
                         height: "100%",
-                        background: "#e8e8e8",
-                      }}
-                    />
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}>
+                      <UiIcon name="home" size={36} style={{ opacity: 0.18 }} />
+                    </div>
                   )}
-                  {/* "See more" overlay on last cell */}
                   {i === 2 && images.length > 3 && (
                     <button
                       onClick={(e) => {
@@ -506,25 +575,15 @@ export default function Detail() {
                       style={{
                         position: "absolute",
                         inset: 0,
-                        background: "rgba(0,0,0,0.45)",
                         border: "none",
+                        background: "rgba(0,0,0,0.48)",
                         color: "#fff",
                         cursor: "pointer",
-                        display: "flex",
-                        flexDirection: "column",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        gap: 4,
+                        fontSize: 13,
+                        fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
+                        fontWeight: 700,
                       }}>
-                      <span style={{ fontSize: 28 }}>⊞</span>
-                      <span
-                        style={{
-                          fontSize: 13,
-                          fontFamily: "Inter, sans-serif",
-                          fontWeight: 600,
-                        }}>
-                        Xem thêm {images.length - 3} ảnh
-                      </span>
+                      Xem thêm {images.length - 3} ảnh
                     </button>
                   )}
                 </div>
@@ -558,7 +617,7 @@ export default function Detail() {
               justifyContent: "space-between",
               padding: "0 24px",
               borderBottom: "1px solid rgba(255,255,255,0.16)",
-              fontFamily: "Inter, sans-serif",
+              fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
             }}>
             <strong style={{ fontSize: 15 }}>
               Ảnh {activeImg + 1}/{images.length}
@@ -721,7 +780,7 @@ export default function Detail() {
               }}>
               <h1
                 style={{
-                  fontFamily: "Manrope, sans-serif",
+                  fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
                   fontSize: 28,
                   fontWeight: 700,
                   color: "#1a1c1c",
@@ -743,7 +802,7 @@ export default function Detail() {
                     display: "flex",
                     alignItems: "center",
                     gap: 6,
-                    fontFamily: "Inter, sans-serif",
+                    fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
                     fontSize: 13,
                     fontWeight: 600,
                     color: saved ? "#b51b17" : "#5f5e5e",
@@ -763,7 +822,7 @@ export default function Detail() {
                 gap: 6,
                 marginBottom: 20,
                 color: "#757575",
-                fontFamily: "Inter, sans-serif",
+                fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
                 fontSize: 14,
               }}>
               <UiIcon name="location" size={17} />
@@ -791,7 +850,7 @@ export default function Detail() {
                 }}>
                 <span
                   style={{
-                    fontFamily: "Manrope, sans-serif",
+                    fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
                     fontSize: 32,
                     fontWeight: 700,
                     color: "#b51b17",
@@ -801,7 +860,7 @@ export default function Detail() {
                 {property.transaction_type === "rent" && (
                   <span
                     style={{
-                      fontFamily: "Inter, sans-serif",
+                      fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
                       fontSize: 14,
                       color: "#757575",
                     }}>
@@ -811,7 +870,7 @@ export default function Detail() {
                 {property.area && (
                   <span
                     style={{
-                      fontFamily: "Inter, sans-serif",
+                      fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
                       fontSize: 14,
                       color: "#757575",
                       marginLeft: 8,
@@ -902,7 +961,7 @@ export default function Detail() {
                       </div>
                       <div
                         style={{
-                          fontFamily: "Inter, sans-serif",
+                          fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
                           fontSize: 11,
                           color: "#757575",
                           marginBottom: 2,
@@ -911,7 +970,7 @@ export default function Detail() {
                       </div>
                       <div
                         style={{
-                          fontFamily: "Inter, sans-serif",
+                          fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
                           fontSize: 13,
                           fontWeight: 600,
                           color: "#1a1c1c",
@@ -934,7 +993,7 @@ export default function Detail() {
               }}>
               <h2
                 style={{
-                  fontFamily: "Manrope, sans-serif",
+                  fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
                   fontSize: 18,
                   fontWeight: 700,
                   color: "#1a1c1c",
@@ -1019,7 +1078,7 @@ export default function Detail() {
                     }}>
                     <span
                       style={{
-                        fontFamily: "Inter, sans-serif",
+                        fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
                         fontSize: 14,
                         color: "#757575",
                       }}>
@@ -1027,7 +1086,7 @@ export default function Detail() {
                     </span>
                     <span
                       style={{
-                        fontFamily: "Inter, sans-serif",
+                        fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
                         fontSize: 14,
                         fontWeight: 600,
                         color: "#1a1c1c",
@@ -1043,7 +1102,7 @@ export default function Detail() {
                 <>
                   <h3
                     style={{
-                      fontFamily: "Manrope, sans-serif",
+                      fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
                       fontSize: 15,
                       fontWeight: 700,
                       color: "#1a1c1c",
@@ -1054,7 +1113,7 @@ export default function Detail() {
                   </h3>
                   <p
                     style={{
-                      fontFamily: "Inter, sans-serif",
+                      fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
                       fontSize: 15,
                       color: "#5f5e5e",
                       lineHeight: 1.8,
@@ -1077,7 +1136,7 @@ export default function Detail() {
               }}>
               <h2
                 style={{
-                  fontFamily: "Manrope, sans-serif",
+                  fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
                   fontSize: 18,
                   fontWeight: 700,
                   color: "#1a1c1c",
@@ -1139,7 +1198,7 @@ export default function Detail() {
                     <div>
                       <div
                         style={{
-                          fontFamily: "Inter, sans-serif",
+                          fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
                           fontSize: 13,
                           fontWeight: 800,
                           color: "#1a1c1c",
@@ -1149,7 +1208,7 @@ export default function Detail() {
                       </div>
                       <div
                         style={{
-                          fontFamily: "Inter, sans-serif",
+                          fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
                           fontSize: 13,
                           color: "#5f5e5e",
                           lineHeight: 1.55,
@@ -1174,7 +1233,7 @@ export default function Detail() {
                 }}>
                 <h2
                   style={{
-                    fontFamily: "Manrope, sans-serif",
+                    fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
                     fontSize: 18,
                     fontWeight: 700,
                     color: "#1a1c1c",
@@ -1203,7 +1262,7 @@ export default function Detail() {
                   rel="noopener noreferrer"
                   style={{
                     display: "inline-block",
-                    fontFamily: "Inter, sans-serif",
+                    fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
                     fontSize: 13,
                     color: "#b51b17",
                     textDecoration: "none",
@@ -1237,7 +1296,7 @@ export default function Detail() {
                 <div>
                   <h3
                     style={{
-                      fontFamily: "Manrope, sans-serif",
+                      fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
                       fontSize: 16,
                       fontWeight: 700,
                       color: "#1a1c1c",
@@ -1247,7 +1306,7 @@ export default function Detail() {
                   </h3>
                   <div
                     style={{
-                      fontFamily: "Inter, sans-serif",
+                      fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
                       fontSize: 13,
                       color: "#5f5e5e",
                     }}>
@@ -1274,7 +1333,7 @@ export default function Detail() {
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    fontFamily: "Manrope, sans-serif",
+                    fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
                     fontSize: 18,
                     fontWeight: 800,
                     flexShrink: 0,
@@ -1326,7 +1385,7 @@ export default function Detail() {
                       display: "flex",
                       justifyContent: "space-between",
                       gap: 12,
-                      fontFamily: "Inter, sans-serif",
+                      fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
                       fontSize: 13,
                     }}>
                     <span style={{ color: "#757575" }}>{label}</span>
@@ -1350,7 +1409,7 @@ export default function Detail() {
                     border: "1px solid #b51b17",
                     color: "#b51b17",
                     textDecoration: "none",
-                    fontFamily: "Inter, sans-serif",
+                    fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
                     fontSize: 13,
                     fontWeight: 700,
                   }}>
@@ -1370,7 +1429,7 @@ export default function Detail() {
                     border: "1px solid #f0ce7a",
                     background: "#fff8e1",
                     color: "#8a5a00",
-                    fontFamily: "Inter, sans-serif",
+                    fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
                     fontSize: 13,
                     fontWeight: 700,
                     cursor: "pointer",
@@ -1390,7 +1449,7 @@ export default function Detail() {
               }}>
               <h3
                 style={{
-                  fontFamily: "Manrope, sans-serif",
+                  fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
                   fontSize: 16,
                   fontWeight: 700,
                   color: "#1a1c1c",
@@ -1422,7 +1481,7 @@ export default function Detail() {
                       display: "flex",
                       justifyContent: "space-between",
                       gap: 12,
-                      fontFamily: "Inter, sans-serif",
+                      fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
                       fontSize: 13,
                     }}>
                     <span style={{ color: "#757575" }}>{label}</span>
@@ -1445,7 +1504,7 @@ export default function Detail() {
                 }}>
                 <h3
                   style={{
-                    fontFamily: "Manrope, sans-serif",
+                    fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
                     fontSize: 16,
                     fontWeight: 700,
                     color: "#1a1c1c",
@@ -1455,7 +1514,7 @@ export default function Detail() {
                   Định giá tham khảo
                 </h3>
                 {priceEstimate.sample_size >= 2 ? (
-                  <div style={{ display: "grid", gap: 9, fontFamily: "Inter, sans-serif" }}>
+                  <div style={{ display: "grid", gap: 9, fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif" }}>
                     <div
                       style={{
                         padding: "10px 12px",
@@ -1505,7 +1564,7 @@ export default function Detail() {
                 }}>
                 <h3
                   style={{
-                    fontFamily: "Manrope, sans-serif",
+                    fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
                     fontSize: 16,
                     fontWeight: 700,
                     color: "#1a1c1c",
@@ -1516,7 +1575,7 @@ export default function Detail() {
                 </h3>
                 <p
                   style={{
-                    fontFamily: "Inter, sans-serif",
+                    fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
                     fontSize: 14,
                     color: "#757575",
                     lineHeight: 1.6,
@@ -1535,7 +1594,7 @@ export default function Detail() {
                         color: "#fff",
                         padding: "12px 0",
                         borderRadius: 8,
-                        fontFamily: "Inter, sans-serif",
+                        fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
                         fontSize: 14,
                         fontWeight: 600,
                         textDecoration: "none",
@@ -1553,7 +1612,7 @@ export default function Detail() {
                           padding: "10px 0",
                           borderRadius: 8,
                           border: "1px solid #b51b17",
-                          fontFamily: "Inter, sans-serif",
+                          fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
                           fontSize: 13,
                           fontWeight: 600,
                           textDecoration: "none",
@@ -1575,7 +1634,7 @@ export default function Detail() {
               }}>
               <h3
                 style={{
-                  fontFamily: "Manrope, sans-serif",
+                  fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
                   fontSize: 16,
                   fontWeight: 700,
                   color: "#1a1c1c",
@@ -1602,7 +1661,7 @@ export default function Detail() {
                     <div>
                       <p
                         style={{
-                          fontFamily: "Inter, sans-serif",
+                          fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
                           fontSize: 14,
                           fontWeight: 700,
                           color: "#0f6e56",
@@ -1612,7 +1671,7 @@ export default function Detail() {
                       </p>
                       <p
                         style={{
-                          fontFamily: "Inter, sans-serif",
+                          fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
                           fontSize: 13,
                           color: "#3f5f55",
                           margin: 0,
@@ -1635,7 +1694,7 @@ export default function Detail() {
                       }}>
                       <div
                         style={{
-                          fontFamily: "Inter, sans-serif",
+                          fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
                           fontSize: 11,
                           fontWeight: 700,
                           color: "#757575",
@@ -1647,7 +1706,7 @@ export default function Detail() {
                       </div>
                       <p
                         style={{
-                          fontFamily: "Inter, sans-serif",
+                          fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
                           fontSize: 14,
                           color: "#5f5e5e",
                           fontStyle: "italic",
@@ -1670,7 +1729,7 @@ export default function Detail() {
                       }}>
                       <div
                         style={{
-                          fontFamily: "Inter, sans-serif",
+                          fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
                           fontSize: 11,
                           fontWeight: 700,
                           color: "#b51b17",
@@ -1682,7 +1741,7 @@ export default function Detail() {
                       </div>
                       <p
                         style={{
-                          fontFamily: "Inter, sans-serif",
+                          fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
                           fontSize: 14,
                           color: "#1a1c1c",
                           margin: 0,
@@ -1702,7 +1761,7 @@ export default function Detail() {
                       color: "#fff",
                       padding: "11px 0",
                       borderRadius: 8,
-                      fontFamily: "Inter, sans-serif",
+                      fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
                       fontSize: 14,
                       fontWeight: 600,
                       textDecoration: "none",
@@ -1714,7 +1773,7 @@ export default function Detail() {
                 <div>
                   <p
                     style={{
-                      fontFamily: "Inter, sans-serif",
+                      fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
                       fontSize: 14,
                       color: "#5f5e5e",
                       lineHeight: 1.6,
@@ -1732,7 +1791,7 @@ export default function Detail() {
                       color: "#fff",
                       padding: "12px 0",
                       borderRadius: 8,
-                      fontFamily: "Inter, sans-serif",
+                      fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
                       fontSize: 14,
                       fontWeight: 600,
                       textDecoration: "none",
@@ -1750,7 +1809,7 @@ export default function Detail() {
                         padding: "8px 12px",
                         borderRadius: 6,
                         fontSize: 13,
-                        fontFamily: "Inter, sans-serif",
+                        fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
                         marginBottom: 12,
                       }}>
                       {contactError}
@@ -1767,7 +1826,7 @@ export default function Detail() {
                     }}>
                     <div
                       style={{
-                        fontFamily: "Inter, sans-serif",
+                        fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
                         fontSize: 11,
                         fontWeight: 700,
                         color: "#757575",
@@ -1779,7 +1838,7 @@ export default function Detail() {
                     </div>
                     <div
                       style={{
-                        fontFamily: "Inter, sans-serif",
+                        fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
                         fontSize: 14,
                         fontWeight: 700,
                         color: "#1a1c1c",
@@ -1789,7 +1848,7 @@ export default function Detail() {
                     </div>
                     <div
                       style={{
-                        fontFamily: "Inter, sans-serif",
+                        fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
                         fontSize: 13,
                         color: "#5f5e5e",
                       }}>
@@ -1826,7 +1885,7 @@ export default function Detail() {
                       border: "none",
                       padding: "12px 0",
                       borderRadius: 8,
-                      fontFamily: "Inter, sans-serif",
+                      fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
                       fontSize: 14,
                       fontWeight: 600,
                       cursor: contactLoading ? "not-allowed" : "pointer",
@@ -1861,7 +1920,7 @@ export default function Detail() {
               <div>
                 <h2
                   style={{
-                    fontFamily: "Manrope, sans-serif",
+                    fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
                     fontSize: 22,
                     fontWeight: 700,
                     color: "#1a1c1c",
@@ -1871,7 +1930,7 @@ export default function Detail() {
                 </h2>
                 <p
                   style={{
-                    fontFamily: "Inter, sans-serif",
+                    fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
                     fontSize: 14,
                     color: "#757575",
                     margin: "4px 0 0",
@@ -1882,7 +1941,7 @@ export default function Detail() {
               <Link
                 to="/"
                 style={{
-                  fontFamily: "Inter, sans-serif",
+                  fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
                   fontSize: 14,
                   fontWeight: 600,
                   color: "#b51b17",
@@ -1964,7 +2023,7 @@ export default function Detail() {
                           fontWeight: 600,
                           padding: "3px 8px",
                           borderRadius: 4,
-                          fontFamily: "Inter, sans-serif",
+                          fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
                         }}>
                         {p.transaction_type === "sale" ? "Bán" : "Cho thuê"}
                       </span>
@@ -1972,7 +2031,7 @@ export default function Detail() {
                     <div style={{ padding: "12px 14px" }}>
                       <p
                         style={{
-                          fontFamily: "Manrope, sans-serif",
+                          fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
                           fontSize: 15,
                           fontWeight: 700,
                           color: "#b51b17",
@@ -1982,7 +2041,7 @@ export default function Detail() {
                       </p>
                       <h4
                         style={{
-                          fontFamily: "Inter, sans-serif",
+                          fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
                           fontSize: 13,
                           fontWeight: 600,
                           color: "#1a1c1c",
@@ -1999,7 +2058,7 @@ export default function Detail() {
                         style={{
                           display: "flex",
                           gap: 10,
-                          fontFamily: "Inter, sans-serif",
+                          fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
                           fontSize: 12,
                           color: "#757575",
                         }}>
@@ -2036,12 +2095,12 @@ export default function Detail() {
               background: "#fff",
               borderRadius: 12,
               padding: 22,
-              fontFamily: "Inter, sans-serif",
+              fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
               boxShadow: "0 16px 42px rgba(0,0,0,0.18)",
             }}>
             <h3
               style={{
-                fontFamily: "Manrope, sans-serif",
+                fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
                 fontSize: 18,
                 fontWeight: 800,
                 color: "#1a1c1c",

@@ -7,7 +7,10 @@ import SiteFooter from "../../components/SiteFooter";
 import { useToast } from "../../components/ToastProvider";
 import { fuzzyMatches } from "../../shared/search";
 
-const VN = { fontFamily: "'Be Vietnam Pro', Inter, sans-serif" };
+const VN = { fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif" };
+const REPLY_MIN_LENGTH = 10;
+const REPLY_MAX_LENGTH = 1000;
+const OWNER_NOTE_MAX_LENGTH = 500;
 
 const LEAD_STATUS = [
   { value: "new", label: "Mới" },
@@ -169,14 +172,26 @@ function ReplyBox({ contactId, onSent, onCancel, showToast }) {
   const [error, setError] = useState("");
 
   const send = async () => {
-    if (!text.trim()) return;
+    const replyText = text.trim().replace(/\s+/g, " ");
+    if (replyText.length < REPLY_MIN_LENGTH) {
+      const message = "Nội dung phản hồi phải có ít nhất 10 ký tự";
+      setError(message);
+      showToast(message, "error");
+      return;
+    }
+    if (replyText.length > REPLY_MAX_LENGTH) {
+      const message = "Nội dung phản hồi không được vượt quá 1000 ký tự";
+      setError(message);
+      showToast(message, "error");
+      return;
+    }
     setSending(true);
     setError("");
     try {
       const res = await api.patch(`/api/contact/${contactId}/reply`, {
-        owner_reply: text,
+        owner_reply: replyText,
       });
-      onSent(contactId, text, res.data?.lead_status);
+      onSent(contactId, replyText, res.data?.lead_status);
       showToast("Đã gửi phản hồi cho người mua");
     } catch (err) {
       const message = err.response?.data?.message || "Gửi thất bại, thử lại.";
@@ -212,6 +227,7 @@ function ReplyBox({ contactId, onSent, onCancel, showToast }) {
         onChange={(e) => setText(e.target.value)}
         placeholder="Nhập nội dung phản hồi của bạn..."
         rows={4}
+        maxLength={REPLY_MAX_LENGTH}
         style={{
           width: "100%",
           padding: 14,
@@ -228,6 +244,18 @@ function ReplyBox({ contactId, onSent, onCancel, showToast }) {
         onFocus={(e) => (e.target.style.borderColor = "#b51b17")}
         onBlur={(e) => (e.target.style.borderColor = "#E8E8E8")}
       />
+      <div
+        style={{
+          marginTop: 6,
+          fontSize: 12,
+          color:
+            text.trim().length === 0 || text.trim().length >= REPLY_MIN_LENGTH
+              ? "#757575"
+              : "#a32d2d",
+          ...VN,
+        }}>
+        {text.trim().length}/{REPLY_MAX_LENGTH} ký tự
+      </div>
       <div
         style={{
           display: "flex",
@@ -277,16 +305,30 @@ function ReplyBox({ contactId, onSent, onCancel, showToast }) {
         </button>
         <button
           onClick={send}
-          disabled={sending || !text.trim()}
+          disabled={
+            sending ||
+            text.trim().length < REPLY_MIN_LENGTH ||
+            text.trim().length > REPLY_MAX_LENGTH
+          }
           style={{
             padding: "7px 20px",
             border: "none",
             borderRadius: 8,
-            background: sending || !text.trim() ? "#ccc" : "#b51b17",
+            background:
+              sending ||
+              text.trim().length < REPLY_MIN_LENGTH ||
+              text.trim().length > REPLY_MAX_LENGTH
+                ? "#ccc"
+                : "#b51b17",
             color: "#fff",
             fontSize: 13,
             fontWeight: 500,
-            cursor: sending || !text.trim() ? "not-allowed" : "pointer",
+            cursor:
+              sending ||
+              text.trim().length < REPLY_MIN_LENGTH ||
+              text.trim().length > REPLY_MAX_LENGTH
+                ? "not-allowed"
+                : "pointer",
             ...VN,
           }}>
           {sending ? "Đang gửi..." : "Gửi phản hồi"}
@@ -321,6 +363,13 @@ function ContactCard({ contact, onReplied, onLeadUpdated, showToast }) {
   );
 
   const saveLead = async () => {
+    const trimmedNote = ownerNote.trim().replace(/\s+/g, " ");
+    if (trimmedNote.length > OWNER_NOTE_MAX_LENGTH) {
+      const message = "Ghi chú chăm sóc khách không được vượt quá 500 ký tự";
+      setLeadError(message);
+      showToast(message, "error");
+      return;
+    }
     if (leadStatus === "scheduled" && !appointmentAt) {
       const message = "Vui lòng chọn ngày giờ hẹn xem";
       setLeadError(message);
@@ -335,7 +384,7 @@ function ContactCard({ contact, onReplied, onLeadUpdated, showToast }) {
     }
     if (
       ["contacted", "closed", "cancelled"].includes(leadStatus) &&
-      ownerNote.trim().length < 10
+      trimmedNote.length < 10
     ) {
       const message = "Vui lòng nhập ghi chú kết quả tối thiểu 10 ký tự";
       setLeadError(message);
@@ -347,11 +396,11 @@ function ContactCard({ contact, onReplied, onLeadUpdated, showToast }) {
       leadStatus === "scheduled"
         ? [
             `Lịch hẹn xem: ${formatDateTime(appointmentAt)}`,
-            ownerNote.trim(),
+            trimmedNote,
           ]
             .filter(Boolean)
             .join(". ")
-        : ownerNote.trim();
+        : trimmedNote;
 
     setLeadSaving(true);
     setLeadError("");
@@ -623,6 +672,7 @@ function ContactCard({ contact, onReplied, onLeadUpdated, showToast }) {
             value={ownerNote}
             onChange={(e) => setOwnerNote(e.target.value)}
             placeholder={leadHint.placeholder}
+            maxLength={OWNER_NOTE_MAX_LENGTH}
             style={{
               height: 36,
               border: "0.5px solid #E8E8E8",

@@ -4,6 +4,8 @@ import api from "../api/axios";
 import { useToast } from "../components/ToastProvider";
 
 const STEPS = ["Thông tin", "Mật khẩu", "Vai trò"];
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const VALID_ROLES = ["buyer", "owner"];
 
 function FeatureIcon({ name, color = "currentColor", size = 18 }) {
   const paths = {
@@ -60,15 +62,17 @@ export default function Register() {
       return showError("Số điện thoại phải gồm 10 chữ số và bắt đầu bằng số 0");
 
     setForm((prev) => ({ ...prev, full_name: fullName, phone_number: phoneNumber }));
-    return true;
+    return { fullName, phoneNumber };
   };
 
   const handleNext = () => {
     setError("");
     if (step === 0) {
       if (!validateNameAndPhone()) return;
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email))
+      const email = form.email.trim().toLowerCase();
+      if (!EMAIL_REGEX.test(email))
         return showError("Email không hợp lệ");
+      setForm((prev) => ({ ...prev, email }));
     }
     if (step === 1) {
       if (form.password.length < 6)
@@ -81,18 +85,30 @@ export default function Register() {
 
   const handleSubmit = async () => {
     if (!agreed) return showError("Bạn cần đồng ý với điều khoản sử dụng");
+    const profileInfo = validateNameAndPhone();
+    if (!profileInfo) return;
+    if (form.password.length < 6)
+      return showError("Mật khẩu phải có ít nhất 6 ký tự");
+    if (form.password !== form.confirm_password)
+      return showError("Mật khẩu xác nhận không khớp");
+    if (!VALID_ROLES.includes(form.role))
+      return showError("Vai trò tài khoản không hợp lệ");
+
+    const email = form.email.trim().toLowerCase();
+    if (!EMAIL_REGEX.test(email)) return showError("Email không hợp lệ");
+
     setError("");
     setLoading(true);
     try {
       await api.post("/api/auth/register", {
-        full_name: form.full_name,
-        email: form.email,
-        phone_number: form.phone_number,
+        full_name: profileInfo.fullName,
+        email,
+        phone_number: profileInfo.phoneNumber,
         password: form.password,
         role: form.role,
       });
       showToast("Đăng ký thành công. Vui lòng xác minh email.");
-      navigate(`/verify-email?email=${encodeURIComponent(form.email)}`, {
+      navigate(`/verify-email?email=${encodeURIComponent(email)}`, {
         state: {
           message:
             "Đăng ký thành công. Vui lòng nhập mã OTP đã được gửi đến email để kích hoạt tài khoản.",
@@ -131,7 +147,7 @@ export default function Register() {
       style={{
         minHeight: "100vh",
         display: "flex",
-        fontFamily: "'Inter', -apple-system, sans-serif",
+        fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
         background: "#F7F6F3",
       }}>
       <style>
@@ -1051,6 +1067,24 @@ export default function Register() {
                 textDecoration: "none",
               }}>
               Đăng nhập
+            </Link>
+          </p>
+          <p
+            style={{
+              textAlign: "center",
+              marginTop: 12,
+              fontSize: 13,
+              color: "#888",
+            }}>
+            Chưa muốn tạo tài khoản?{" "}
+            <Link
+              to="/"
+              style={{
+                color: "#1a1c1c",
+                fontWeight: 700,
+                textDecoration: "none",
+              }}>
+              Về trang chủ
             </Link>
           </p>
         </div>

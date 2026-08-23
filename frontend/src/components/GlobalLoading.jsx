@@ -42,7 +42,7 @@ export default function GlobalLoading() {
         background: "rgba(26, 28, 28, 0.92)",
         color: "#fff",
         boxShadow: "0 12px 32px rgba(0,0,0,0.2)",
-        fontFamily: "Inter, sans-serif",
+        fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
         fontSize: 13,
         fontWeight: 600,
         pointerEvents: "none",

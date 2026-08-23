@@ -4,6 +4,8 @@ import { useAuth } from "../context/AuthContext";
 import api from "../api/axios";
 import { useToast } from "../components/ToastProvider";
 
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 export default function Login() {
   const { login } = useAuth();
   const navigate = useNavigate();
@@ -16,9 +18,25 @@ export default function Login() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
+
+    const email = form.email.trim().toLowerCase();
+    const password = form.password;
+    if (!EMAIL_REGEX.test(email)) {
+      const message = "Email không hợp lệ";
+      setError(message);
+      showToast(message, "error");
+      return;
+    }
+    if (!password) {
+      const message = "Vui lòng nhập mật khẩu";
+      setError(message);
+      showToast(message, "error");
+      return;
+    }
+
     setLoading(true);
     try {
-      const res = await api.post("/api/auth/login", form);
+      const res = await api.post("/api/auth/login", { email, password });
       login(res.data.token, res.data.user);
       showToast("Đăng nhập thành công");
       const role = res.data.user.role;
@@ -28,7 +46,7 @@ export default function Login() {
     } catch (err) {
       if (err.response?.data?.code === "EMAIL_NOT_VERIFIED") {
         showToast("Tài khoản chưa xác minh email", "error");
-        navigate(`/verify-email?email=${encodeURIComponent(form.email)}`, {
+        navigate(`/verify-email?email=${encodeURIComponent(email)}`, {
           state: { message: err.response.data.message },
         });
         return;
@@ -46,7 +64,7 @@ export default function Login() {
       style={{
         minHeight: "100vh",
         display: "flex",
-        fontFamily: "'Be Vietnam Pro', sans-serif",
+        fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif",
         background: "#F7F6F3",
       }}>
       {/* Left Panel — Visual */}
@@ -551,6 +569,24 @@ export default function Login() {
                 textDecoration: "none",
               }}>
               Đăng ký ngay
+            </Link>
+          </p>
+          <p
+            style={{
+              textAlign: "center",
+              marginTop: 12,
+              fontSize: 13,
+              color: "#888",
+            }}>
+            Chưa muốn đăng nhập?{" "}
+            <Link
+              to="/"
+              style={{
+                color: "#1a1c1c",
+                fontWeight: 700,
+                textDecoration: "none",
+              }}>
+              Về trang chủ
             </Link>
           </p>
         </div>

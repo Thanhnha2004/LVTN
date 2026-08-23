@@ -26,8 +26,13 @@ import {
   FaChartBar,
 } from "react-icons/fa";
 
-const VN = { fontFamily: "'Be Vietnam Pro', Inter, sans-serif" };
+const VN = { fontFamily: "'Be Vietnam Pro', system-ui, -apple-system, sans-serif" };
 const OWNER_LIST_PAGE_SIZE = 50;
+
+function getPositiveId(value) {
+  const id = Number(value);
+  return Number.isSafeInteger(id) && id > 0 ? id : null;
+}
 
 async function loadAllOwnerProperties() {
   const properties = [];
@@ -543,6 +548,11 @@ export default function OwnerDashboard() {
   }, [navigate]);
 
   const handleDelete = async (id) => {
+    const propertyId = getPositiveId(id);
+    if (!propertyId) {
+      showToast("Mã tin đăng không hợp lệ", "error");
+      return;
+    }
     const ok = await confirm({
       title: "Xóa tin đăng?",
       message: "Tin đăng sẽ bị xóa khỏi hệ thống và không thể khôi phục.",
@@ -551,8 +561,8 @@ export default function OwnerDashboard() {
     });
     if (!ok) return;
     try {
-      await api.delete(`/api/property/${id}`);
-      setProperties((prev) => prev.filter((p) => p.id !== id));
+      await api.delete(`/api/property/${propertyId}`);
+      setProperties((prev) => prev.filter((p) => Number(p.id) !== propertyId));
       showToast("Đã xoá tin đăng");
     } catch (err) {
       showToast(err.response?.data?.message || "Không thể xoá tin đăng", "error");
@@ -560,6 +570,11 @@ export default function OwnerDashboard() {
   };
 
   const handleHide = async (id) => {
+    const propertyId = getPositiveId(id);
+    if (!propertyId) {
+      showToast("Mã tin đăng không hợp lệ", "error");
+      return;
+    }
     const ok = await confirm({
       title: "Ẩn tin đăng?",
       message: "Tin này sẽ không còn hiển thị công khai cho người mua.",
@@ -567,9 +582,9 @@ export default function OwnerDashboard() {
     });
     if (!ok) return;
     try {
-      await api.patch(`/api/property/${id}/hide`);
+      await api.patch(`/api/property/${propertyId}/hide`);
       setProperties((prev) =>
-        prev.map((p) => (p.id === id ? { ...p, status: "hidden" } : p)),
+        prev.map((p) => (Number(p.id) === propertyId ? { ...p, status: "hidden" } : p)),
       );
       showToast("Đã ẩn tin đăng");
     } catch (err) {
@@ -578,6 +593,11 @@ export default function OwnerDashboard() {
   };
 
   const handleSold = async (id) => {
+    const propertyId = getPositiveId(id);
+    if (!propertyId) {
+      showToast("Mã tin đăng không hợp lệ", "error");
+      return;
+    }
     const ok = await confirm({
       title: "Đánh dấu đã giao dịch?",
       message:
@@ -586,9 +606,9 @@ export default function OwnerDashboard() {
     });
     if (!ok) return;
     try {
-      await api.patch(`/api/property/${id}/sold`);
+      await api.patch(`/api/property/${propertyId}/sold`);
       setProperties((prev) =>
-        prev.map((p) => (p.id === id ? { ...p, status: "sold" } : p)),
+        prev.map((p) => (Number(p.id) === propertyId ? { ...p, status: "sold" } : p)),
       );
       showToast("Đã đánh dấu tin là đã giao dịch");
     } catch (err) {
@@ -600,6 +620,11 @@ export default function OwnerDashboard() {
   };
 
   const handleUnhide = async (id) => {
+    const propertyId = getPositiveId(id);
+    if (!propertyId) {
+      showToast("Mã tin đăng không hợp lệ", "error");
+      return;
+    }
     const ok = await confirm({
       title: "Gửi lại tin để chờ duyệt?",
       message: "Tin sẽ chuyển về trạng thái chờ quản trị viên duyệt trước khi hiển thị lại.",
@@ -607,10 +632,10 @@ export default function OwnerDashboard() {
     });
     if (!ok) return;
     try {
-      await api.patch(`/api/property/${id}/unhide`);
+      await api.patch(`/api/property/${propertyId}/unhide`);
       setProperties((prev) =>
         prev.map((p) =>
-          p.id === id ? { ...p, status: "pending", reject_reason: null } : p,
+          Number(p.id) === propertyId ? { ...p, status: "pending", reject_reason: null } : p,
         ),
       );
       showToast("Đã gửi lại tin để chờ duyệt");
@@ -667,6 +692,26 @@ export default function OwnerDashboard() {
     setPaymentUrl(pendingOrder?.payment_url || "");
   };
 
+  const refreshFeaturedOrders = async (propertyIdToFocus) => {
+    const ordersRes = await api.get("/api/property/owner/featured-orders");
+    const nextOrders = Array.isArray(ordersRes.data) ? ordersRes.data : [];
+    setFeaturedOrders(nextOrders);
+    if (propertyIdToFocus) {
+      const nextPendingOrder = nextOrders.find(
+        (order) =>
+          Number(order.property_id) === Number(propertyIdToFocus) &&
+          order.status === "pending" &&
+          order.payment_url,
+      );
+      if (nextPendingOrder) {
+        setPaymentOrder(nextPendingOrder);
+        setPaymentUrl(nextPendingOrder.payment_url || "");
+        return nextPendingOrder;
+      }
+    }
+    return null;
+  };
+
   const closePaymentModal = () => {
     setPaymentModal(null);
     setSelectedPackageId("");
@@ -676,7 +721,16 @@ export default function OwnerDashboard() {
   };
 
   const createFeaturedOrder = async () => {
-    if (!paymentModal || !selectedPackageId) {
+    const propertyId = getPositiveId(paymentModal?.id);
+    const packageId = getPositiveId(selectedPackageId);
+    const selectedPackage = featuredPackages.find(
+      (pkg) => Number(pkg.id) === packageId,
+    );
+    if (!propertyId) {
+      showToast("Mã tin đăng không hợp lệ", "error");
+      return;
+    }
+    if (!packageId || !selectedPackage) {
       showToast("Vui lòng chọn gói nổi bật", "error");
       return;
     }
@@ -684,19 +738,21 @@ export default function OwnerDashboard() {
     setPaymentLoading(true);
     try {
       const res = await api.post(
-        `/api/property/${paymentModal.id}/featured-orders`,
+        `/api/property/${propertyId}/featured-orders`,
         {
-          package_id: Number(selectedPackageId),
+          package_id: packageId,
           payment_method: "vnpay",
         },
       );
-      setPaymentOrder(res.data.order);
-      setPaymentUrl(res.data.payment_url || "");
-      if (res.data.order) {
-        setFeaturedOrders((prev) => [
-          { ...res.data.order, payment_url: res.data.payment_url || "" },
-          ...prev,
-        ]);
+      const refreshedOrder = await refreshFeaturedOrders(propertyId);
+      if (!refreshedOrder && res.data.order) {
+        const fallbackOrder = {
+          ...res.data.order,
+          payment_url: res.data.payment_url || "",
+        };
+        setPaymentOrder(fallbackOrder);
+        setPaymentUrl(res.data.payment_url || "");
+        setFeaturedOrders((prev) => [fallbackOrder, ...prev]);
       }
       showToast("Đã tạo đơn thanh toán");
     } catch (err) {
